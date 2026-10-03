@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { Loader2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { isSupabaseConfigured } from "@/lib/supabase/env";
 
 function GoogleIcon() {
   return (
@@ -34,7 +35,7 @@ export function GoogleSignInButton({ next }: { next: string }) {
       <button
         type="button"
         onClick={signIn}
-        disabled={pending}
+        disabled={pending || !isSupabaseConfigured}
         className="flex h-12 w-full items-center justify-center gap-3 rounded-full border border-line bg-white text-[15px] font-medium text-ink shadow-[0_1px_2px_rgb(11_13_23/0.05)] transition-colors hover:bg-canvas focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:opacity-60"
       >
         {pending ? <Loader2 className="size-5 animate-spin" aria-hidden /> : <GoogleIcon />}

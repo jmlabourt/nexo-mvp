@@ -4,6 +4,7 @@ import { ArrowLeft } from "lucide-react";
 import { GoogleSignInButton } from "@/components/auth/google-sign-in-button";
 import { Logo } from "@/components/landing/primitives";
 import { safeNext } from "@/lib/supabase/safe-next";
+import { isSupabaseConfigured, SUPABASE_NOT_CONFIGURED } from "@/lib/supabase/env";
 
 export const metadata: Metadata = { title: "Acceder · NEXO" };
 
@@ -32,6 +33,11 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
           <p className="mt-2 text-sm text-pretty text-ink-soft">
             Entrá con tu cuenta de Google. La primera vez creamos tu empresa con los datos demo de Madera Sur S.R.L.
           </p>
+          {!isSupabaseConfigured && (
+            <p role="alert" className="mt-6 rounded-xl bg-bad/5 px-3 py-2 text-sm text-bad ring-1 ring-bad/20">
+              {SUPABASE_NOT_CONFIGURED}
+            </p>
+          )}
           {authError && (
             <p role="alert" className="mt-6 rounded-xl bg-bad/5 px-3 py-2 text-sm text-bad ring-1 ring-bad/20">
               No pudimos iniciar sesión. Probá de nuevo.
