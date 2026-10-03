@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { ChevronRight, QrCode } from "lucide-react";
-import { APP_NAME, DEMO_USERS } from "@/lib/constants";
+import { APP_NAME } from "@/lib/constants";
 import { useAppStore } from "@/store/use-app-store";
 import { StatusBadge } from "@/components/shared/badges";
 import { ModeSwitch } from "@/components/layout/mode-switch";
@@ -9,12 +9,13 @@ import { ModeSwitch } from "@/components/layout/mode-switch";
 /** Vista de modo Taller: sin datos económicos, solo elegir proyecto para registrar. */
 export function WorkshopHome() {
   const projects = useAppStore((s) => s.projects).filter((p) => ["purchasing", "production", "installation"].includes(p.status));
+  const userName = useAppStore((s) => s.userName);
   return (
     <div className="mx-auto min-h-screen max-w-md bg-white px-4 pb-10">
       <header className="flex items-center justify-between py-4">
         <div>
           <div className="text-lg font-semibold tracking-tight">{APP_NAME}</div>
-          <div className="text-xs text-slate-500">Modo taller · {DEMO_USERS.workshop.name}</div>
+          <div className="text-xs text-slate-500">Modo taller · {userName}</div>
         </div>
       </header>
       <div className="mb-4 flex items-start gap-3 rounded-lg bg-blue-50 p-3 text-sm text-blue-900">

@@ -8,6 +8,9 @@ export const PILOT_CONTACT_HREF = "mailto:equipo@nexo.example?subject=Quiero%20s
 
 export const DEMO_HREF = "/dashboard";
 
+/** Login con Google; después vuelve al dashboard. */
+export const LOGIN_HREF = "/login";
+
 export const NAV_LINKS = [
   { href: "#producto", label: "Producto" },
   { href: "#como-funciona", label: "Cómo funciona" },
@@ -162,6 +165,6 @@ export const FAQS = [
   },
   {
     q: "¿Los números de la demo son reales?",
-    a: "No. La demo usa una empresa ficticia, Madera Sur S.R.L., y sus números no provienen de ninguna empresa entrevistada.",
+    a: "No. La demo usa una empresa ficticia, Madera Sur S.R.L., y sus números no provienen de ninguna empresa entrevistada. Cuando quieras, desde Configuración podés vaciar los datos y cargar tus proyectos reales.",
   },
 ];

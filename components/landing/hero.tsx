@@ -30,7 +30,7 @@ export function Hero() {
             </CtaLink>
           </div>
           <p className="mt-4 animate-fade-up text-xs text-ink-faint [animation-delay:300ms]">
-            Sin registro · La demo usa datos ficticios de Madera Sur S.R.L.
+            Entrás con tu cuenta de Google · La demo usa datos ficticios de Madera Sur S.R.L.
           </p>
         </div>
 

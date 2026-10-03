@@ -41,12 +41,15 @@ export function SettingsPage() {
   const updateSettings = useAppStore((s) => s.updateSettings);
   const resetSettings = useAppStore((s) => s.resetSettings);
   const resetDemo = useAppStore((s) => s.resetDemo);
+  const clearData = useAppStore((s) => s.clearData);
+  const organizationName = useAppStore((s) => s.organizationName);
+  const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
   const { register, handleSubmit, reset, formState } = useForm<AlertSettings>({ resolver: zodResolver(schema), defaultValues: settings });
 
   return (
     <div className="max-w-3xl">
-      <PageHeader title="Configuración" subtitle={`${APP_NAME} · ${APP_SUBTITLE} · ${COMPANY_NAME} (empresa demo)`} />
+      <PageHeader title="Configuración" subtitle={`${APP_NAME} · ${APP_SUBTITLE} · ${organizationName}`} />
       <Card>
         <CardHeader>
           <CardTitle>Umbrales de alertas</CardTitle>
@@ -85,20 +88,38 @@ export function SettingsPage() {
       </Card>
       <Card className="mt-6">
         <CardHeader>
-          <CardTitle>Datos demo</CardTitle>
-          <CardDescription>Los datos se guardan solo en este navegador (localStorage). El reset restaura los proyectos iniciales de {COMPANY_NAME}.</CardDescription>
+          <CardTitle>Datos de la empresa</CardTitle>
+          <CardDescription>
+            Los datos se guardan en tu cuenta (Supabase). El reset restaura los proyectos de ejemplo de {COMPANY_NAME}; vaciar
+            borra todo para empezar con tus proyectos reales.
+          </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="flex flex-wrap gap-2">
           <Button
-            variant="destructive"
-            onClick={() => {
-              if (window.confirm("¿Restaurar los datos demo iniciales?")) {
-                resetDemo();
-                reset(DEFAULT_SETTINGS);
-              }
+            variant="outline"
+            disabled={busy}
+            onClick={async () => {
+              if (!window.confirm("¿Restaurar los datos demo? Se perderán los registros cargados.")) return;
+              setBusy(true);
+              const res = await resetDemo();
+              setBusy(false);
+              if (res.ok) reset(DEFAULT_SETTINGS);
             }}
           >
             Reset demo
+          </Button>
+          <Button
+            variant="destructive"
+            disabled={busy}
+            onClick={async () => {
+              if (!window.confirm("¿Borrar todos los proyectos, registros y sobrantes de tu empresa? No se puede deshacer.")) return;
+              setBusy(true);
+              const res = await clearData();
+              setBusy(false);
+              if (res.ok) reset(DEFAULT_SETTINGS);
+            }}
+          >
+            Vaciar datos
           </Button>
         </CardContent>
       </Card>

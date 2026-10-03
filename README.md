@@ -19,9 +19,9 @@ Flujo central: `presupuesto → compra → consumo → desperdicio/sobrante → 
 
 ## Stack
 
-Next.js 16 (App Router) · TypeScript strict · Tailwind CSS v4 · componentes estilo shadcn/ui (Radix + cva) · Lucide · Recharts · Zustand + persist (localStorage) · React Hook Form + Zod · qrcode.react · Vitest.
+Next.js 16 (App Router) · TypeScript strict · Tailwind CSS v4 · componentes estilo shadcn/ui (Radix + cva) · Lucide · Recharts · Zustand · Supabase (Postgres + Auth con Google, `@supabase/ssr`) · React Hook Form + Zod · qrcode.react · Vitest.
 
-No necesita backend, API keys ni servicios pagos. Se puede desplegar en Vercel sin configuración.
+Los datos viven en Supabase (proyecto `nexo`, región São Paulo). El landing es público; el resto pide iniciar sesión con Google.
 
 > Los componentes de `components/ui` siguen el patrón de shadcn/ui (código propio sobre Radix). Se escribieron localmente porque en el entorno de desarrollo el registry de shadcn estaba bloqueado. Si se prefiere, se pueden reemplazar con `npx shadcn add …` sin cambiar el resto de la app.
 
@@ -29,6 +29,7 @@ No necesita backend, API keys ni servicios pagos. Se puede desplegar en Vercel s
 
 ```bash
 npm install
+cp .env.example .env.local   # completar URL y publishable key de Supabase
 npm run dev        # http://localhost:3000
 npm test           # tests de dominio (Vitest)
 npm run lint
@@ -47,7 +48,8 @@ npm run build && npm start
 | `/alerts` | Alertas: Todas · Críticas · Atención · Resueltas |
 | `/history` | Proyectos finalizados y aprendizajes |
 | `/materials` | Pool simple de sobrantes reutilizables (no es un módulo de stock) |
-| `/settings` | Umbrales de alertas y reset de la demo |
+| `/settings` | Umbrales de alertas, reset de la demo y vaciar datos |
+| `/login` | Acceso con Google (público) |
 | `/registro/[projectId]` | Registro de taller mobile, sin sidebar (destino del QR) |
 
 ## Arquitectura
@@ -71,9 +73,10 @@ lib/
   seed-data.ts            empresa demo Madera Sur S.R.L.
   landing-content.ts      textos del landing (sin testimonios, logos ni precios inventados)
   constants.ts            nombre de la app, labels, catálogo, umbrales, semántica de color
+  supabase/               clientes (browser/server), proxy de sesión, mappers y lectura/escritura del workspace
   formatting.ts           es-AR, ARS, dd/mm/yyyy, pp
 store/
-  use-app-store.ts        Zustand + persist: la ÚNICA capa de persistencia
+  use-app-store.ts        Zustand: estado en memoria + cola de escrituras a Supabase
   selectors.ts            hooks derivados memoizados
 types/index.ts            modelo de dominio
 tests/                    cálculos, reconciliación, alertas y escenarios de la demo
@@ -81,18 +84,32 @@ tests/                    cálculos, reconciliación, alertas y escenarios de la
 
 **Para migrar a una API o base de datos**, se reemplazan las acciones de `store/use-app-store.ts` por llamadas remotas. `lib/` y `types/` no cambian, porque todas las reglas económicas son funciones puras que reciben datos y devuelven datos.
 
+## Supabase y login con Google
+
+- **Schema**: `supabase/migrations/20261003190000_init.sql` (ya aplicado al proyecto). Cada usuario pertenece a una empresa (`organizations` + `organization_members`); un trigger crea la empresa en el primer login. Todas las tablas tienen RLS: solo los miembros de la empresa leen y escriben sus datos.
+- **Sesión**: `proxy.ts` refresca la sesión en cada request y manda a `/login?next=…` si una ruta privada se pide sin sesión. Públicas: `/`, `/login`, `/auth/callback`.
+- **Flujo**: Landing → “Acceder” → `/login` → Google → `/auth/callback` (intercambia el código por la sesión) → `/dashboard`.
+- **Store**: la UI sigue usando las mismas acciones síncronas; el store aplica las operaciones puras en memoria y encola la escritura en Supabase de lo que cambió (`lib/supabase/workspace.ts`). Si una escritura falla, aparece un aviso.
+
+Para que Google funcione hay que configurarlo una vez:
+
+1. Google Cloud Console → *APIs & Services → Credentials* → crear un **OAuth client ID** (tipo *Web application*). En *Authorized redirect URIs* agregar `https://ijulkdtqztphtvvfpsbl.supabase.co/auth/v1/callback`.
+2. Supabase → *Authentication → Sign In / Providers → Google*: activarlo y pegar el Client ID y el Client Secret.
+3. Supabase → *Authentication → URL Configuration*: **Site URL** = la URL de producción, y en **Redirect URLs** agregar `http://localhost:3000/auth/callback` y `https://<tu-dominio>/auth/callback`.
+4. En Vercel, cargar `NEXT_PUBLIC_SUPABASE_URL` y `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`.
+
 ## Datos demo y reset
 
 La app arranca con **Madera Sur S.R.L.** (empresa ficticia) ya cargada: 8 proyectos activos o en cotización y 4 finalizados. Las fechas se generan relativas a “hoy”, para que las alertas de fecha y de inactividad tengan sentido cada vez que se abre la demo.
 
 El proyecto principal es **P-1042 · Local Palermo – Mobiliario comercial** (Retail Sur): venta $ 12.000.000, presupuesto $ 7.200.000, margen esperado 40%, proyectado ≈ 30,8% y estado *En riesgo* por materiales (+$ 850.000).
 
-Hay dos formas de restaurar el estado inicial:
+La primera vez que alguien entra, su empresa se carga con esta demo. Después:
 
-- “Reset demo” en el sidebar.
-- `/settings` → Reset demo.
+- “Reset demo” (sidebar o `/settings`) vuelve a cargar la demo.
+- `/settings` → “Vaciar datos” borra todo para empezar con proyectos reales.
 
-Los datos viven solo en el `localStorage` de ese navegador.
+Los datos se guardan en Supabase, por empresa. Solo el modo Gestión/Taller elegido queda en el navegador.
 
 ## Fórmulas
 
@@ -145,8 +162,9 @@ El **estado económico** (Saludable / Atención / En riesgo) usa solo las alerta
 
 ## Limitaciones (conscientes)
 
-- Sin autenticación: “Gestión / Taller” es un selector de rol demo.
-- Persistencia local por navegador: el QR abierto en otro dispositivo **no comparte datos**. Para una prueba real con celular hace falta desplegar un backend. La demo se hace en el mismo navegador (el QR abre `/registro/...`).
+- “Gestión / Taller” sigue siendo un selector de modo: no hay roles con permisos distintos.
+- Una persona = una empresa. Todavía no hay invitaciones: para que un operario registre desde el QR en su celular tiene que entrar con la misma cuenta (o hay que sumarlo a mano a `organization_members`).
+- Las escrituras son optimistas: si una falla, la pantalla muestra el aviso pero no deshace el cambio en memoria; al recargar se ve lo que quedó guardado.
 - No es inventario: no hay depósitos, lotes, FIFO, stock mínimo ni transferencias. El pool de sobrantes es deliberadamente simple.
 - El avance (%) es manual.
 - El costo por hora del registro de taller sale de la tarifa presupuestada (o de un valor por defecto de $ 14.000).
@@ -154,7 +172,7 @@ El **estado económico** (Saludable / Atención / En riesgo) usa solo las alerta
 
 ## Futuras mejoras (a validar con usuarios antes de construir)
 
-- Backend (API + DB) y multiusuario real para usar el QR desde el celular del taller.
+- Invitaciones a la empresa y roles (gestión / taller) para usar el QR desde el celular de cada operario.
 - Fotos o voz en el registro de taller, si las entrevistas muestran que reducen la fricción.
 - Plantillas de presupuesto construidas a partir del historial (“proyectos tipo Local comercial usan +8% material”).
 - Exportar el cierre a PDF o planilla.

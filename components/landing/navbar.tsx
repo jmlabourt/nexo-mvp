@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { ArrowRight, Menu } from "lucide-react";
-import { DEMO_HREF, NAV_LINKS } from "@/lib/landing-content";
+import { DEMO_HREF, LOGIN_HREF, NAV_LINKS } from "@/lib/landing-content";
 import { CtaLink, Logo } from "./primitives";
 
 export function Navbar() {
@@ -22,6 +22,12 @@ export function Navbar() {
           ))}
         </nav>
         <div className="ml-auto flex items-center gap-2 md:ml-0">
+          <Link
+            href={LOGIN_HREF}
+            className="hidden h-9 items-center rounded-full px-4 text-sm font-medium text-ink transition-colors hover:bg-canvas sm:inline-flex"
+          >
+            Acceder
+          </Link>
           <CtaLink href={DEMO_HREF} size="sm" className="hidden sm:inline-flex">
             Ver la demo <ArrowRight />
           </CtaLink>
@@ -38,6 +44,9 @@ export function Navbar() {
                   {l.label}
                 </a>
               ))}
+              <CtaLink href={LOGIN_HREF} variant="secondary" size="sm" className="mt-2 w-full">
+                Acceder
+              </CtaLink>
               <CtaLink href={DEMO_HREF} size="sm" className="mt-2 w-full">
                 Ver la demo <ArrowRight />
               </CtaLink>

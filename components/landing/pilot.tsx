@@ -38,8 +38,8 @@ export function Pilot() {
                 "Un proyecto principal con desvío real de materiales",
                 "Registro de taller desde el QR",
                 "Alertas, sobrantes, cierre e historial",
-                "Los datos quedan en tu navegador",
-                "Reset de la demo cuando quieras",
+                "Tus datos quedan guardados en tu cuenta",
+                "Vaciá la demo y cargá tus proyectos reales",
               ]}
             />
             <CtaLink href={DEMO_HREF} variant="secondary" className="mt-10 w-full md:mt-auto">

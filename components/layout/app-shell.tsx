@@ -2,9 +2,9 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
-import { Bell, FolderKanban, History, LayoutDashboard, Layers, Menu, Plus, RotateCcw, Search, Settings, TriangleAlert, X } from "lucide-react";
+import { Bell, FolderKanban, History, LayoutDashboard, Layers, LogOut, Menu, Plus, RotateCcw, Search, Settings, TriangleAlert, X } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { APP_NAME, APP_SUBTITLE, COMPANY_NAME, DEMO_USERS } from "@/lib/constants";
+import { APP_NAME, APP_SUBTITLE } from "@/lib/constants";
 import { useAppStore } from "@/store/use-app-store";
 import { useAlerts } from "@/store/selectors";
 import { Button } from "@/components/ui/button";
@@ -43,7 +43,9 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const resetDemo = useAppStore((s) => s.resetDemo);
   const { open } = useAlerts();
   const critical = open.filter((a) => a.level !== "info").length;
-  const user = DEMO_USERS.management;
+  const userName = useAppStore((s) => s.userName);
+  const userEmail = useAppStore((s) => s.userEmail);
+  const organizationName = useAppStore((s) => s.organizationName);
 
   return (
     <div className="flex h-full flex-col">
@@ -78,12 +80,12 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
         <ModeSwitch />
         <div className="flex items-center gap-3">
           <div className="flex size-8 items-center justify-center rounded-full bg-slate-200 text-xs font-semibold text-slate-700" aria-hidden>
-            {user.name.split(" ").map((w) => w[0]).join("")}
+            {userName.split(" ").filter(Boolean).slice(0, 2).map((w) => w[0]?.toUpperCase()).join("")}
           </div>
           <div className="min-w-0">
-            <div className="truncate text-sm font-medium text-slate-900">{user.name}</div>
-            <div className="truncate text-xs text-slate-500">
-              {user.role} · {COMPANY_NAME}
+            <div className="truncate text-sm font-medium text-slate-900">{userName}</div>
+            <div className="truncate text-xs text-slate-500" title={userEmail}>
+              {organizationName}
             </div>
           </div>
         </div>
@@ -92,11 +94,16 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
           size="sm"
           className="w-full justify-start text-slate-500"
           onClick={() => {
-            if (window.confirm("¿Restaurar los datos demo iniciales? Se perderán los registros cargados.")) resetDemo();
+            if (window.confirm("¿Restaurar los datos demo iniciales? Se perderán los registros cargados.")) void resetDemo();
           }}
         >
           <RotateCcw /> Reset demo
         </Button>
+        <form action="/auth/signout" method="post">
+          <Button type="submit" variant="ghost" size="sm" className="w-full justify-start text-slate-500">
+            <LogOut /> Cerrar sesión
+          </Button>
+        </form>
       </div>
     </div>
   );
