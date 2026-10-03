@@ -89,11 +89,11 @@ function Shell({ children }: { children: React.ReactNode }) {
         <header className="flex items-center justify-between py-4">
           <span className="text-lg font-semibold tracking-tight">{APP_NAME}</span>
           {mode === "management" ? (
-            <Link href="/" className="text-sm text-blue-700" onClick={() => setMode("management")}>
+            <Link href="/dashboard" className="text-sm text-blue-700" onClick={() => setMode("management")}>
               Ir a gestión
             </Link>
           ) : (
-            <Link href="/" className="text-sm text-blue-700">
+            <Link href="/dashboard" className="text-sm text-blue-700">
               Proyectos
             </Link>
           )}

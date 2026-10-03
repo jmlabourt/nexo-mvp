@@ -12,7 +12,7 @@ import { ModeSwitch } from "./mode-switch";
 import { WorkshopHome } from "@/components/workshop/workshop-home";
 
 const NAV = [
-  { href: "/", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/projects", label: "Proyectos", icon: FolderKanban },
   { href: "/alerts", label: "Alertas", icon: TriangleAlert },
   { href: "/history", label: "Historial", icon: History },
@@ -21,13 +21,12 @@ const NAV = [
 ];
 
 function isActive(pathname: string, href: string) {
-  return href === "/" ? pathname === "/" : pathname.startsWith(href);
+  return pathname.startsWith(href);
 }
 
 function useBreadcrumb(): string[] {
   const pathname = usePathname();
   const projects = useAppStore((s) => s.projects);
-  if (pathname === "/") return ["Dashboard"];
   const parts = pathname.split("/").filter(Boolean);
   const crumbs: string[] = [];
   const root = NAV.find((n) => n.href === `/${parts[0]}`);
@@ -48,10 +47,10 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="px-5 py-5">
+      <Link href="/" className="block px-5 py-5" title="Ir al sitio">
         <div className="text-lg font-semibold tracking-tight text-slate-900">{APP_NAME}</div>
         <div className="text-xs text-slate-500">{APP_SUBTITLE}</div>
-      </div>
+      </Link>
       <nav aria-label="Principal" className="flex-1 space-y-0.5 px-3">
         {NAV.map((item) => {
           const active = isActive(pathname, item.href);

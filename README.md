@@ -39,7 +39,8 @@ npm run build && npm start
 
 | Ruta | Qué es |
 |---|---|
-| `/` | Dashboard: KPIs, “Necesitan atención”, gráfico esperado vs. proyectado, tabla de activos |
+| `/` | Landing pública (estática, sin store): propuesta de valor, producto, cómo funciona, piloto y FAQ |
+| `/dashboard` | Dashboard: KPIs, “Necesitan atención”, gráfico esperado vs. proyectado, tabla de activos |
 | `/projects` | Proyectos: tabs por estado, búsqueda y filtros por riesgo y fecha |
 | `/projects/new` | Wizard: información → presupuesto (con resumen sticky) → resumen |
 | `/projects/[id]` | **Detalle** con tabs Resumen · Presupuesto · Materiales · Costos reales · Actividad, más los diálogos Registrar lo que pasó · Registrar compra · QR · Cambiar estado · Cerrar |
@@ -52,10 +53,11 @@ npm run build && npm start
 ## Arquitectura
 
 ```
-app/                      rutas (thin wrappers); (gestion)/ lleva el AppShell, registro/ no
+app/                      rutas (thin wrappers); page.tsx es el landing; (gestion)/ lleva HydrationGate + AppShell, registro/ solo HydrationGate
 components/
   ui/                     primitivas (button, card, dialog, tabs, table, choice, field…)
   layout/                 AppShell, HydrationGate, ModeSwitch
+  landing/                secciones del landing (server components, sin estado)
   dashboard/ projects/ budget/ materials/ actual-costs/ alerts/ history/ settings/ workshop/ charts/ shared/
 lib/
   calculations.ts         cálculos económicos (funciones puras)
@@ -67,6 +69,7 @@ lib/
   activity.ts             mensajes de actividad (quién / qué / cuándo)
   schemas.ts              validación Zod
   seed-data.ts            empresa demo Madera Sur S.R.L.
+  landing-content.ts      textos del landing (sin testimonios, logos ni precios inventados)
   constants.ts            nombre de la app, labels, catálogo, umbrales, semántica de color
   formatting.ts           es-AR, ARS, dd/mm/yyyy, pp
 store/
