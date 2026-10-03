@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Check } from "lucide-react";
-import { CATEGORY_LABELS, CATEGORY_ORDER, DEMO_USERS, PROJECT_TYPES } from "@/lib/constants";
+import { CATEGORY_LABELS, CATEGORY_ORDER, PROJECT_TYPES } from "@/lib/constants";
 import { projectInfoSchema, type ProjectInfoValues } from "@/lib/schemas";
 import { formatCurrency, formatDate, formatPercent, todayISO, toISODate } from "@/lib/formatting";
 import { marginPercent } from "@/lib/calculations";
@@ -45,7 +45,7 @@ export function NewProjectWizard() {
       description: "",
       startDate: todayISO(),
       dueDate: in30days(),
-      owner: DEMO_USERS.management.name,
+      owner: useAppStore.getState().userName,
       salesPrice: undefined as unknown as number,
     },
     mode: "onTouched",

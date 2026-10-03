@@ -3,7 +3,7 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { ArrowLeft, CheckCircle2, Clock, Package, Receipt } from "lucide-react";
 import type { ActualEntryType, MaterialSource } from "@/types";
-import { ACTUAL_TYPE_LABELS, APP_NAME, DEMO_USERS, OTHER_MATERIAL_ID, SOURCE_LABELS } from "@/lib/constants";
+import { ACTUAL_TYPE_LABELS, APP_NAME, OTHER_MATERIAL_ID, SOURCE_LABELS } from "@/lib/constants";
 import { projectMaterialOptions } from "@/lib/material-options";
 import { materialKey, slugify } from "@/lib/material-reconciliation";
 import { poolAvailableFor } from "@/lib/reusable-pool";
@@ -18,7 +18,6 @@ import { QuantityInput } from "./quantity-input";
 import { cn } from "@/lib/utils";
 
 type View = "menu" | "material" | "hours" | "other" | "done";
-const ACTOR = DEMO_USERS.workshop.name;
 
 export function WorkshopRecorder({ projectId }: { projectId: string }) {
   const project = useProject(projectId);
@@ -89,11 +88,11 @@ function Shell({ children }: { children: React.ReactNode }) {
         <header className="flex items-center justify-between py-4">
           <span className="text-lg font-semibold tracking-tight">{APP_NAME}</span>
           {mode === "management" ? (
-            <Link href="/" className="text-sm text-blue-700" onClick={() => setMode("management")}>
+            <Link href="/dashboard" className="text-sm text-blue-700" onClick={() => setMode("management")}>
               Ir a gestión
             </Link>
           ) : (
-            <Link href="/" className="text-sm text-blue-700">
+            <Link href="/dashboard" className="text-sm text-blue-700">
               Proyectos
             </Link>
           )}
@@ -194,7 +193,6 @@ function MaterialFlow({ projectId, onDone }: { projectId: string; onDone: (s: st
         reusableLeftoverQuantity: l ?? 0,
         date: todayISO(),
       },
-      ACTOR,
     );
     if (!res.ok) {
       setErrors({ form: res.error });
@@ -340,7 +338,7 @@ function HoursFlow({ projectId, onDone }: { projectId: string; onDone: (s: strin
         // El costo/hora lo define gestión (tarifa presupuestada); el taller no lo ve.
         labor: { role, workerName: worker.trim() || undefined, hours: h!, hourlyCost: resolveHourlyCost(project) },
       },
-      worker.trim() || ACTOR,
+      worker.trim() || undefined,
     );
     if (!res.ok) return setErrors({ form: res.error });
     onDone(`${formatQty(h!, "h")} de ${role}${worker.trim() ? ` · ${worker.trim()}` : ""}`);
@@ -395,7 +393,7 @@ function OtherFlow({ projectId, onDone }: { projectId: string; onDone: (s: strin
     if (a === null) e.amount = "Indicá el monto pagado";
     setErrors(e);
     if (Object.keys(e).length || !type) return;
-    const res = addActualEntry(projectId, { type, description: description.trim(), amount: a!, date: todayISO() }, ACTOR);
+    const res = addActualEntry(projectId, { type, description: description.trim(), amount: a!, date: todayISO() });
     if (!res.ok) return setErrors({ form: res.error });
     onDone(`${ACTUAL_TYPE_LABELS[type]}: ${description.trim()}`);
   };
