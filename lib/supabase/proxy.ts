@@ -1,6 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
-import { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from "./env";
+import { isSupabaseConfigured, SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from "./env";
 
 /** Rutas públicas: el landing, el login y el intercambio del código OAuth. */
 const PUBLIC_PATHS = ["/", "/login", "/auth/callback"];
@@ -15,6 +15,17 @@ function isPublic(pathname: string) {
  */
 export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({ request });
+
+  // Sin variables de Supabase no hay sesión posible: el sitio público sigue andando
+  // y las rutas privadas van a /login, que explica qué falta.
+  if (!isSupabaseConfigured) {
+    const { pathname } = request.nextUrl;
+    if (isPublic(pathname)) return response;
+    const url = request.nextUrl.clone();
+    url.pathname = "/login";
+    url.search = "";
+    return NextResponse.redirect(url);
+  }
 
   const supabase = createServerClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
     cookies: {
