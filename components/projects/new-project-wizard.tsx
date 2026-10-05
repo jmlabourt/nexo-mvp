@@ -15,10 +15,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field } from "@/components/ui/field";
 import { Input, Select, Textarea } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { BudgetEditor, draftToInput, draftTotal, newDraftLine, type DraftLine } from "@/components/budget/budget-editor";
+import { BudgetEditor, draftFromInput, draftToInput, draftTotal, newDraftLine, type DraftLine } from "@/components/budget/budget-editor";
+import { BudgetCalculator } from "@/components/budget/budget-calculator";
+import { computeCalculator, initialCalcState, type CalcState } from "@/components/budget/calculator-state";
+import { totalOfLines } from "@/lib/budget-calculator";
 import { cn } from "@/lib/utils";
 
-const STEPS = ["Información general", "Presupuesto", "Resumen"];
+const STEPS = ["Datos del proyecto", "Presupuesto", "Revisar y crear"];
 
 function in30days() {
   const d = new Date();
@@ -33,6 +36,9 @@ export function NewProjectWizard() {
   const code = useMemo(() => nextProjectCode(projects), [projects]);
   const [step, setStep] = useState(0);
   const [lines, setLines] = useState<DraftLine[]>(() => [newDraftLine("materials"), newDraftLine("labor"), newDraftLine("installation")]);
+  const [mode, setMode] = useState<"calculator" | "manual">("calculator");
+  const [calcState, setCalcState] = useState<CalcState>(initialCalcState);
+  const [priceError, setPriceError] = useState("");
   const [lineErrors, setLineErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState("");
 
@@ -50,13 +56,26 @@ export function NewProjectWizard() {
     },
     mode: "onTouched",
   });
-  const { register, formState, control, trigger, getValues } = form;
+  const { register, formState, control, trigger, getValues, setValue } = form;
   const salesPrice = Number(useWatch({ control, name: "salesPrice" })) || 0;
-  const budget = lines.reduce((s, l) => s + draftTotal(l), 0);
+  const startDate = useWatch({ control, name: "startDate" });
+  const projectType = useWatch({ control, name: "projectType" });
+  const calc = useMemo(() => computeCalculator(calcState, startDate, projectType, projects), [calcState, startDate, projectType, projects]);
+  const manualTotal = lines.reduce((s, l) => s + draftTotal(l), 0);
+  const budget = mode === "calculator" ? calc.total : manualTotal;
   const profit = salesPrice - budget;
   const margin = marginPercent(profit, salesPrice);
 
   const validateLines = (): BudgetLineInput[] | null => {
+    if (mode === "calculator") {
+      setLineErrors({});
+      if (calc.lines.length === 0) {
+        setFormError("Cargá al menos un material, horas de trabajo o un costo para armar el presupuesto.");
+        return null;
+      }
+      setFormError("");
+      return calc.lines;
+    }
     const errs: Record<string, string> = {};
     const inputs: BudgetLineInput[] = [];
     const nonEmpty = lines.filter((l) => l.description.trim() || l.unitCost.trim());
@@ -76,21 +95,36 @@ export function NewProjectWizard() {
   };
 
   const next = async () => {
-    if (step === 0 && !(await trigger())) return;
-    if (step === 1 && !validateLines()) return;
+    if (step === 0 && !(await trigger(["name", "client", "projectType", "description", "startDate", "dueDate", "owner"]))) return;
+    if (step === 1) {
+      if (!validateLines()) return;
+      if (!(salesPrice > 0)) return setPriceError("Definí el precio de venta (podés usar el sugerido) para continuar.");
+      setPriceError("");
+    }
     setStep((s) => s + 1);
   };
 
   const submit = () => {
     const inputs = validateLines();
     if (!inputs) return setStep(1);
+    if (!(salesPrice > 0)) {
+      setPriceError("Definí el precio de venta para crear el proyecto.");
+      return setStep(1);
+    }
     const v = getValues();
     const res = createProject({ ...v, salesPrice: Number(v.salesPrice), code, budgetLines: inputs });
     if (!res.ok) return setFormError(res.error);
     router.push(`/projects/${res.value}`);
   };
 
-  const byCat = CATEGORY_ORDER.map((c) => ({ c, total: lines.filter((l) => l.category === c).reduce((s, l) => s + draftTotal(l), 0) })).filter((x) => x.total > 0);
+  const byCat = CATEGORY_ORDER.map((c) => ({
+    c,
+    total: mode === "calculator" ? totalOfLines(calc.lines.filter((l) => l.category === c)) : lines.filter((l) => l.category === c).reduce((s, l) => s + draftTotal(l), 0),
+  })).filter((x) => x.total > 0);
+  const editManually = () => {
+    setLines(calc.lines.map(draftFromInput));
+    setMode("manual");
+  };
 
   return (
     <div>
@@ -141,23 +175,66 @@ export function NewProjectWizard() {
                 <Field label="Responsable" htmlFor="owner" error={formState.errors.owner?.message}>
                   <Input id="owner" {...register("owner")} />
                 </Field>
-                <Field label="Precio de venta (ARS)" htmlFor="salesPrice" error={formState.errors.salesPrice?.message}>
+                <Field label="Precio de venta (ARS)" htmlFor="salesPrice" error={formState.errors.salesPrice?.message} hint="Opcional por ahora: si todavía no lo definiste, la calculadora te sugiere uno según el margen que busques.">
                   <Input id="salesPrice" type="number" min={0} step="any" inputMode="numeric" {...register("salesPrice", { valueAsNumber: true })} aria-invalid={!!formState.errors.salesPrice} />
                 </Field>
               </CardContent>
             </Card>
           )}
           {step === 1 && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Presupuesto</CardTitle>
-                <p className="text-sm text-slate-500">Cargá materiales con cantidad para poder compararlos luego con lo comprado y consumido.</p>
-              </CardHeader>
-              <CardContent>
-                <BudgetEditor lines={lines} onChange={setLines} errors={lineErrors} />
-                {formError && <p role="alert" className="mt-3 text-sm text-red-600">{formError}</p>}
-              </CardContent>
-            </Card>
+            <div className="space-y-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Presupuesto</CardTitle>
+                  <p className="text-sm text-slate-500">
+                    Armalo con la calculadora (materiales, operarios, máquinas y costos) o cargalo a mano si ya tenés los números. Es la línea base contra la que se medirán los desvíos.
+                  </p>
+                </CardHeader>
+                <CardContent>
+                  <div role="group" aria-label="Cómo cargar el presupuesto" className="inline-flex rounded-md border border-slate-300 p-0.5 text-sm">
+                    {([["calculator", "Calculadora guiada"], ["manual", "Carga manual"]] as const).map(([m, label]) => (
+                      <button
+                        key={m}
+                        type="button"
+                        aria-pressed={mode === m}
+                        onClick={() => (m === "manual" ? editManually() : setMode("calculator"))}
+                        className={cn("rounded px-3 py-1.5 font-medium", mode === m ? "bg-blue-700 text-white" : "text-slate-600 hover:bg-slate-100")}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+              {mode === "calculator" ? (
+                <BudgetCalculator
+                  state={calcState}
+                  onState={setCalcState}
+                  result={calc}
+                  projectType={projectType}
+                  salesPrice={salesPrice}
+                  priceError={priceError}
+                  onSalesPrice={(n) => {
+                    setValue("salesPrice", n, { shouldValidate: true });
+                    if (n > 0) setPriceError("");
+                  }}
+                  onDueDate={(iso) => setValue("dueDate", iso, { shouldValidate: true })}
+                  onEditManually={editManually}
+                />
+              ) : (
+                <Card>
+                  <CardContent className="pt-5">
+                    <BudgetEditor lines={lines} onChange={setLines} errors={lineErrors} />
+                    <div className="mt-4 flex max-w-xs flex-col gap-1.5">
+                      <label htmlFor="manual-price" className="text-sm font-medium text-slate-700">Precio de venta (ARS)</label>
+                      <Input id="manual-price" type="number" min={0} step="any" inputMode="numeric" aria-invalid={!!priceError} value={salesPrice > 0 ? salesPrice : ""} onChange={(e) => { setValue("salesPrice", Number(e.target.value) || 0, { shouldValidate: true }); if (Number(e.target.value) > 0) setPriceError(""); }} />
+                      {priceError && <p role="alert" className="text-xs text-red-600">{priceError}</p>}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+              {formError && <p role="alert" className="text-sm text-red-600">{formError}</p>}
+            </div>
           )}
           {step === 2 && (
             <Card>

@@ -37,6 +37,19 @@ export function draftFromLine(l: BudgetLine): DraftLine {
   };
 }
 
+/** Convierte una línea ya calculada (p. ej. de la calculadora) en fila editable. */
+export function draftFromInput(l: BudgetLineInput): DraftLine {
+  k += 1;
+  return {
+    key: `d${Date.now()}${k}`,
+    category: l.category,
+    description: l.description,
+    quantity: l.quantity === null ? "" : String(l.quantity),
+    unit: l.unit,
+    unitCost: String(l.unitCost),
+  };
+}
+
 const num = (s: string) => (s.trim() === "" ? null : Number(s.replace(",", ".")));
 
 export function draftToInput(d: DraftLine): { input?: BudgetLineInput; error?: string } {
