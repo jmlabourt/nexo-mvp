@@ -89,6 +89,10 @@ export interface MaterialUsageEntry {
   source: MaterialSource;
   /** Si source = reused_leftover, qué ítem del pool se usó. */
   reusableMaterialId?: string;
+  /** Lote de stock del que salió el material (ledger). */
+  lotId?: string;
+  /** Mueble del proyecto al que se imputa (vacío = general del proyecto). */
+  itemId?: string;
   notes?: string;
   createdBy: string;
   createdAt: string;
@@ -98,6 +102,7 @@ export interface LaborDetail {
   role: string;
   workerName?: string;
   hours: number;
+  /** Se congela al registrar: cambiar la tarifa del operario no altera el historial. */
   hourlyCost: number;
 }
 
@@ -111,6 +116,12 @@ export interface ActualEntry {
   amount: number;
   supplier?: string;
   labor?: LaborDetail;
+  /** Operario (tabla de operarios) que hizo las horas. */
+  operatorId?: string;
+  /** Etapa en la que se trabajó. */
+  stage?: ProjectStatus;
+  /** Mueble del proyecto al que se imputa (vacío = general del proyecto). */
+  itemId?: string;
   notes?: string;
   createdBy: string;
   createdAt: string;
@@ -126,6 +137,8 @@ export type ActivityKind =
   | "leftover"
   | "deviation"
   | "progress"
+  | "stock"
+  | "stage"
   | "closed";
 
 export interface ActivityEvent {
@@ -149,7 +162,6 @@ export interface Project {
   createdAt: string;
   updatedAt: string;
   salesPrice: number;
-  progressPercent: number;
   owner: string;
   budgetLines: BudgetLine[];
   actualEntries: ActualEntry[];
@@ -158,6 +170,162 @@ export interface Project {
   activity: ActivityEvent[];
   isClosed: boolean;
   closedAt?: string;
+  /** Operarios asignados al proyecto (ids de la tabla de operarios). */
+  assignedOperatorIds: string[];
+  /** Muebles / ítems del proyecto. Vacío = proyecto de un solo bloque. */
+  items: ProjectItem[];
+  /** Bitácora por etapa (compras, producción, instalación). */
+  stageLogs: StageLog[];
+  /** Archivos adjuntos (proyecto, mueble o etapa). */
+  attachments: Attachment[];
+  /** Presupuesto aprobado original. Se captura una sola vez y no se pisa. */
+  baseline?: ProjectBaseline;
+}
+
+export interface ProjectItem {
+  id: string;
+  name: string;
+  description?: string;
+  quantity: number;
+}
+
+export interface ProjectBaseline {
+  capturedAt: string;
+  capturedBy: string;
+  salesPrice: number;
+  dueDate: string;
+  budgetTotal: number;
+  lines: BudgetLine[];
+}
+
+export type StageKey = "purchasing" | "production" | "installation";
+
+export interface StageLog {
+  id: string;
+  projectId: string;
+  stage: StageKey;
+  date: string;
+  kind: "note" | "incident";
+  text: string;
+  responsible?: string;
+  itemId?: string;
+  createdBy: string;
+  createdAt: string;
+}
+
+export interface Attachment {
+  id: string;
+  projectId: string;
+  itemId?: string;
+  stage?: StageKey;
+  stageLogId?: string;
+  name: string;
+  mimeType: string;
+  size: number;
+  /** Ruta dentro del bucket de Supabase Storage. */
+  storagePath: string;
+  uploadedBy: string;
+  uploadedAt: string;
+}
+
+export interface Operator {
+  id: string;
+  name: string;
+  role: string;
+  hourlyCost: number;
+  active: boolean;
+  /** Usuario (auth) vinculado, si el operario entra al sistema. */
+  userId?: string;
+  email?: string;
+  createdAt: string;
+}
+
+export interface MaterialRequest {
+  id: string;
+  projectId: string;
+  materialId: string;
+  materialName: string;
+  quantity: number;
+  unit: string;
+  note?: string;
+  requestedBy: string;
+  status: "open" | "resolved" | "cancelled";
+  createdAt: string;
+  resolvedAt?: string;
+  resolvedBy?: string;
+}
+
+// ── Stock (ledger) ────────────────────────────────────────────
+
+/** Dónde está físicamente (o contablemente) una cantidad de material. */
+export type Place =
+  | { type: "supplier" }
+  | { type: "warehouse" }
+  | { type: "project"; projectId: string }
+  | { type: "consumed"; projectId: string }
+  | { type: "waste"; projectId: string }
+  | { type: "converted" };
+
+export type MovementKind =
+  | "purchase_in"
+  | "opening"
+  | "assign"
+  | "release"
+  | "transfer"
+  | "consume"
+  | "waste"
+  | "to_leftover"
+  | "leftover_in"
+  | "supplier_return"
+  | "adjustment";
+
+/** Medidas opcionales de un sobrante (solo se piden según el tipo de material). */
+export interface LeftoverDims {
+  lengthMm?: number;
+  widthMm?: number;
+  thicknessMm?: number;
+  finish?: string;
+}
+
+export interface StockLot {
+  id: string;
+  materialId: string;
+  materialName: string;
+  unit: string;
+  /** Costo unitario del lote: viaja con el material aunque se use en otro proyecto. */
+  unitCost: number;
+  kind: "purchase" | "leftover" | "opening";
+  supplier?: string;
+  purchaseEntryId?: string;
+  /** Proyecto para el que se compró / del que sobró. */
+  originProjectId?: string;
+  originProjectName?: string;
+  parentLotId?: string;
+  location?: string;
+  dims?: LeftoverDims;
+  notes?: string;
+  createdBy: string;
+  createdAt: string;
+}
+
+export interface StockMovement {
+  id: string;
+  lotId: string;
+  kind: MovementKind;
+  quantity: number;
+  from: Place;
+  to: Place;
+  date: string;
+  /** Proyecto al que se imputa (consumo / desperdicio). */
+  projectId?: string;
+  itemId?: string;
+  /** En to_leftover: lote hijo que recibe la cantidad. */
+  intoLotId?: string;
+  /** Agrupa los movimientos de una misma acción (ej.: las dos patas de un sobrante). */
+  groupId?: string;
+  note?: string;
+  createdBy: string;
+  createdAt: string;
 }
 
 export interface ReusableMaterial {
@@ -187,7 +355,8 @@ export interface AlertSettings {
   marginCriticalPp: number;
   daysWithoutRecords: number;
   dueSoonDays: number;
-  dueSoonProgressPct: number;
+  /** Alerta si pasó este % del plazo y el proyecto todavía no llegó a Producción. */
+  deadlineNoProductionPct: number;
 }
 
 export type AlertKind = "category" | "margin" | "stale" | "due" | "reconciliation";
@@ -211,3 +380,6 @@ export interface DemoUser {
   name: string;
   role: string;
 }
+
+/** Rol del usuario dentro de la empresa. owner/member = Gestión; operator = Taller. */
+export type AppRole = "owner" | "member" | "operator";
