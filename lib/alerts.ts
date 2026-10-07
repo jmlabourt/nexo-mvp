@@ -4,9 +4,10 @@
 // ─────────────────────────────────────────────────────────────
 import type { Alert, AlertLevel, AlertSettings, EconomicHealth, Project } from "@/types";
 import { projectEconomics, lastRecordDate } from "./calculations";
-import { reconciliationSummary } from "./material-reconciliation";
-import { CATEGORY_IS_PLURAL, CATEGORY_LABELS } from "./constants";
-import { daysBetween, formatCurrency, formatNumber, formatPercent, formatQty, formatSignedCurrency, pluralizeUnit } from "./formatting";
+import { projectSchedule } from "./project-rules";
+import { projectHoldings, type StockState } from "./stock";
+import { CATEGORY_IS_PLURAL, CATEGORY_LABELS, STATUS_LABELS } from "./constants";
+import { daysBetween, formatCurrency, formatNumber, formatPercent, formatQty, formatSignedCurrency } from "./formatting";
 
 export const LEVEL_RANK: Record<AlertLevel, number> = { info: 0, warning: 1, critical: 2 };
 
@@ -27,7 +28,7 @@ function base(project: Project) {
   return { projectId: project.id, projectCode: project.code, projectName: project.name };
 }
 
-export function projectAlerts(project: Project, settings: AlertSettings, today: string): Alert[] {
+export function projectAlerts(project: Project, settings: AlertSettings, today: string, stock?: StockState): Alert[] {
   if (project.status === "completed" || project.status === "quotation") return [];
   const econ = projectEconomics(project);
   const alerts: Alert[] = [];
@@ -100,42 +101,61 @@ export function projectAlerts(project: Project, settings: AlertSettings, today: 
     }
   }
 
-  // 4. Entrega próxima con poco avance
-  const daysLeft = daysBetween(today, project.dueDate);
-  if (daysLeft <= settings.dueSoonDays && project.progressPercent < settings.dueSoonProgressPct) {
+  // 4. Plazo + etapa (el plazo es tiempo transcurrido, no avance de obra)
+  const sched = projectSchedule(project, today);
+  const preProduction = project.status === "approved" || project.status === "purchasing";
+  if (sched.overdue) {
+    alerts.push({
+      ...base(project),
+      id: `${project.id}:due:${project.dueDate}:critical`,
+      kind: "due",
+      level: "critical",
+      title: "Entrega vencida",
+      message: `La entrega venció hace ${Math.abs(sched.remainingDays)} días y el proyecto sigue en ${STATUS_LABELS[project.status]}.`,
+    });
+  } else if (preProduction && sched.remainingDays <= settings.dueSoonDays) {
     alerts.push({
       ...base(project),
       id: `${project.id}:due:${project.dueDate}:warning`,
       kind: "due",
       level: "warning",
-      title: daysLeft < 0 ? "Entrega vencida" : "Entrega próxima",
-      message:
-        daysLeft < 0
-          ? `La entrega venció hace ${Math.abs(daysLeft)} días y el avance es ${project.progressPercent}%.`
-          : `Faltan ${daysLeft} días para la entrega y el avance es ${project.progressPercent}%.`,
+      title: `Entrega próxima y todavía en ${STATUS_LABELS[project.status]}`,
+      message: `Faltan ${sched.remainingDays} días para la entrega y el proyecto aún no pasó a Producción.`,
+    });
+  } else if (preProduction && sched.elapsedPct >= settings.deadlineNoProductionPct) {
+    alerts.push({
+      ...base(project),
+      id: `${project.id}:deadline:${settings.deadlineNoProductionPct}:warning`,
+      kind: "due",
+      level: "warning",
+      title: "Mucho plazo consumido sin empezar a producir",
+      message: `Pasó el ${sched.elapsedPct}% del plazo y el proyecto sigue en ${STATUS_LABELS[project.status]}.`,
     });
   }
 
-  // 5. Reconciliación de materiales.
-  // En producción, lo comprado y aún no usado es normal → info.
-  // En instalación la fabricación terminó → lo no explicado pasa a warning.
-  if (project.status === "production" || project.status === "installation") {
+  // 5. Material asignado y sin consumir (sin destino). En producción es normal → info;
+  // en instalación la fabricación terminó → hay que darle destino.
+  if (stock && (project.status === "production" || project.status === "installation")) {
     const fabricationDone = project.status === "installation";
-    for (const row of reconciliationSummary(project).pending) {
-      const qty = Math.abs(row.unexplainedQty);
-      const missing = row.unexplainedQty > 0;
-      const q = formatQty(qty, row.unit);
+    const byMaterial = new Map<string, { name: string; unit: string; qty: number; value: number }>();
+    for (const h of projectHoldings(stock, project.id)) {
+      const cur = byMaterial.get(h.lot.materialId) ?? { name: h.lot.materialName, unit: h.lot.unit, qty: 0, value: 0 };
+      cur.qty += h.quantity;
+      cur.value += h.quantity * h.lot.unitCost;
+      byMaterial.set(h.lot.materialId, cur);
+    }
+    for (const [key, m] of byMaterial) {
+      const q = formatQty(m.qty, m.unit);
       alerts.push({
         ...base(project),
-        id: `${project.id}:reconciliation:${row.key}:${row.unexplainedQty}`,
+        id: `${project.id}:reconciliation:${key}:${Math.round(m.qty * 1000)}`,
         kind: "reconciliation",
-        level: missing && fabricationDone ? "warning" : "info",
-        title: `Reconciliar ${row.name}`,
-        message: !missing
-          ? `Se registró uso de ${formatNumber(qty)} ${pluralizeUnit(row.unit, qty)} de ${row.name} como “comprado para el proyecto” por encima de lo comprado.`
-          : fabricationDone
-            ? `Falta reconciliar ${q} de ${row.name}.`
-            : `Falta reconciliar ${q} de ${row.name}: se compraron pero todavía no tienen consumo, desperdicio ni sobrante registrado.`,
+        level: fabricationDone ? "warning" : "info",
+        title: `${m.name} sin consumir`,
+        message: fabricationDone
+          ? `Quedan ${q} asignados al proyecto sin usar. Devolvelos al stock, transferilos, marcalos como sobrante o desperdicio antes de cerrar.`
+          : `Hay ${q} de ${m.name} asignados al proyecto que todavía no tienen consumo registrado.`,
+        impactAmount: Math.round(m.value),
       });
     }
   }
@@ -147,8 +167,8 @@ export function sortAlerts(alerts: Alert[]): Alert[] {
   return [...alerts].sort((a, b) => LEVEL_RANK[b.level] - LEVEL_RANK[a.level]);
 }
 
-export function allAlerts(projects: Project[], settings: AlertSettings, today: string): Alert[] {
-  return sortAlerts(projects.flatMap((p) => projectAlerts(p, settings, today)));
+export function allAlerts(projects: Project[], settings: AlertSettings, today: string, stock?: StockState): Alert[] {
+  return sortAlerts(projects.flatMap((p) => projectAlerts(p, settings, today, stock)));
 }
 
 /**

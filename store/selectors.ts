@@ -5,7 +5,7 @@ import type { Alert, EconomicHealth, Project } from "@/types";
 import { allAlerts, closedHealth, economicHealth, projectAlerts } from "@/lib/alerts";
 import { projectEconomics, type ProjectEconomics } from "@/lib/calculations";
 import { todayISO } from "@/lib/formatting";
-import { useAppStore } from "./use-app-store";
+import { effectiveIdentity, useAppStore } from "./use-app-store";
 
 export function useToday(): string {
   return useMemo(() => todayISO(), []);
@@ -15,23 +15,25 @@ export function useAlerts(): { open: Alert[]; resolved: Alert[] } {
   const projects = useAppStore((s) => s.projects);
   const settings = useAppStore((s) => s.settings);
   const resolvedIds = useAppStore((s) => s.resolvedAlertIds);
+  const stock = useAppStore((s) => s.stock);
   const today = useToday();
   return useMemo(() => {
-    const all = allAlerts(projects, settings, today);
+    const all = allAlerts(projects, settings, today, stock);
     const set = new Set(resolvedIds);
     return { open: all.filter((a) => !set.has(a.id)), resolved: all.filter((a) => set.has(a.id)) };
-  }, [projects, settings, resolvedIds, today]);
+  }, [projects, settings, resolvedIds, today, stock]);
 }
 
 export function useProjectAlerts(project: Project | undefined): Alert[] {
   const settings = useAppStore((s) => s.settings);
   const resolvedIds = useAppStore((s) => s.resolvedAlertIds);
+  const stock = useAppStore((s) => s.stock);
   const today = useToday();
   return useMemo(() => {
     if (!project) return [];
     const set = new Set(resolvedIds);
-    return projectAlerts(project, settings, today).filter((a) => !set.has(a.id));
-  }, [project, settings, resolvedIds, today]);
+    return projectAlerts(project, settings, today, stock).filter((a) => !set.has(a.id));
+  }, [project, settings, resolvedIds, today, stock]);
 }
 
 export interface ProjectView {
@@ -61,4 +63,22 @@ export function useProjectViews(): ProjectView[] {
 export function useProjectView(id: string): ProjectView | undefined {
   const views = useProjectViews();
   return views.find((v) => v.project.id === id);
+}
+
+/** Quién opera ahora: rol, operario (si corresponde) y nombre para los registros. */
+export function useIdentity() {
+  const role = useAppStore((s) => s.role);
+  const currentMode = useAppStore((s) => s.currentMode);
+  const operators = useAppStore((s) => s.operators);
+  const userId = useAppStore((s) => s.userId);
+  const userEmail = useAppStore((s) => s.userEmail);
+  const actingOperatorId = useAppStore((s) => s.actingOperatorId);
+  const userName = useAppStore((s) => s.userName);
+  return useMemo(
+    () => {
+      const id = effectiveIdentity({ role, currentMode, operators, userId, userEmail, actingOperatorId, userName });
+      return { ...id, isManager: id.role !== "operator", realRole: role };
+    },
+    [role, currentMode, operators, userId, userEmail, actingOperatorId, userName],
+  );
 }

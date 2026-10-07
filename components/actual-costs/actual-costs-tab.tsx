@@ -55,7 +55,7 @@ export function ActualCostsTab({ project }: { project: Project }) {
   const filtered = rows.filter((r) => (cat === "all" || r.category === cat) && (user === "all" || r.user === user));
   const total = filtered.reduce((s, r) => s + r.amount, 0);
 
-  if (rows.length === 0) return <EmptyState icon={Receipt} title="Todavía no hay costos reales registrados" description="Usá “Registrar lo que pasó” o el QR del taller." />;
+  if (rows.length === 0) return <EmptyState icon={Receipt} title="Todavía no hay costos reales registrados" description="Usá “Registrar lo que pasó” o pedile al taller que cargue sus registros." />;
 
   return (
     <div className="space-y-3">

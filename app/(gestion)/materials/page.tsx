@@ -1,5 +1,5 @@
-import { LeftoversPage } from "@/components/materials/leftovers-page";
+import { redirect } from "next/navigation";
 
 export default function Page() {
-  return <LeftoversPage />;
+  redirect("/stock?tab=sobrantes");
 }

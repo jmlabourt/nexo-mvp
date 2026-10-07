@@ -25,10 +25,30 @@ describe("alertas derivadas", () => {
     const a = projectAlerts(p, S, "2026-01-12");
     expect(a.some((x) => x.kind === "stale" && x.message.includes("10 días"))).toBe(true);
   });
-  it("entrega próxima con avance < 80%", () => {
-    const p = project({ dueDate: "2026-01-14", progressPercent: 50 });
-    expect(projectAlerts(p, S, "2026-01-11").some((x) => x.kind === "due")).toBe(true);
-    expect(projectAlerts({ ...p, progressPercent: 85 }, S, "2026-01-11").some((x) => x.kind === "due")).toBe(false);
+  it("entrega próxima y todavía en Compras", () => {
+    const p = project({ status: "purchasing", dueDate: "2026-01-14" });
+    expect(projectAlerts(p, S, "2026-01-11").some((x) => x.kind === "due" && /Compras/.test(x.title))).toBe(true);
+    // Ya en Producción deja de ser esa alerta.
+    expect(projectAlerts({ ...p, status: "production" }, S, "2026-01-11").some((x) => x.kind === "due")).toBe(false);
+  });
+  it("mucho plazo consumido y sin llegar a Producción", () => {
+    const p = project({ status: "approved", startDate: "2026-01-01", dueDate: "2026-03-01" });
+    expect(projectAlerts(p, S, "2026-01-10").some((x) => x.kind === "due")).toBe(false);
+    expect(projectAlerts(p, S, "2026-02-05").some((x) => x.kind === "due" && /plazo/i.test(x.title))).toBe(true);
+  });
+  it("entrega vencida y no finalizado → crítica", () => {
+    const p = project({ status: "production", dueDate: "2026-01-05" });
+    const a = projectAlerts(p, S, "2026-01-11").find((x) => x.kind === "due");
+    expect(a?.level).toBe("critical");
+  });
+  it("material asignado sin consumir en Instalación → aviso", () => {
+    const p = project({ status: "installation", dueDate: "2026-06-01" });
+    const stock = {
+      lots: [{ id: "l1", materialId: "m", materialName: "Placa", unit: "placa", unitCost: 100, kind: "purchase" as const, createdBy: "t", createdAt: "2026-01-02T00:00:00Z" }],
+      movements: [{ id: "m1", lotId: "l1", kind: "purchase_in" as const, quantity: 3, from: { type: "supplier" as const }, to: { type: "project" as const, projectId: "p" }, date: "2026-01-02", createdBy: "t", createdAt: "2026-01-02T00:00:00Z" }],
+    };
+    expect(projectAlerts(p, S, "2026-01-11", stock).some((x) => x.kind === "reconciliation" && x.level === "warning")).toBe(true);
+    expect(projectAlerts(p, S, "2026-01-11").some((x) => x.kind === "reconciliation")).toBe(false);
   });
   it("salud económica: crítico → En riesgo", () => {
     const p = project({

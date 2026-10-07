@@ -4,19 +4,45 @@ import { TriangleAlert } from "lucide-react";
 import type { Project } from "@/types";
 import { CATEGORY_LABELS } from "@/lib/constants";
 import { projectEconomics } from "@/lib/calculations";
-import { reconciliationSummary } from "@/lib/material-reconciliation";
+import { projectMaterialFlow, unresolvedMaterial } from "@/lib/material-flow";
 import { closingSummary } from "@/lib/insights";
-import { formatCurrency, formatPercent, formatPp, formatQty, formatSignedCurrency } from "@/lib/formatting";
+import { formatCurrency, formatPercent, formatPp, formatQty, formatSignedCurrency, todayISO } from "@/lib/formatting";
 import { useAppStore } from "@/store/use-app-store";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
-import { ReconciliationTable } from "@/components/materials/materials-tab";
+import { StockActionDialog, type StockAction, type StockTarget } from "@/components/stock/stock-action-dialog";
 
 export function CloseDialog({ project, open, onOpenChange }: { project: Project; open: boolean; onOpenChange: (o: boolean) => void }) {
   const closeProject = useAppStore((s) => s.closeProject);
   const [step, setStep] = useState<0 | 1>(0);
-  const recon = useMemo(() => reconciliationSummary(project), [project]);
+  const stock = useAppStore((s) => s.stock);
+  const registerUsage = useAppStore((s) => s.registerUsage);
+  const [error, setError] = useState("");
+  const [act, setAct] = useState<{ action: StockAction; target: StockTarget } | null>(null);
+  const loose = useMemo(() => unresolvedMaterial(stock, project.id), [stock, project.id]);
+  const flow = useMemo(() => projectMaterialFlow(stock, project.id), [stock, project.id]);
+  const target = (h: (typeof loose)[number]): StockTarget => ({
+    materialId: h.lot.materialId,
+    materialName: h.lot.materialName,
+    unit: h.lot.unit,
+    max: h.quantity,
+    fromProjectId: project.id,
+    lotId: h.lot.id,
+  });
+  const markWaste = (h: (typeof loose)[number]) => {
+    const r = registerUsage(project.id, {
+      materialId: h.lot.materialId,
+      materialName: h.lot.materialName,
+      unit: h.lot.unit,
+      consumed: 0,
+      waste: h.quantity,
+      lotId: h.lot.id,
+      date: todayISO(),
+      notes: "Desperdicio registrado al cerrar el proyecto",
+    });
+    if (!r.ok) setError(r.error);
+  };
   // Simulamos el cierre para mostrar el margen real antes de confirmar.
   const simulated = useMemo(() => ({ ...project, status: "completed" as const }), [project]);
   const econ = useMemo(() => projectEconomics(simulated), [simulated]);
@@ -27,30 +53,41 @@ export function CloseDialog({ project, open, onOpenChange }: { project: Project;
       <DialogContent className="max-w-3xl">
         <DialogHeader>
           <DialogTitle>Cerrar proyecto {project.code}</DialogTitle>
-          <DialogDescription>Paso {step + 1} de 2 · {step === 0 ? "Reconciliación de materiales" : "Resultado final"}</DialogDescription>
+          <DialogDescription>Paso {step + 1} de 2 · {step === 0 ? "Destino del material" : "Resultado final"}</DialogDescription>
         </DialogHeader>
         {step === 0 ? (
           <div className="space-y-4">
-            {recon.allReconciled ? (
-              <p className="rounded-md bg-emerald-50 p-3 text-sm text-emerald-800">Todos los materiales comprados están explicados por consumo, desperdicio o sobrante.</p>
+            {loose.length === 0 ? (
+              <p className="rounded-md bg-emerald-50 p-3 text-sm text-emerald-800">
+                No queda material sin destino. Costo de materiales imputable: <strong>{formatCurrency(flow.attributableCost)}</strong> (consumido + desperdiciado).
+              </p>
             ) : (
               <div className="rounded-md bg-amber-50 p-3 text-sm text-amber-900" role="alert">
                 <div className="flex items-center gap-2 font-medium">
-                  <TriangleAlert className="size-4" /> Hay materiales sin reconciliar
+                  <TriangleAlert className="size-4" /> Hay material asignado sin destino
                 </div>
-                <ul className="mt-1 list-disc pl-6">
-                  {recon.pending.map((r) => (
-                    <li key={r.key}>
-                      {r.unexplainedQty > 0 ? `Falta reconciliar ${formatQty(r.unexplainedQty, r.unit)} de ${r.name}.` : `El uso registrado de ${r.name} supera lo comprado en ${formatQty(-r.unexplainedQty, r.unit)}.`}
-                    </li>
-                  ))}
-                </ul>
-                <p className="mt-2">Podés cerrar igual: el costo real se calcula sobre lo registrado. Conviene registrar lo faltante antes para que el margen real sea confiable.</p>
+                <p className="mt-1">No se puede cerrar con material en el aire. Elegí qué pasó con cada uno:</p>
               </div>
             )}
-            <div className="rounded-lg border border-slate-200">
-              <ReconciliationTable rows={recon.rows} />
-            </div>
+            {loose.length > 0 && (
+              <ul className="divide-y divide-slate-200 rounded-lg border border-slate-200">
+                {loose.map((h) => (
+                  <li key={h.lot.id} className="flex flex-wrap items-center gap-2 p-3 text-sm">
+                    <div className="min-w-48 flex-1">
+                      <div className="font-medium text-slate-900">{h.lot.materialName}</div>
+                      <div className="text-xs text-slate-500">{formatQty(h.quantity, h.lot.unit)} · {formatCurrency(h.quantity * h.lot.unitCost)}</div>
+                    </div>
+                    <Button size="sm" variant="outline" onClick={() => setAct({ action: "release", target: target(h) })}>Volver al stock</Button>
+                    <Button size="sm" variant="outline" onClick={() => setAct({ action: "transfer", target: target(h) })}>Otro proyecto</Button>
+                    <Button size="sm" variant="outline" onClick={() => setAct({ action: "leftover", target: target(h) })}>Sobrante</Button>
+                    <Button size="sm" variant="outline" onClick={() => setAct({ action: "supplier", target: target(h) })}>A proveedor</Button>
+                    <Button size="sm" variant="ghost" className="text-red-700" onClick={() => markWaste(h)}>Desperdicio</Button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
+            {act && <StockActionDialog action={act.action} target={act.target} open onOpenChange={(o) => { if (!o) setAct(null); }} />}
           </div>
         ) : (
           <div className="space-y-5">
@@ -115,7 +152,7 @@ export function CloseDialog({ project, open, onOpenChange }: { project: Project;
           {step === 0 ? (
             <>
               <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-              <Button onClick={() => setStep(1)}>{recon.allReconciled ? "Continuar" : "Continuar sin reconciliar"}</Button>
+              <Button disabled={loose.length > 0} onClick={() => setStep(1)}>Continuar</Button>
             </>
           ) : (
             <>
@@ -124,6 +161,7 @@ export function CloseDialog({ project, open, onOpenChange }: { project: Project;
                 onClick={() => {
                   const r = closeProject(project.id);
                   if (r.ok) onOpenChange(false);
+                  else setError(r.error);
                 }}
               >
                 Confirmar cierre

@@ -12,16 +12,20 @@ import type {
   BudgetLine,
   MaterialSource,
   MaterialUsageEntry,
+  Operator,
   Project,
   ProjectStatus,
   PurchaseEntry,
   ReusableMaterial,
+  StageLog,
 } from "@/types";
 import { ACTUAL_TYPE_LABELS, ACTUAL_TYPE_TO_CATEGORY, DEMO_USERS, MATERIAL_CATALOG, STATUS_LABELS, STATUS_ORDER } from "./constants";
 import { budgetLineTotal } from "./calculations";
 import { toISODate } from "./formatting";
 import { actualMessage, leftoverMessage, purchaseMessage, usageMessage } from "./activity";
 import { applyUsageToPool, poolAvailableFor } from "./reusable-pool";
+import { deriveLedgerFromLegacy } from "./stock-legacy";
+import type { StockState } from "./stock";
 
 const MGMT = DEMO_USERS.management.name;
 const PLANTA = DEMO_USERS.workshop.name;
@@ -57,7 +61,6 @@ interface ProjectSpec {
   start: number; // offset en días desde hoy
   due: number;
   salesPrice: number;
-  progress: number;
   owner: string;
   budget: BudgetSpec;
   purchases?: PurchaseSpec[];
@@ -80,6 +83,17 @@ function material(id: string) {
   const m = MATERIAL_CATALOG.find((x) => x.id === id);
   if (!m) throw new Error(`Material de catálogo inexistente: ${id}`);
   return m;
+}
+
+/** Operarios de la demo: ids estables para vincular horas y asignaciones. */
+const OPERATOR_SPECS: Array<{ id: string; name: string; role: string; hourlyCost: number }> = [
+  { id: "op-juan", name: "Juan Pérez", role: "Carpintería", hourlyCost: 15_000 },
+  { id: "op-diego", name: "Diego Sosa", role: "Armado", hourlyCost: 12_500 },
+  { id: "op-sofia", name: "Sofía Méndez", role: "Oficina técnica", hourlyCost: 15_000 },
+];
+
+function operatorIdFor(name: string): string | undefined {
+  return OPERATOR_SPECS.find((o) => o.name === name)?.id;
 }
 
 class SeedBuilder {
@@ -157,7 +171,6 @@ class SeedBuilder {
       createdAt: this.at(spec.start - 10, 9),
       updatedAt: this.at(0, 8),
       salesPrice: spec.salesPrice,
-      progressPercent: spec.progress,
       owner: spec.owner,
       budgetLines: this.budgetLines(spec.budget),
       actualEntries: [],
@@ -166,6 +179,10 @@ class SeedBuilder {
       activity: [],
       isClosed: spec.status === "completed",
       closedAt: spec.closedAt !== undefined ? this.at(spec.closedAt, 17) : undefined,
+      assignedOperatorIds: [],
+      items: [],
+      stageLogs: [],
+      attachments: [],
     };
     const events: ActivityEvent[] = [];
     const ev = (offset: number, kind: ActivityEvent["kind"], actor: string, message: string, hour = 10) =>
@@ -234,7 +251,7 @@ class SeedBuilder {
       this.pool = applyUsageToPool(this.pool, u, p, this.id("reu"));
       p.materialUsages.push(u);
       ev(off, "usage", by, usageMessage(u), 15);
-      if (leftover > 0) ev(off, "leftover", "Sistema", leftoverMessage(u), 15);
+      if (leftover > 0) ev(off, "leftover", "Sistema", leftoverMessage(u.materialName, leftover, u.unit), 15);
     }
 
     for (const [off, role, worker, hours, rate] of spec.labor ?? []) {
@@ -247,6 +264,7 @@ class SeedBuilder {
         description: `${role} — ${worker}`,
         amount: hours * rate,
         labor: { role, workerName: worker, hours, hourlyCost: rate },
+        operatorId: operatorIdFor(worker),
         createdBy: worker,
         createdAt: this.at(off, 18),
       };
@@ -275,13 +293,36 @@ class SeedBuilder {
       ev(spec.closedAt, "closed", MGMT, "Proyecto cerrado. Margen real calculado.", 17);
     }
     p.activity = events.sort((a, b) => b.at.localeCompare(a.at));
+    // Línea base: el presupuesto con el que se aprobó el proyecto.
+    if (spec.status !== "quotation") {
+      p.baseline = {
+        capturedAt: this.at(spec.start - 3, 11),
+        capturedBy: MGMT,
+        salesPrice: p.salesPrice,
+        dueDate: p.dueDate,
+        budgetTotal: p.budgetLines.reduce((sum, l) => sum + l.total, 0),
+        lines: p.budgetLines.map((l) => ({ ...l })),
+      };
+    }
+    // Operarios asignados: los que ya cargaron horas + el equipo base en obras abiertas.
+    const worked = new Set((p.actualEntries.map((e) => e.operatorId).filter(Boolean)) as string[]);
+    const open = ["purchasing", "production", "installation"].includes(spec.status);
+    if (open) {
+      worked.add("op-juan");
+      worked.add("op-diego");
+    }
+    p.assignedOperatorIds = OPERATOR_SPECS.map((o) => o.id).filter((id) => worked.has(id));
     return p;
   }
 }
 
 export interface SeedState {
   projects: Project[];
-  reusableMaterials: ReusableMaterial[];
+  operators: Operator[];
+  /** Stock inicial: se deriva de las compras, usos y sobrantes de la demo. */
+  stock: StockState;
+  /** Pool del modelo anterior (sólo para derivar el stock). */
+  legacyPool: ReusableMaterial[];
 }
 
 export const MAIN_DEMO_PROJECT_ID = "p-1042";
@@ -304,7 +345,6 @@ export function buildSeed(now: Date = new Date()): SeedState {
       due: -125,
       closedAt: -122,
       salesPrice: 6_500_000,
-      progress: 100,
       owner: MGMT,
       budget: {
         materials: [
@@ -353,7 +393,6 @@ export function buildSeed(now: Date = new Date()): SeedState {
       due: -90,
       closedAt: -88,
       salesPrice: 14_000_000,
-      progress: 100,
       owner: MGMT,
       budget: {
         materials: [
@@ -402,7 +441,6 @@ export function buildSeed(now: Date = new Date()): SeedState {
       due: -75,
       closedAt: -73,
       salesPrice: 3_800_000,
-      progress: 100,
       owner: MGMT,
       budget: {
         materials: [
@@ -441,7 +479,6 @@ export function buildSeed(now: Date = new Date()): SeedState {
       due: -50,
       closedAt: -47,
       salesPrice: 10_500_000,
-      progress: 100,
       owner: MGMT,
       budget: {
         materials: [
@@ -491,7 +528,6 @@ export function buildSeed(now: Date = new Date()): SeedState {
       start: -40,
       due: 20,
       salesPrice: 12_000_000,
-      progress: 60,
       owner: MGMT,
       budget: {
         materials: [
@@ -554,7 +590,6 @@ export function buildSeed(now: Date = new Date()): SeedState {
       start: -20,
       due: 30,
       salesPrice: 11_000_000,
-      progress: 45,
       owner: MGMT,
       budget: {
         materials: [
@@ -595,7 +630,6 @@ export function buildSeed(now: Date = new Date()): SeedState {
       start: -28,
       due: 12,
       salesPrice: 6_600_000,
-      progress: 70,
       owner: MGMT,
       budget: {
         materials: [
@@ -636,7 +670,6 @@ export function buildSeed(now: Date = new Date()): SeedState {
       start: -45,
       due: 3,
       salesPrice: 9_600_000,
-      progress: 90,
       owner: MGMT,
       budget: {
         materials: [
@@ -681,7 +714,6 @@ export function buildSeed(now: Date = new Date()): SeedState {
       start: -22,
       due: 4,
       salesPrice: 4_500_000,
-      progress: 55,
       owner: MGMT,
       budget: {
         materials: [
@@ -718,7 +750,6 @@ export function buildSeed(now: Date = new Date()): SeedState {
       start: 5,
       due: 45,
       salesPrice: 7_500_000,
-      progress: 0,
       owner: MGMT,
       budget: {
         materials: [
@@ -746,7 +777,6 @@ export function buildSeed(now: Date = new Date()): SeedState {
       start: -5,
       due: 40,
       salesPrice: 13_500_000,
-      progress: 10,
       owner: MGMT,
       budget: {
         materials: [
@@ -779,7 +809,6 @@ export function buildSeed(now: Date = new Date()): SeedState {
       start: 25,
       due: 55,
       salesPrice: 5_600_000,
-      progress: 0,
       owner: MGMT,
       budget: {
         materials: [
@@ -793,5 +822,32 @@ export function buildSeed(now: Date = new Date()): SeedState {
     }),
   );
 
-  return { projects, reusableMaterials: b.pool };
+  // Muebles, bitácora y archivos del proyecto demo principal.
+  const main = projects.find((x) => x.id === MAIN_DEMO_PROJECT_ID);
+  if (main) {
+    main.items = [
+      { id: "itm-mostrador", name: "Mostrador de atención", description: "Frente laqueado, tapa de MDF y cajonera.", quantity: 1 },
+      { id: "itm-gondolas", name: "Góndolas centrales", description: "Estructura de melamina y perfil de aluminio.", quantity: 6 },
+      { id: "itm-murales", name: "Exhibidores murales", quantity: 8 },
+    ];
+    const labor = main.actualEntries.filter((e) => e.type === "labor");
+    if (labor[1]) labor[1].itemId = "itm-mostrador";
+    if (labor[2]) labor[2].itemId = "itm-gondolas";
+    if (labor[3]) labor[3].itemId = "itm-gondolas";
+    const logs: StageLog[] = [
+      { id: "log-0001", projectId: main.id, stage: "purchasing", date: b.day(-34), kind: "note", text: "Se compraron las placas y los herrajes con el proveedor habitual. El tapacanto se pidió con 10% extra por la merma anterior.", responsible: MGMT, createdBy: MGMT, createdAt: b.at(-34, 13) },
+      { id: "log-0002", projectId: main.id, stage: "production", date: b.day(-22), kind: "incident", text: "Una placa de melamina grafito llegó con una esquina golpeada. Se usó igual en piezas chicas y se informó al proveedor.", responsible: PLANTA, createdBy: PLANTA, createdAt: b.at(-22, 16) },
+      { id: "log-0003", projectId: main.id, stage: "production", date: b.day(-10), kind: "note", text: "Terminado el corte de las góndolas. Arranca el armado del mostrador.", responsible: PLANTA, itemId: "itm-gondolas", createdBy: PLANTA, createdAt: b.at(-10, 17) },
+    ];
+    main.stageLogs = logs;
+  }
+  const shop = projects.find((x) => x.id === "p-1053");
+  if (shop) {
+    shop.stageLogs = [
+      { id: "log-0004", projectId: shop.id, stage: "purchasing", date: b.day(-3), kind: "note", text: "Compra de placas realizada. Falta cotizar los herrajes y las correderas.", responsible: MGMT, createdBy: MGMT, createdAt: b.at(-3, 14) },
+    ];
+  }
+
+  const operators: Operator[] = OPERATOR_SPECS.map((o) => ({ ...o, active: true, createdAt: b.at(-200, 9) }));
+  return { projects, operators, stock: deriveLedgerFromLegacy(projects, b.pool), legacyPool: b.pool };
 }
