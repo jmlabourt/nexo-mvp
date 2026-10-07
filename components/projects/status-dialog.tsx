@@ -1,57 +1,75 @@
 "use client";
 import { useState } from "react";
 import type { Project, ProjectStatus } from "@/types";
-import { STATUS_LABELS, STATUS_ORDER } from "@/lib/constants";
+import { STATUS_LABELS } from "@/lib/constants";
+import { nextStatus, previousStatuses } from "@/lib/project-rules";
 import { useAppStore } from "@/store/use-app-store";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Choice } from "@/components/ui/choice";
-import { Field } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
 
+const NOTES: Partial<Record<ProjectStatus, string>> = {
+  approved: "Al aprobar, el presupuesto queda guardado como línea base: no se modifica, sólo se compara.",
+  purchasing: "Desde Compras ya se puede registrar compras y asignar material.",
+  production: "Desde Producción, Taller puede registrar horas y consumos de los operarios asignados.",
+};
+
+/** Cambio de etapa de a un paso. Volver atrás es una corrección y pide confirmación. */
 export function StatusDialog({ project, open, onOpenChange }: { project: Project; open: boolean; onOpenChange: (o: boolean) => void }) {
   const changeProjectStatus = useAppStore((s) => s.changeProjectStatus);
-  const setProgress = useAppStore((s) => s.setProgress);
-  const [status, setStatus] = useState<ProjectStatus>(project.status);
-  const [progress, setProgressValue] = useState(String(project.progressPercent));
   const [error, setError] = useState("");
-  const options = STATUS_ORDER.filter((s) => s !== "completed");
-  const lockWarning = (status === "purchasing" || status === "production" || status === "installation") && (project.status === "quotation" || project.status === "approved");
+  const [back, setBack] = useState<ProjectStatus | "">("");
+  const next = nextStatus(project.status);
+  const prev = previousStatuses(project.status);
 
-  const save = () => {
-    const p = Number(progress);
-    if (!Number.isFinite(p) || p < 0 || p > 100) return setError("El avance debe estar entre 0 y 100.");
-    const r1 = changeProjectStatus(project.id, status);
-    if (!r1.ok) return setError(r1.error);
-    setProgress(project.id, p);
+  const go = (to: ProjectStatus, confirmBack = false) => {
+    const r = changeProjectStatus(project.id, to, { confirmBack });
+    if (!r.ok) return setError(r.error);
     onOpenChange(false);
   };
 
   return (
-    <Dialog open={open} onOpenChange={(o) => { onOpenChange(o); if (o) { setStatus(project.status); setProgressValue(String(project.progressPercent)); setError(""); } }}>
+    <Dialog open={open} onOpenChange={(o) => { onOpenChange(o); if (o) { setError(""); setBack(""); } }}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Cambiar estado y avance</DialogTitle>
-          <DialogDescription>Para finalizar el proyecto usá “Cerrar proyecto”.</DialogDescription>
+          <DialogTitle>Cambiar etapa</DialogTitle>
+          <DialogDescription>Ahora: <strong>{STATUS_LABELS[project.status]}</strong>. Las etapas se avanzan de a una. Para finalizar usá “Cerrar proyecto”.</DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
-          <fieldset>
-            <legend className="mb-1.5 text-sm font-medium text-slate-700">Estado</legend>
-            <Choice<ProjectStatus> name="Estado" columns={3} value={status} onChange={setStatus} options={options.map((s) => ({ value: s, label: STATUS_LABELS[s] }))} />
-          </fieldset>
-          {lockWarning && (
-            <p className="rounded-md bg-amber-50 p-3 text-sm text-amber-900">
-              Al pasar a ejecución, el presupuesto queda bloqueado como línea base para medir desvíos.
-            </p>
+          {next ? (
+            <div className="rounded-lg border border-slate-200 p-4">
+              <p className="text-sm font-medium text-slate-900">Pasar a {STATUS_LABELS[next]}</p>
+              {NOTES[next] && <p className="mt-1 text-sm text-slate-600">{NOTES[next]}</p>}
+              <Button className="mt-3" onClick={() => go(next)}>Pasar a {STATUS_LABELS[next]}</Button>
+            </div>
+          ) : (
+            <p className="text-sm text-slate-600">Es la última etapa de ejecución. Cuando termine, cerrá el proyecto.</p>
           )}
-          <Field label="Avance (%) — carga manual" htmlFor="progress" hint="No se calcula automáticamente: lo informa el responsable.">
-            <Input id="progress" type="number" min={0} max={100} value={progress} onChange={(e) => setProgressValue(e.target.value)} />
-          </Field>
+          {prev.length > 0 && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50/50 p-4">
+              <p className="text-sm font-medium text-amber-900">Corregir: volver a una etapa anterior</p>
+              {back === "" ? (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {prev.map((s) => (
+                    <Button key={s} size="sm" variant="outline" onClick={() => setBack(s)}>{STATUS_LABELS[s]}</Button>
+                  ))}
+                </div>
+              ) : (
+                <div className="mt-2 space-y-2">
+                  <p className="text-sm text-amber-900">
+                    ¿Confirmás volver a <strong>{STATUS_LABELS[back]}</strong>? Queda registrado como corrección. {back === "quotation" || back === "approved" ? "Taller deja de poder cargar registros." : ""}
+                  </p>
+                  <div className="flex gap-2">
+                    <Button size="sm" variant="outline" onClick={() => setBack("")}>No</Button>
+                    <Button size="sm" onClick={() => go(back, true)}>Sí, volver a {STATUS_LABELS[back]}</Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
           {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-          <Button onClick={save}>Guardar</Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Cerrar</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

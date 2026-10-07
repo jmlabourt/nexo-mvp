@@ -5,8 +5,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Info } from "lucide-react";
 import type { Project } from "@/types";
 import { OTHER_MATERIAL_ID } from "@/lib/constants";
-import { projectMaterialOptions } from "@/lib/material-options";
-import { resolveUnitCost } from "@/lib/project-operations";
+import { projectMaterialOptions, suggestUnitCost } from "@/lib/material-options";
 import { purchaseSchema, type PurchaseValues } from "@/lib/schemas";
 import { formatCurrency, todayISO } from "@/lib/formatting";
 import { slugify } from "@/lib/material-reconciliation";
@@ -18,14 +17,33 @@ import { DialogFooter } from "@/components/ui/dialog";
 import { MaterialSelect } from "./material-select";
 
 export const PURCHASE_NOTICE =
-  "Registrar esta compra no significa que todo el material se imputará al costo del proyecto. El costo real se calcula según el consumo y desperdicio registrado.";
+  "El material comprado queda asignado a este proyecto, pero todavía no es costo: el costo real se calcula con lo que se consume y se desperdicia. Lo que sobre puede volver al stock o ir a otro proyecto.";
 
-export function PurchaseForm({ project, onDone }: { project: Project; onDone: () => void }) {
+export function PurchaseForm({
+  project,
+  onDone,
+  prefill,
+}: {
+  project: Project;
+  onDone: () => void;
+  /** Para comprar lo que falta de un material desde la pestaña Materiales. */
+  prefill?: { materialId: string; quantity: number };
+}) {
   const addPurchaseEntry = useAppStore((s) => s.addPurchaseEntry);
+  const lots = useAppStore((s) => s.stock.lots);
   const options = useMemo(() => projectMaterialOptions(project), [project]);
   const { register, handleSubmit, control, setValue, setError, formState } = useForm<PurchaseValues>({
     resolver: zodResolver(purchaseSchema),
-    defaultValues: { materialId: "", customName: "", unit: "", date: todayISO(), supplier: "", notes: "" },
+    defaultValues: {
+      materialId: prefill?.materialId ?? "",
+      customName: "",
+      unit: options.find((o) => o.id === prefill?.materialId)?.unit ?? "",
+      quantity: prefill?.quantity,
+      unitCost: prefill ? suggestUnitCost(project, lots, prefill.materialId) || undefined : undefined,
+      date: todayISO(),
+      supplier: "",
+      notes: "",
+    },
   });
   const materialId = useWatch({ control, name: "materialId" });
   const qty = Number(useWatch({ control, name: "quantity" })) || 0;
@@ -37,7 +55,7 @@ export function PurchaseForm({ project, onDone }: { project: Project; onDone: ()
     const o = options.find((x) => x.id === id);
     if (o) {
       setValue("unit", o.unit);
-      const { unitCost } = resolveUnitCost(project, o.id, o.name, "purchased_for_project");
+      const unitCost = suggestUnitCost(project, lots, o.id);
       if (unitCost > 0) setValue("unitCost", unitCost);
     }
   };
@@ -97,7 +115,7 @@ export function PurchaseForm({ project, onDone }: { project: Project; onDone: ()
       </Field>
       <div className="rounded-md bg-slate-50 p-3 text-sm">
         Total compra: <strong className="tabular">{formatCurrency(qty * cost)}</strong>
-        <span className="text-slate-500"> · Impacto en costo imputable: <strong>$ 0</strong> hasta registrar su uso</span>
+        <span className="text-slate-500"> · Impacto en el costo del proyecto: <strong>$ 0</strong> hasta que se consuma</span>
       </div>
       {e.root && <p role="alert" className="text-sm text-red-600">{e.root.message}</p>}
       <DialogFooter>

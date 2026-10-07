@@ -1,13 +1,11 @@
 "use client";
-import Link from "next/link";
 import { useMemo, useState } from "react";
-import { FolderSearch, Plus, Search } from "lucide-react";
+import { FolderSearch, Search } from "lucide-react";
 import type { EconomicHealth, ProjectStatus } from "@/types";
 import { HEALTH_LABELS } from "@/lib/constants";
 import { daysBetween, todayISO } from "@/lib/formatting";
 import { useProjectViews } from "@/store/selectors";
 import { PageHeader } from "@/components/shared/page-header";
-import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input, Select } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -61,13 +59,6 @@ export function ProjectsPage({ initialQuery = "" }: { initialQuery?: string }) {
       <PageHeader
         title="Proyectos"
         subtitle="Cada proyecto conecta su presupuesto con lo que realmente ocurre en fábrica."
-        actions={
-          <Button asChild>
-            <Link href="/projects/new">
-              <Plus /> Nuevo proyecto
-            </Link>
-          </Button>
-        }
       />
       <Tabs value={tab} onValueChange={(v) => setTab(v as ProjectStatus | "all")}>
         <TabsList aria-label="Filtrar por estado">

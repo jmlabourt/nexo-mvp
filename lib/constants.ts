@@ -129,7 +129,7 @@ export const DEFAULT_SETTINGS: AlertSettings = {
   marginCriticalPp: 10,
   daysWithoutRecords: 7,
   dueSoonDays: 5,
-  dueSoonProgressPct: 80,
+  deadlineNoProductionPct: 50,
 };
 
 export const DEMO_USERS = {

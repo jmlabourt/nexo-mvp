@@ -6,9 +6,10 @@ import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { HealthBadge, StatusBadge } from "@/components/shared/badges";
 import { DeltaPp } from "@/components/shared/margin-shift";
 import { ProgressBar } from "@/components/ui/progress";
-import { formatCurrency, formatDate, formatPercent } from "@/lib/formatting";
+import { projectSchedule } from "@/lib/project-rules";
+import { formatCurrency, formatDate, formatPercent, todayISO } from "@/lib/formatting";
 
-export function ProjectsTable({ views, showProgress = true }: { views: ProjectView[]; showProgress?: boolean }) {
+export function ProjectsTable({ views, showSchedule = true }: { views: ProjectView[]; showSchedule?: boolean }) {
   const router = useRouter();
   return (
     <Table>
@@ -18,7 +19,7 @@ export function ProjectsTable({ views, showProgress = true }: { views: ProjectVi
           <TH>Cliente</TH>
           <TH>Estado</TH>
           <TH>Entrega</TH>
-          {showProgress && <TH>Progreso</TH>}
+          {showSchedule && <TH>Plazo transcurrido</TH>}
           <TH className="text-right">Venta</TH>
           <TH className="text-right">Margen esperado</TH>
           <TH className="text-right">Margen proyectado</TH>
@@ -44,12 +45,17 @@ export function ProjectsTable({ views, showProgress = true }: { views: ProjectVi
               <StatusBadge status={p.status} />
             </TD>
             <TD className="whitespace-nowrap tabular">{formatDate(p.dueDate)}</TD>
-            {showProgress && (
+            {showSchedule && (
               <TD className="min-w-28">
-                <div className="flex items-center gap-2">
-                  <ProgressBar value={p.progressPercent} className="w-16" label={`Avance ${p.code}`} />
-                  <span className="text-xs tabular text-slate-500">{p.progressPercent}%</span>
-                </div>
+                {(() => {
+                  const sc = projectSchedule(p, p.isClosed && p.closedAt ? p.closedAt.slice(0, 10) : todayISO());
+                  return (
+                    <div className="flex items-center gap-2">
+                      <ProgressBar value={sc.elapsedPct} className="w-16" label={`Plazo transcurrido ${p.code}`} />
+                      <span className={`text-xs tabular ${sc.overdue && !p.isClosed ? "font-medium text-red-700" : "text-slate-500"}`}>{sc.elapsedPct}%</span>
+                    </div>
+                  );
+                })()}
               </TD>
             )}
             <TD className="whitespace-nowrap text-right tabular">{formatCurrency(p.salesPrice)}</TD>

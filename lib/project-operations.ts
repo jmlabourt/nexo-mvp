@@ -8,13 +8,21 @@ import type {
   ActualEntry,
   ActualEntryType,
   AlertSettings,
+  AppRole,
+  Attachment,
   BudgetLine,
+  LeftoverDims,
   MaterialSource,
   MaterialUsageEntry,
+  Operator,
   Project,
+  ProjectBaseline,
+  ProjectItem,
   ProjectStatus,
   PurchaseEntry,
-  ReusableMaterial,
+  StageKey,
+  StageLog,
+  StockLot,
   UnitCostOrigin,
 } from "@/types";
 import {
@@ -23,64 +31,55 @@ import {
   BUDGET_EDITABLE_STATUSES,
   CATEGORY_IS_PLURAL,
   CATEGORY_LABELS,
-  MATERIAL_CATALOG,
   STATUS_LABELS,
+  STATUS_ORDER,
 } from "./constants";
-import { budgetLineTotal } from "./calculations";
+import { actualByCategory, budgetByCategory, budgetLineTotal, budgetTotal } from "./calculations";
 import { actualMessage, activity, createId, leftoverMessage, purchaseMessage, usageMessage } from "./activity";
-import { applyUsageToPool } from "./reusable-pool";
 import { categoryAlertLevel, LEVEL_RANK } from "./alerts";
-import { actualByCategory, budgetByCategory } from "./calculations";
-import { formatPercent } from "./formatting";
+import { formatPercent, formatQty, todayISO } from "./formatting";
 import { materialKey } from "./material-reconciliation";
+import { unresolvedMaterial } from "./material-flow";
+import { assertExecutable, assertTransition, checkHours, isManager, RuleError } from "./project-rules";
+import {
+  applyChange,
+  assignToProject,
+  markLeftover,
+  receiveStock,
+  releaseToWarehouse,
+  returnToSupplier,
+  transferBetweenProjects,
+  consumeMaterial,
+  type StockState,
+} from "./stock";
 
 export class DomainError extends Error {}
 
 export interface Ctx {
   actor: string;
   now: string; // ISO datetime
+  /** Rol de quien opera. Por defecto Gestión. */
+  role?: AppRole;
+  /** Operario vinculado al usuario (sólo rol operator). */
+  operatorId?: string;
+}
+
+const roleOf = (ctx: Ctx): AppRole => ctx.role ?? "owner";
+
+function assertManager(ctx: Ctx, what: string) {
+  if (!isManager(roleOf(ctx))) throw new RuleError(`${what} lo hace Gestión.`);
+}
+
+/** Un operario sólo trabaja en proyectos que tiene asignados. */
+function assertCanWork(project: Pick<Project, "assignedOperatorIds">, ctx: Ctx) {
+  if (roleOf(ctx) !== "operator") return;
+  if (!ctx.operatorId || !project.assignedOperatorIds.includes(ctx.operatorId)) {
+    throw new RuleError("No estás asignado a este proyecto.");
+  }
 }
 
 function touch(project: Project, now: string, events: ActivityEvent[]): Project {
   return { ...project, updatedAt: now, activity: [...events, ...project.activity] };
-}
-
-// ── Costo unitario (físico → económico) ───────────────────────
-
-/**
- * Resuelve el costo unitario cuando el taller registra sin precio.
- * Orden: sobrante del pool → última compra del proyecto → presupuesto → catálogo.
- * Se guarda el origen para que gestión pueda ver cómo se valorizó.
- */
-export function resolveUnitCost(
-  project: Pick<Project, "purchaseEntries" | "budgetLines">,
-  materialId: string,
-  materialName: string,
-  source: MaterialSource,
-  poolItem?: ReusableMaterial,
-): { unitCost: number; origin: UnitCostOrigin } {
-  if (source === "reused_leftover" && poolItem) return { unitCost: poolItem.unitCost, origin: "reusable_pool" };
-  const key = materialKey(materialId, materialName);
-  const purchases = project.purchaseEntries
-    .filter((p) => materialKey(p.materialId, p.materialName) === key)
-    .sort((a, b) => a.date.localeCompare(b.date) || a.createdAt.localeCompare(b.createdAt));
-  const last = purchases.at(-1);
-  if (source === "purchased_for_project" && last) return { unitCost: last.unitCost, origin: "purchase" };
-  const line = project.budgetLines.find(
-    (l) => l.category === "materials" && materialKey(l.materialId, l.description) === key,
-  );
-  if (line && line.quantity !== null) return { unitCost: line.unitCost, origin: "budget" };
-  if (last) return { unitCost: last.unitCost, origin: "purchase" };
-  const cat = MATERIAL_CATALOG.find((m) => m.id === materialId);
-  if (cat) return { unitCost: cat.referenceCost, origin: "catalog" };
-  return { unitCost: 0, origin: "manual" };
-}
-
-/** Costo/hora para registros de taller (sin precio): tarifa del presupuesto o valor por defecto. */
-export const DEFAULT_HOURLY_COST = 14_000;
-export function resolveHourlyCost(project: Pick<Project, "budgetLines">): number {
-  const line = project.budgetLines.find((l) => l.category === "labor" && l.unit === "h" && l.quantity !== null);
-  return line ? line.unitCost : DEFAULT_HOURLY_COST;
 }
 
 // ── Creación ──────────────────────────────────────────────────
@@ -134,7 +133,6 @@ export function createProject(input: NewProjectInput, ctx: Ctx): Project {
     createdAt: ctx.now,
     updatedAt: ctx.now,
     salesPrice: input.salesPrice,
-    progressPercent: 0,
     owner: input.owner,
     budgetLines: input.budgetLines.map(makeBudgetLine),
     actualEntries: [],
@@ -142,6 +140,10 @@ export function createProject(input: NewProjectInput, ctx: Ctx): Project {
     purchaseEntries: [],
     activity: [activity("created", ctx.actor, "Proyecto creado.", ctx.now)],
     isClosed: false,
+    assignedOperatorIds: [],
+    items: [],
+    stageLogs: [],
+    attachments: [],
   };
 }
 
@@ -183,23 +185,39 @@ export function removeBudgetLine(project: Project, lineId: string, ctx: Ctx): Pr
   ]);
 }
 
-// ── Estado / avance ───────────────────────────────────────────
+// ── Estado ────────────────────────────────────────────────────
 
-export function changeStatus(project: Project, status: ProjectStatus, ctx: Ctx): Project {
-  if (project.isClosed) throw new DomainError("El proyecto está cerrado.");
-  if (status === "completed") throw new DomainError("Para finalizar usá “Cerrar proyecto”.");
-  if (status === project.status) return project;
-  const msg =
-    status === "approved" ? "Presupuesto aprobado. Proyecto pasó a Aprobado." : `Proyecto pasó a ${STATUS_LABELS[status]}.`;
-  return touch({ ...project, status }, ctx.now, [activity("status", ctx.actor, msg, ctx.now)]);
+export function captureBaseline(project: Project, ctx: Ctx): ProjectBaseline {
+  return {
+    capturedAt: ctx.now,
+    capturedBy: ctx.actor,
+    salesPrice: project.salesPrice,
+    dueDate: project.dueDate,
+    budgetTotal: budgetTotal(project.budgetLines),
+    lines: project.budgetLines.map((l) => ({ ...l })),
+  };
 }
 
-export function setProgress(project: Project, progress: number, ctx: Ctx): Project {
-  const p = Math.max(0, Math.min(100, Math.round(progress)));
-  if (p === project.progressPercent) return project;
-  return touch({ ...project, progressPercent: p }, ctx.now, [
-    activity("progress", ctx.actor, `Avance actualizado a ${p}%.`, ctx.now),
-  ]);
+/**
+ * Cambio de etapa: se avanza de a una; sólo Gestión corrige hacia atrás y con confirmación.
+ * Al aprobar se congela el presupuesto original (línea base): nunca se pisa.
+ */
+export function changeStatus(
+  project: Project,
+  status: ProjectStatus,
+  ctx: Ctx,
+  opts: { confirmBack?: boolean } = {},
+): Project {
+  if (status === project.status) return project;
+  const kind = assertTransition(project, status, { role: roleOf(ctx), confirmBack: opts.confirmBack });
+  const msg =
+    kind === "backward"
+      ? `Corrección: el proyecto volvió a ${STATUS_LABELS[status]}.`
+      : status === "approved"
+        ? "Presupuesto aprobado. Proyecto pasó a Aprobado."
+        : `Proyecto pasó a ${STATUS_LABELS[status]}.`;
+  const baseline = status === "approved" && !project.baseline ? captureBaseline(project, ctx) : project.baseline;
+  return touch({ ...project, status, baseline }, ctx.now, [activity("status", ctx.actor, msg, ctx.now)]);
 }
 
 // ── Compras (NO afectan costo imputable) ──────────────────────
@@ -215,19 +233,52 @@ export interface PurchaseInput {
   notes?: string;
 }
 
-export function addPurchase(project: Project, input: PurchaseInput, ctx: Ctx): Project {
+/**
+ * Registra una compra para el proyecto: queda en el historial de compras y el material
+ * entra al stock ASIGNADO al proyecto. No es costo hasta que se consuma o se desperdicie.
+ */
+export function addPurchase(
+  project: Project,
+  stock: StockState,
+  input: PurchaseInput,
+  ctx: Ctx,
+): { project: Project; stock: StockState } {
+  assertManager(ctx, "Registrar compras");
   assertOpen(project);
+  if (project.status === "quotation") {
+    throw new RuleError("Un proyecto en Cotización todavía no compra materiales: aprobalo primero.");
+  }
+  const key = materialKey(input.materialId, input.materialName);
   const entry: PurchaseEntry = {
     id: createId("pur"),
     projectId: project.id,
     ...input,
+    materialId: key,
     total: Math.round(input.quantity * input.unitCost * 100) / 100,
     createdBy: ctx.actor,
     createdAt: ctx.now,
   };
-  return touch({ ...project, purchaseEntries: [...project.purchaseEntries, entry] }, ctx.now, [
-    activity("purchase", ctx.actor, purchaseMessage(entry), ctx.now),
-  ]);
+  const received = receiveStock(
+    {
+      materialId: key,
+      materialName: input.materialName,
+      unit: input.unit,
+      quantity: input.quantity,
+      unitCost: input.unitCost,
+      supplier: input.supplier,
+      date: input.date,
+      destination: { projectId: project.id, projectName: `${project.code} · ${project.name}` },
+      purchaseEntryId: entry.id,
+      notes: input.notes,
+    },
+    ctx,
+  );
+  return {
+    project: touch({ ...project, purchaseEntries: [...project.purchaseEntries, entry] }, ctx.now, [
+      activity("purchase", ctx.actor, purchaseMessage(entry), ctx.now),
+    ]),
+    stock: applyChange(stock, received),
+  };
 }
 
 // ── Desvíos: evento de actividad cuando una categoría empeora de nivel ──
@@ -268,128 +319,437 @@ export interface MaterialUsageInput {
   materialId: string;
   materialName: string;
   unit: string;
-  source: MaterialSource;
-  reusableMaterialId?: string;
-  quantityConsumed: number;
-  wasteQuantity: number;
-  reusableLeftoverQuantity: number;
-  /** Solo en modo gestión. Si falta, se resuelve automáticamente (modo taller). */
-  unitCost?: number;
+  consumed: number;
+  waste: number;
+  /** Lote puntual, si se quiere usar uno específico. Si falta se elige solo. */
+  lotId?: string;
+  itemId?: string;
   date: string;
   notes?: string;
+  /** Opcional: lo que sobró reutilizable (no es costo, conserva su valor). */
+  leftover?: {
+    quantity: number;
+    dims?: LeftoverDims;
+    location?: string;
+    destination?: "warehouse" | { projectId: string };
+  };
 }
 
-export interface UsageResult {
-  project: Project;
-  pool: ReusableMaterial[];
-  usage: MaterialUsageEntry;
+function usageOrigin(lot: StockLot): UnitCostOrigin {
+  return lot.kind === "leftover" ? "reusable_pool" : lot.kind === "purchase" ? "purchase" : "manual";
 }
 
-export function addMaterialUsage(
+function usageSource(lot: StockLot, projectId: string): MaterialSource {
+  if (lot.kind === "leftover") return "reused_leftover";
+  return lot.originProjectId === projectId ? "purchased_for_project" : "existing_stock";
+}
+
+/**
+ * Consumo / desperdicio de material. Sólo se puede usar lo que el proyecto tiene asignado
+ * (comprado para él, tomado del stock o transferido). El costo sale del lote, no se tipea.
+ */
+export function registerUsage(
   project: Project,
-  pool: ReusableMaterial[],
+  stock: StockState,
   input: MaterialUsageInput,
   settings: AlertSettings,
   ctx: Ctx,
-): UsageResult {
-  assertOpen(project);
-  if (input.quantityConsumed < 0 || input.wasteQuantity < 0 || input.reusableLeftoverQuantity < 0) {
-    throw new DomainError("Las cantidades no pueden ser negativas.");
+): { project: Project; stock: StockState } {
+  assertExecutable(project, "consumo de material");
+  assertCanWork(project, ctx);
+  if (input.itemId && !project.items.some((i) => i.id === input.itemId)) {
+    throw new DomainError("El mueble elegido no existe en este proyecto.");
   }
-  if (input.quantityConsumed + input.wasteQuantity <= 0) {
-    throw new DomainError("Indicá cuánto material se utilizó.");
-  }
-  const poolItem =
-    input.source === "reused_leftover" ? pool.find((p) => p.id === input.reusableMaterialId) : undefined;
-  if (input.source === "reused_leftover" && !poolItem) throw new DomainError("Elegí qué sobrante se reutilizó.");
+  const key = materialKey(input.materialId, input.materialName);
+  const used = consumeMaterial(
+    stock,
+    { projectId: project.id, materialId: key, consumed: input.consumed, waste: input.waste, lotId: input.lotId, itemId: input.itemId, date: input.date, note: input.notes },
+    ctx,
+  );
+  let next = applyChange(stock, used);
 
-  let unitCost: number;
-  let origin: UnitCostOrigin;
-  if (input.unitCost !== undefined && input.source !== "reused_leftover") {
-    unitCost = input.unitCost;
-    origin = "manual";
-  } else {
-    ({ unitCost, origin } = resolveUnitCost(project, input.materialId, input.materialName, input.source, poolItem));
-  }
-
-  const usage: MaterialUsageEntry = {
+  const usages: MaterialUsageEntry[] = used.parts.map((part) => ({
     id: createId("use"),
     projectId: project.id,
-    materialId: input.materialId,
+    materialId: key,
     materialName: input.materialName,
     date: input.date,
-    quantityConsumed: input.quantityConsumed,
-    wasteQuantity: input.wasteQuantity,
-    reusableLeftoverQuantity: input.reusableLeftoverQuantity,
+    quantityConsumed: part.consumed,
+    wasteQuantity: part.waste,
+    reusableLeftoverQuantity: 0,
     unit: input.unit,
-    unitCost,
-    unitCostOrigin: origin,
-    source: input.source,
-    reusableMaterialId: poolItem?.id,
+    unitCost: part.lot.unitCost,
+    unitCostOrigin: usageOrigin(part.lot),
+    source: usageSource(part.lot, project.id),
+    reusableMaterialId: undefined,
+    lotId: part.lot.id,
+    itemId: input.itemId,
     notes: input.notes,
     createdBy: ctx.actor,
     createdAt: ctx.now,
+  }));
+
+  const events: ActivityEvent[] = usages.map((u) => activity("usage", ctx.actor, usageMessage(u), ctx.now));
+  if (input.leftover && input.leftover.quantity > 0) {
+    const change = markLeftover(
+      next,
+      {
+        projectId: project.id,
+        materialId: key,
+        quantity: input.leftover.quantity,
+        dims: input.leftover.dims,
+        location: input.leftover.location,
+        destination: input.leftover.destination,
+        date: input.date,
+      },
+      ctx,
+    );
+    next = applyChange(next, change);
+    events.push(
+      activity("leftover", "Sistema", leftoverMessage(input.materialName, input.leftover.quantity, input.unit), ctx.now),
+    );
+  }
+
+  const updated: Project = { ...project, materialUsages: [...project.materialUsages, ...usages] };
+  return {
+    project: touch(updated, ctx.now, [...deviationEvents(project, updated, settings, ctx), ...events]),
+    stock: next,
   };
-
-  // Puede lanzar PoolError si no alcanza el sobrante.
-  const nextPool = applyUsageToPool(pool, usage, project, createId("reu"));
-
-  const updated: Project = { ...project, materialUsages: [...project.materialUsages, usage] };
-  const events = [activity("usage", ctx.actor, usageMessage(usage), ctx.now)];
-  if (usage.reusableLeftoverQuantity > 0) events.unshift(activity("leftover", "Sistema", leftoverMessage(usage), ctx.now));
-  events.unshift(...deviationEvents(project, updated, settings, ctx));
-  return { project: touch(updated, ctx.now, events), pool: nextPool, usage };
 }
 
-// ── Costos no materiales ──────────────────────────────────────
+// ── Costos ────────────────────────────────────────────────────
 
 export interface ActualInput {
-  type: ActualEntryType;
+  type: Exclude<ActualEntryType, "labor">;
   description: string;
   date: string;
   supplier?: string;
   notes?: string;
-  /** Para labor se calcula como horas × costo/hora. */
-  amount?: number;
-  labor?: { role: string; workerName?: string; hours: number; hourlyCost: number };
+  amount: number;
+  itemId?: string;
 }
 
+/** Costos monetarios que no son materiales ni horas (tercerizaciones, flete…). Sólo Gestión. */
 export function addActual(project: Project, input: ActualInput, settings: AlertSettings, ctx: Ctx): Project {
-  assertOpen(project);
-  let amount: number;
-  if (input.type === "labor") {
-    if (!input.labor || input.labor.hours <= 0) throw new DomainError("Indicá las horas trabajadas.");
-    amount = Math.round(input.labor.hours * input.labor.hourlyCost * 100) / 100;
-  } else {
-    if (input.amount === undefined || input.amount <= 0) throw new DomainError("Indicá un monto mayor a cero.");
-    amount = input.amount;
-  }
+  assertManager(ctx, "Cargar costos extra");
+  assertExecutable(project, "costos de ejecución");
+  if (!(input.amount > 0)) throw new DomainError("Indicá un monto mayor a cero.");
   const entry: ActualEntry = {
     id: createId("act"),
     projectId: project.id,
     date: input.date,
     type: input.type,
     category: ACTUAL_TYPE_TO_CATEGORY[input.type],
-    description:
-      input.description ||
-      (input.labor ? `${input.labor.role}${input.labor.workerName ? ` — ${input.labor.workerName}` : ""}` : ACTUAL_TYPE_LABELS[input.type]),
-    amount,
+    description: input.description || ACTUAL_TYPE_LABELS[input.type],
+    amount: input.amount,
     supplier: input.supplier,
-    labor: input.type === "labor" ? input.labor : undefined,
+    itemId: input.itemId,
     notes: input.notes,
     createdBy: ctx.actor,
     createdAt: ctx.now,
   };
   const updated: Project = { ...project, actualEntries: [...project.actualEntries, entry] };
-  const events = [...deviationEvents(project, updated, settings, ctx), activity("cost", ctx.actor, actualMessage(entry), ctx.now)];
-  return touch(updated, ctx.now, events);
+  return touch(updated, ctx.now, [...deviationEvents(project, updated, settings, ctx), activity("cost", ctx.actor, actualMessage(entry), ctx.now)]);
+}
+
+export interface HoursInput {
+  /** Gestión elige al operario. Un operario siempre carga a su nombre (se ignora este campo). */
+  operatorId?: string;
+  date: string;
+  hours: number;
+  /** Tipo de trabajo (corte, armado, laqueado…). */
+  workType: string;
+  stage?: StageKey;
+  itemId?: string;
+  comment?: string;
+  /** Confirma una carga alta (más de 16 h en el día). */
+  confirmHighHours?: boolean;
+}
+
+/**
+ * Horas de un operario. El costo/hora sale de la tabla de operarios (no se tipea) y se congela
+ * en el registro: cambiar la tarifa después no altera el historial.
+ */
+export function logHours(
+  project: Project,
+  operators: Operator[],
+  input: HoursInput,
+  settings: AlertSettings,
+  ctx: Ctx,
+): Project {
+  assertExecutable(project, "horas de trabajo");
+  assertCanWork(project, ctx);
+  const isOperator = roleOf(ctx) === "operator";
+  const operatorId = isOperator ? ctx.operatorId : input.operatorId;
+  const op = operators.find((o) => o.id === operatorId);
+  if (!op) throw new DomainError(isOperator ? "Tu usuario no está vinculado a un operario." : "Elegí el operario.");
+  if (!op.active) throw new DomainError(`${op.name} está inactivo.`);
+  if (isOperator && input.operatorId && input.operatorId !== op.id) {
+    throw new RuleError("Solo podés cargar tus propias horas.");
+  }
+  if (!isOperator && !project.assignedOperatorIds.includes(op.id)) {
+    throw new RuleError(`${op.name} no está asignado a este proyecto. Asignalo primero.`);
+  }
+  if (input.itemId && !project.items.some((i) => i.id === input.itemId)) {
+    throw new DomainError("El mueble elegido no existe en este proyecto.");
+  }
+  const check = checkHours(project.actualEntries, op.id, input.date, input.hours, todayISO());
+  if (check.level === "block") throw new RuleError(check.message ?? "Horas inválidas.");
+  if (check.level === "warn" && !input.confirmHighHours) throw new RuleError(`${check.message} Confirmá para guardarlas.`);
+
+  const entry: ActualEntry = {
+    id: createId("act"),
+    projectId: project.id,
+    date: input.date,
+    type: "labor",
+    category: "labor",
+    description: `${input.workType} — ${op.name}`,
+    amount: Math.round(input.hours * op.hourlyCost * 100) / 100,
+    labor: { role: input.workType, workerName: op.name, hours: input.hours, hourlyCost: op.hourlyCost },
+    operatorId: op.id,
+    stage: input.stage ?? (project.status as StageKey),
+    itemId: input.itemId,
+    notes: input.comment,
+    createdBy: ctx.actor,
+    createdAt: ctx.now,
+  };
+  const updated: Project = { ...project, actualEntries: [...project.actualEntries, entry] };
+  return touch(updated, ctx.now, [...deviationEvents(project, updated, settings, ctx), activity("cost", ctx.actor, actualMessage(entry), ctx.now)]);
 }
 
 // ── Cierre ────────────────────────────────────────────────────
 
-export function closeProject(project: Project, ctx: Ctx): Project {
+/** Material asignado y sin consumir que impide cerrar. */
+export function closeBlockers(stock: StockState, projectId: string) {
+  return unresolvedMaterial(stock, projectId);
+}
+
+export function closeProject(project: Project, stock: StockState, ctx: Ctx): Project {
   if (project.isClosed) return project;
-  return touch({ ...project, status: "completed", isClosed: true, closedAt: ctx.now, progressPercent: 100 }, ctx.now, [
+  assertManager(ctx, "Cerrar el proyecto");
+  const open = unresolvedMaterial(stock, project.id);
+  if (open.length > 0) {
+    throw new RuleError(
+      `No se puede cerrar: hay material sin destino (${open
+        .map((h) => `${formatQty(h.quantity, h.lot.unit)} de ${h.lot.materialName}`)
+        .join(", ")}). Devolvelo al stock, transferilo, marcalo como sobrante, desperdicio o devolvelo al proveedor.`,
+    );
+  }
+  return touch({ ...project, status: "completed", isClosed: true, closedAt: ctx.now }, ctx.now, [
     activity("closed", ctx.actor, "Proyecto cerrado. Margen real calculado.", ctx.now),
   ]);
+}
+
+// ── Operarios asignados ───────────────────────────────────────
+
+export function assignOperators(project: Project, operatorIds: string[], operators: Operator[], ctx: Ctx): Project {
+  assertManager(ctx, "Asignar operarios");
+  assertOpen(project);
+  const valid = operatorIds.filter((id) => operators.some((o) => o.id === id));
+  const names = valid.map((id) => operators.find((o) => o.id === id)?.name).filter(Boolean);
+  return touch({ ...project, assignedOperatorIds: valid }, ctx.now, [
+    activity("stage", ctx.actor, names.length ? `Operarios asignados: ${names.join(", ")}.` : "Se quitaron los operarios asignados.", ctx.now),
+  ]);
+}
+
+// ── Muebles del proyecto ──────────────────────────────────────
+
+export function addItem(project: Project, input: { name: string; description?: string; quantity: number }, ctx: Ctx): Project {
+  assertManager(ctx, "Editar los muebles");
+  assertOpen(project);
+  const name = input.name.trim();
+  if (name.length < 2) throw new DomainError("Ingresá el nombre del mueble.");
+  if (!(input.quantity >= 1)) throw new DomainError("La cantidad debe ser al menos 1.");
+  const item: ProjectItem = { id: createId("itm"), name, description: input.description?.trim() || undefined, quantity: input.quantity };
+  return touch({ ...project, items: [...project.items, item] }, ctx.now, [
+    activity("stage", ctx.actor, `Se agregó el mueble “${name}”.`, ctx.now),
+  ]);
+}
+
+export function removeItem(project: Project, itemId: string, ctx: Ctx): Project {
+  assertManager(ctx, "Editar los muebles");
+  assertOpen(project);
+  const used =
+    project.materialUsages.some((u) => u.itemId === itemId) ||
+    project.actualEntries.some((a) => a.itemId === itemId) ||
+    project.attachments.some((a) => a.itemId === itemId) ||
+    project.stageLogs.some((l) => l.itemId === itemId);
+  if (used) throw new DomainError("Ese mueble ya tiene materiales, horas, archivos o notas asociadas: no se puede quitar.");
+  return touch({ ...project, items: project.items.filter((i) => i.id !== itemId) }, ctx.now, []);
+}
+
+// ── Bitácora por etapa ────────────────────────────────────────
+
+export interface StageLogInput {
+  stage: StageKey;
+  date: string;
+  kind: "note" | "incident";
+  text: string;
+  responsible?: string;
+  itemId?: string;
+}
+
+export function addStageLog(project: Project, input: StageLogInput, ctx: Ctx): { project: Project; log: StageLog } {
+  assertOpen(project);
+  assertCanWork(project, ctx);
+  const text = input.text.trim();
+  if (text.length < 3) throw new DomainError("Contá brevemente qué pasó.");
+  if (STATUS_ORDER.indexOf(input.stage) > STATUS_ORDER.indexOf(project.status)) {
+    throw new RuleError(`El proyecto todavía no llegó a ${STATUS_LABELS[input.stage]}.`);
+  }
+  const log: StageLog = {
+    id: createId("log"),
+    projectId: project.id,
+    stage: input.stage,
+    date: input.date,
+    kind: input.kind,
+    text,
+    responsible: input.responsible?.trim() || undefined,
+    itemId: input.itemId,
+    createdBy: ctx.actor,
+    createdAt: ctx.now,
+  };
+  const label = input.kind === "incident" ? "incidente" : "nota";
+  return {
+    project: touch({ ...project, stageLogs: [...project.stageLogs, log] }, ctx.now, [
+      activity("stage", ctx.actor, `Se registró un ${label} en ${STATUS_LABELS[input.stage]}.`, ctx.now),
+    ]),
+    log,
+  };
+}
+
+// ── Adjuntos ──────────────────────────────────────────────────
+
+export function addAttachment(project: Project, attachment: Attachment, ctx: Ctx): Project {
+  assertOpen(project);
+  assertCanWork(project, ctx);
+  return touch({ ...project, attachments: [...project.attachments, attachment] }, ctx.now, [
+    activity("stage", ctx.actor, `Se adjuntó “${attachment.name}”.`, ctx.now),
+  ]);
+}
+
+export function removeAttachment(project: Project, attachmentId: string, ctx: Ctx): Project {
+  assertManager(ctx, "Quitar archivos");
+  assertOpen(project);
+  return touch({ ...project, attachments: project.attachments.filter((a) => a.id !== attachmentId) }, ctx.now, []);
+}
+
+// ── Movimientos de stock entre proyectos (Gestión) ────────────
+
+export interface StockMoveBase {
+  materialId: string;
+  quantity: number;
+  lotId?: string;
+  date?: string;
+  note?: string;
+}
+
+type ProjectsAndStock = { projects: Project[]; stock: StockState };
+
+function withProject(projects: Project[], id: string): Project {
+  const p = projects.find((x) => x.id === id);
+  if (!p) throw new DomainError("Proyecto no encontrado.");
+  return p;
+}
+
+function replaceProjects(projects: Project[], ...changed: Project[]): Project[] {
+  return projects.map((p) => changed.find((c) => c.id === p.id) ?? p);
+}
+
+function assertReceivesMaterial(p: Project) {
+  assertOpen(p);
+  if (p.status === "quotation") throw new RuleError(`${p.code} está en Cotización: aprobalo antes de asignarle material.`);
+}
+
+function stockEvent(project: Project, ctx: Ctx, message: string): Project {
+  return touch(project, ctx.now, [activity("stock", ctx.actor, message, ctx.now)]);
+}
+
+export function assignStockToProject(
+  projects: Project[],
+  stock: StockState,
+  input: StockMoveBase & { projectId: string; materialName: string; unit: string },
+  ctx: Ctx,
+): ProjectsAndStock {
+  assertManager(ctx, "Asignar material");
+  const p = withProject(projects, input.projectId);
+  assertReceivesMaterial(p);
+  const next = applyChange(stock, assignToProject(stock, { ...input }, ctx));
+  const q = formatQty(input.quantity, input.unit);
+  return { projects: replaceProjects(projects, stockEvent(p, ctx, `Se asignaron ${q} de ${input.materialName} desde el stock.`)), stock: next };
+}
+
+export function releaseProjectStock(
+  projects: Project[],
+  stock: StockState,
+  input: StockMoveBase & { projectId: string; materialName: string; unit: string },
+  ctx: Ctx,
+): ProjectsAndStock {
+  assertManager(ctx, "Liberar material");
+  const p = withProject(projects, input.projectId);
+  assertOpen(p);
+  const next = applyChange(stock, releaseToWarehouse(stock, { ...input }, ctx));
+  const q = formatQty(input.quantity, input.unit);
+  return { projects: replaceProjects(projects, stockEvent(p, ctx, `Se devolvieron ${q} de ${input.materialName} al stock.`)), stock: next };
+}
+
+export function transferProjectStock(
+  projects: Project[],
+  stock: StockState,
+  input: StockMoveBase & { fromProjectId: string; toProjectId: string; materialName: string; unit: string },
+  ctx: Ctx,
+): ProjectsAndStock {
+  assertManager(ctx, "Transferir material");
+  const from = withProject(projects, input.fromProjectId);
+  const to = withProject(projects, input.toProjectId);
+  assertOpen(from);
+  assertReceivesMaterial(to);
+  const next = applyChange(stock, transferBetweenProjects(stock, { ...input }, ctx));
+  const q = formatQty(input.quantity, input.unit);
+  return {
+    projects: replaceProjects(
+      projects,
+      stockEvent(from, ctx, `Se transfirieron ${q} de ${input.materialName} a ${to.code}.`),
+      stockEvent(to, ctx, `Se recibieron ${q} de ${input.materialName} de ${from.code}.`),
+    ),
+    stock: next,
+  };
+}
+
+export function returnProjectStockToSupplier(
+  projects: Project[],
+  stock: StockState,
+  input: StockMoveBase & { projectId: string; materialName: string; unit: string },
+  ctx: Ctx,
+): ProjectsAndStock {
+  assertManager(ctx, "Devolver material al proveedor");
+  const p = withProject(projects, input.projectId);
+  assertOpen(p);
+  const next = applyChange(stock, returnToSupplier(stock, { ...input, from: { projectId: p.id } }, ctx));
+  const q = formatQty(input.quantity, input.unit);
+  return { projects: replaceProjects(projects, stockEvent(p, ctx, `Se devolvieron ${q} de ${input.materialName} al proveedor.`)), stock: next };
+}
+
+export function leftoverFromProject(
+  projects: Project[],
+  stock: StockState,
+  input: StockMoveBase & {
+    projectId: string;
+    materialName: string;
+    unit: string;
+    dims?: LeftoverDims;
+    location?: string;
+    destination?: "warehouse" | { projectId: string };
+  },
+  ctx: Ctx,
+): ProjectsAndStock {
+  assertManager(ctx, "Marcar sobrantes");
+  const p = withProject(projects, input.projectId);
+  assertOpen(p);
+  const dest = input.destination && input.destination !== "warehouse" ? withProject(projects, input.destination.projectId) : null;
+  if (dest) assertReceivesMaterial(dest);
+  const next = applyChange(stock, markLeftover(stock, { ...input }, ctx));
+  const updated = [stockEvent(p, ctx, leftoverMessage(input.materialName, input.quantity, input.unit))];
+  if (dest) updated.push(stockEvent(dest, ctx, `Recibió ${formatQty(input.quantity, input.unit)} de sobrante de ${input.materialName} de ${p.code}.`));
+  return { projects: replaceProjects(projects, ...updated), stock: next };
 }

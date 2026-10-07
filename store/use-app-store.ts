@@ -3,16 +3,32 @@
 // Store global (Zustand). Los datos viven en Supabase: el store los carga
 // al entrar (WorkspaceGate), aplica las operaciones puras de lib/ en memoria
 // (la UI sigue siendo síncrona) y encola la escritura de lo que cambió.
-// Solo el modo Gestión/Taller se guarda en localStorage.
+// Gestión, Taller, Stock y el detalle del proyecto leen SIEMPRE de este mismo estado.
+// Sólo el modo Gestión/Taller (y el operario simulado) se guarda en localStorage.
 // ─────────────────────────────────────────────────────────────
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
-import type { AlertSettings, AppMode, Project, ProjectStatus, ReusableMaterial } from "@/types";
+import type {
+  AlertSettings,
+  AppMode,
+  AppRole,
+  Attachment,
+  MaterialRequest,
+  Operator,
+  Project,
+  ProjectStatus,
+  StockLot,
+} from "@/types";
 import { DEFAULT_SETTINGS } from "@/lib/constants";
 import { buildSeed } from "@/lib/seed-data";
 import * as ops from "@/lib/project-operations";
-import { consumeFromPool } from "@/lib/reusable-pool";
+import * as people from "@/lib/operators";
+import { createId } from "@/lib/activity";
+import { isManager } from "@/lib/project-rules";
+import { EMPTY_STOCK, applyChange, receiveStock, type StockState } from "@/lib/stock";
+import { materialKey } from "@/lib/material-reconciliation";
 import { createClient } from "@/lib/supabase/client";
+import { lotToRow } from "@/lib/supabase/mappers";
 import * as remote from "@/lib/supabase/workspace";
 import type { Workspace, WorkspaceData } from "@/lib/supabase/workspace";
 
@@ -22,7 +38,9 @@ export type SyncStatus = "idle" | "saving" | "error";
 
 interface AppState {
   projects: Project[];
-  reusableMaterials: ReusableMaterial[];
+  operators: Operator[];
+  stock: StockState;
+  requests: MaterialRequest[];
   settings: AlertSettings;
   currentMode: AppMode;
   resolvedAlertIds: string[];
@@ -30,30 +48,74 @@ interface AppState {
   /** Empresa y usuario de la sesión (null hasta que carga el workspace). */
   organizationId: string | null;
   organizationName: string;
+  userId: string | null;
   userName: string;
   userEmail: string;
+  /** Rol real del usuario en la empresa. */
+  role: AppRole;
+  /** Sólo para Gestión viendo el modo Taller: con qué operario simular el flujo. */
+  actingOperatorId: string | null;
   syncStatus: SyncStatus;
   syncError: string | null;
 
   loadWorkspace: (ws: Workspace) => void;
   setMode: (mode: AppMode) => void;
+  setActingOperator: (id: string | null) => void;
+
   createProject: (input: ops.NewProjectInput) => Result<string>;
   updateProject: (
     id: string,
     patch: Partial<Pick<Project, "name" | "client" | "projectType" | "description" | "dueDate" | "owner" | "salesPrice">>,
   ) => Result;
-  setProgress: (id: string, progress: number) => Result;
-  changeProjectStatus: (id: string, status: ProjectStatus) => Result;
+  changeProjectStatus: (id: string, status: ProjectStatus, opts?: { confirmBack?: boolean }) => Result;
   addBudgetLine: (id: string, input: ops.BudgetLineInput) => Result;
   updateBudgetLine: (id: string, lineId: string, input: ops.BudgetLineInput) => Result;
   removeBudgetLine: (id: string, lineId: string) => Result;
-  addPurchaseEntry: (id: string, input: ops.PurchaseInput) => Result;
-  addMaterialUsage: (id: string, input: ops.MaterialUsageInput, actorOverride?: string) => Result;
-  addActualEntry: (id: string, input: ops.ActualInput, actorOverride?: string) => Result;
   closeProject: (id: string) => Result;
+
+  addPurchaseEntry: (id: string, input: ops.PurchaseInput) => Result;
+  registerUsage: (id: string, input: ops.MaterialUsageInput) => Result;
+  logHours: (id: string, input: ops.HoursInput) => Result;
+  addActualEntry: (id: string, input: ops.ActualInput) => Result;
+
+  assignOperators: (id: string, operatorIds: string[]) => Result;
+  addItem: (id: string, input: { name: string; description?: string; quantity: number }) => Result;
+  removeItem: (id: string, itemId: string) => Result;
+  addStageLog: (id: string, input: ops.StageLogInput) => Result;
+  addAttachment: (id: string, attachment: Attachment) => Result;
+  removeAttachment: (id: string, attachmentId: string) => Result;
+
+  assignStock: (input: Parameters<typeof ops.assignStockToProject>[2]) => Result;
+  releaseStock: (input: Parameters<typeof ops.releaseProjectStock>[2]) => Result;
+  transferStock: (input: Parameters<typeof ops.transferProjectStock>[2]) => Result;
+  returnStockToSupplier: (input: Parameters<typeof ops.returnProjectStockToSupplier>[2]) => Result;
+  markLeftover: (input: Parameters<typeof ops.leftoverFromProject>[2]) => Result;
+  addStockLot: (input: {
+    materialId?: string;
+    materialName: string;
+    unit: string;
+    quantity: number;
+    unitCost: number;
+    supplier?: string;
+    location?: string;
+    date: string;
+  }) => Result<StockLot>;
+  updateLotLocation: (lotId: string, location: string) => Result;
+
+  createOperator: (input: people.OperatorInput) => Result<string>;
+  updateOperator: (id: string, input: people.OperatorInput) => Result;
+  createMaterialRequest: (input: {
+    projectId: string;
+    materialId: string;
+    materialName: string;
+    unit: string;
+    quantity: number;
+    note?: string;
+  }) => Result;
+  setRequestStatus: (id: string, status: "resolved" | "cancelled") => Result;
+
   resolveAlert: (alertId: string) => void;
   reopenAlert: (alertId: string) => void;
-  consumeReusableMaterial: (itemId: string, quantity: number) => Result;
   updateSettings: (patch: Partial<AlertSettings>) => void;
   resetSettings: () => void;
   /** Reemplaza los datos de la empresa por la demo de Madera Sur. */
@@ -71,21 +133,47 @@ export function demoData(): WorkspaceData {
   const seed = buildSeed(new Date());
   return {
     projects: seed.projects,
-    reusableMaterials: seed.reusableMaterials,
+    operators: seed.operators,
+    stock: seed.stock,
+    requests: [],
     settings: { ...DEFAULT_SETTINGS },
     resolvedAlertIds: [],
   };
 }
 
-const EMPTY_DATA: WorkspaceData = { projects: [], reusableMaterials: [], settings: { ...DEFAULT_SETTINGS }, resolvedAlertIds: [] };
+const EMPTY_DATA: WorkspaceData = {
+  projects: [],
+  operators: [],
+  stock: EMPTY_STOCK,
+  requests: [],
+  settings: { ...DEFAULT_SETTINGS },
+  resolvedAlertIds: [],
+};
+
+/** Quién está operando realmente: el rol de la cuenta o, en modo Taller, un operario. */
+export function effectiveIdentity(s: Pick<AppState, "role" | "currentMode" | "operators" | "userId" | "userEmail" | "actingOperatorId" | "userName">): {
+  role: AppRole;
+  operator: Operator | undefined;
+  actor: string;
+} {
+  if (s.role === "operator") {
+    const operator = people.operatorForUser(s.operators, s.userId, s.userEmail);
+    return { role: "operator", operator, actor: operator?.name ?? s.userName };
+  }
+  if (s.currentMode === "workshop") {
+    const operator = s.operators.find((o) => o.id === s.actingOperatorId && o.active);
+    return { role: "operator", operator, actor: operator?.name ?? s.userName };
+  }
+  return { role: s.role, operator: undefined, actor: s.userName };
+}
 
 export const useAppStore = create<AppState>()(
   persist(
     (set, get) => {
-      const ctx = (actorOverride?: string): ops.Ctx => ({
-        actor: actorOverride ?? get().userName,
-        now: new Date().toISOString(),
-      });
+      const ctx = (): ops.Ctx => {
+        const id = effectiveIdentity(get());
+        return { actor: id.actor, now: new Date().toISOString(), role: id.role, operatorId: id.operator?.id };
+      };
 
       // Cola de escrituras: se ejecutan en orden para que un proyecto exista antes que sus hijos.
       let queue: Promise<unknown> = Promise.resolve();
@@ -110,37 +198,78 @@ export const useAppStore = create<AppState>()(
         return queue;
       };
 
-      /** Aplica una operación pura a un proyecto, guarda en memoria y encola la escritura. */
-      const mutate = (id: string, fn: (p: Project) => Project): Result => {
-        const project = get().projects.find((p) => p.id === id);
-        if (!project) return { ok: false, error: "Proyecto no encontrado." };
+      /** Guarda en memoria lo que cambió y encola su escritura. Todas las vistas leen de acá. */
+      const commit = (next: { projects?: Project[]; stock?: StockState; operators?: Operator[]; requests?: MaterialRequest[] }) => {
+        const prev = get();
+        const projects = next.projects ?? prev.projects;
+        const stock = next.stock ?? prev.stock;
+        const operators = next.operators ?? prev.operators;
+        const requests = next.requests ?? prev.requests;
+        set({ projects, stock, operators, requests });
+        void persistRemote(async (db, org) => {
+          for (const p of projects) {
+            const before = prev.projects.find((x) => x.id === p.id);
+            if (before !== p) await remote.syncProject(db, org, before, p);
+          }
+          await remote.syncStock(db, org, prev.stock, stock);
+          await remote.syncOperators(db, org, prev.operators, operators);
+          await remote.syncRequests(db, org, prev.requests, requests);
+        });
+      };
+
+      /** Corre una operación y devuelve Result (nunca lanza). */
+      const run = <T,>(fn: () => T): Result<T> => {
         try {
-          const next = fn(project);
-          set({ projects: get().projects.map((p) => (p.id === id ? next : p)) });
-          void persistRemote((db, org) => remote.syncProject(db, org, project, next));
-          return { ok: true, value: undefined };
+          return { ok: true, value: fn() };
         } catch (e) {
           return { ok: false, error: errorMessage(e) };
         }
       };
+
+      const find = (id: string): Project => {
+        const project = get().projects.find((p) => p.id === id);
+        if (!project) throw new ops.DomainError("Proyecto no encontrado.");
+        return project;
+      };
+
+      const requireManager = (what: string) => {
+        if (!isManager(effectiveIdentity(get()).role)) throw new ops.DomainError(`${what} lo hace Gestión.`);
+      };
+
+      /** Aplica una operación pura sobre un proyecto. */
+      const mutate = (id: string, fn: (p: Project) => Project): Result =>
+        run(() => {
+          const project = find(id);
+          const next = fn(project);
+          commit({ projects: get().projects.map((p) => (p.id === id ? next : p)) });
+          return undefined;
+        });
+
+      /** Aplica una operación que toca proyectos y stock a la vez. */
+      const mutateStock = (fn: (s: ReturnType<typeof get>) => { projects: Project[]; stock: StockState }): Result =>
+        run(() => {
+          const res = fn(get());
+          commit({ projects: res.projects, stock: res.stock });
+          return undefined;
+        });
 
       /** Reemplaza todos los datos de la empresa (reset demo / vaciar). Espera a las escrituras previas. */
       const replaceAll = (data: WorkspaceData): Promise<Result> => {
         const org = get().organizationId;
         if (!org) return Promise.resolve({ ok: false, error: "Todavía no cargó tu empresa." });
         set({ syncStatus: "saving" });
-        const run = queue.then(async (): Promise<Result> => {
+        const run2 = queue.then(async (): Promise<Result> => {
           try {
             await remote.replaceWorkspace(createClient(), org, data);
-            set({ ...data, currentMode: "management", syncStatus: "idle", syncError: null });
+            set({ ...data, currentMode: "management", actingOperatorId: null, syncStatus: "idle", syncError: null });
             return { ok: true, value: undefined };
           } catch (e) {
             set({ syncStatus: "error", syncError: `No se pudo guardar: ${errorMessage(e)}` });
             return { ok: false, error: errorMessage(e) };
           }
         });
-        queue = run;
-        return run;
+        queue = run2;
+        return run2;
       };
 
       return {
@@ -148,75 +277,202 @@ export const useAppStore = create<AppState>()(
         currentMode: "management",
         organizationId: null,
         organizationName: "",
+        userId: null,
         userName: "",
         userEmail: "",
+        role: "owner",
+        actingOperatorId: null,
         syncStatus: "idle",
         syncError: null,
 
-        loadWorkspace: (ws) =>
+        loadWorkspace: (ws) => {
           set({
             projects: ws.projects,
-            reusableMaterials: ws.reusableMaterials,
+            operators: ws.operators,
+            stock: ws.stock,
+            requests: ws.requests,
             settings: ws.settings,
             resolvedAlertIds: ws.resolvedAlertIds,
             organizationId: ws.organizationId,
             organizationName: ws.organizationName,
+            userId: ws.userId,
             userName: ws.userName,
             userEmail: ws.userEmail,
+            role: ws.role,
+            // Un operario real siempre ve Taller.
+            currentMode: ws.role === "operator" ? "workshop" : get().currentMode,
             syncStatus: "idle",
             syncError: null,
+          });
+          // Datos del modelo anterior: el ledger derivado se guarda una sola vez.
+          if (ws.stockMigrated) void persistRemote((db, org) => remote.syncStock(db, org, EMPTY_STOCK, ws.stock));
+        },
+
+        setMode: (mode) => set({ currentMode: get().role === "operator" ? "workshop" : mode }),
+        setActingOperator: (id) => set({ actingOperatorId: id }),
+
+        createProject: (input) =>
+          run(() => {
+            requireManager("Crear proyectos");
+            const project = ops.createProject(input, ctx());
+            commit({ projects: [project, ...get().projects] });
+            return project.id;
           }),
 
-        setMode: (mode) => set({ currentMode: mode }),
-
-        createProject: (input) => {
-          try {
-            const project = ops.createProject(input, ctx());
-            set({ projects: [project, ...get().projects] });
-            void persistRemote((db, org) => remote.syncProject(db, org, undefined, project));
-            return { ok: true, value: project.id };
-          } catch (e) {
-            return { ok: false, error: errorMessage(e) };
-          }
-        },
-
         updateProject: (id, patch) =>
-          mutate(id, (p) => ({ ...p, ...patch, updatedAt: new Date().toISOString() })),
+          mutate(id, (p) => {
+            requireManager("Editar el proyecto");
+            return { ...p, ...patch, updatedAt: new Date().toISOString() };
+          }),
 
-        setProgress: (id, progress) => mutate(id, (p) => ops.setProgress(p, progress, ctx())),
+        changeProjectStatus: (id, status, opts) => mutate(id, (p) => ops.changeStatus(p, status, ctx(), opts)),
 
-        changeProjectStatus: (id, status) => mutate(id, (p) => ops.changeStatus(p, status, ctx())),
+        addBudgetLine: (id, input) =>
+          mutate(id, (p) => {
+            requireManager("Editar el presupuesto");
+            return ops.addBudgetLine(p, input, ctx());
+          }),
+        updateBudgetLine: (id, lineId, input) =>
+          mutate(id, (p) => {
+            requireManager("Editar el presupuesto");
+            return ops.updateBudgetLine(p, lineId, input, ctx());
+          }),
+        removeBudgetLine: (id, lineId) =>
+          mutate(id, (p) => {
+            requireManager("Editar el presupuesto");
+            return ops.removeBudgetLine(p, lineId, ctx());
+          }),
 
-        addBudgetLine: (id, input) => mutate(id, (p) => ops.addBudgetLine(p, input, ctx())),
-        updateBudgetLine: (id, lineId, input) => mutate(id, (p) => ops.updateBudgetLine(p, lineId, input, ctx())),
-        removeBudgetLine: (id, lineId) => mutate(id, (p) => ops.removeBudgetLine(p, lineId, ctx())),
+        closeProject: (id) =>
+          run(() => {
+            const project = find(id);
+            const closed = ops.closeProject(project, get().stock, ctx());
+            commit({ projects: get().projects.map((p) => (p.id === id ? closed : p)) });
+            return undefined;
+          }),
 
-        addPurchaseEntry: (id, input) => mutate(id, (p) => ops.addPurchase(p, input, ctx())),
+        addPurchaseEntry: (id, input) =>
+          run(() => {
+            const project = find(id);
+            const res = ops.addPurchase(project, get().stock, input, ctx());
+            commit({ projects: get().projects.map((p) => (p.id === id ? res.project : p)), stock: res.stock });
+            return undefined;
+          }),
 
-        addMaterialUsage: (id, input, actorOverride) => {
-          const project = get().projects.find((p) => p.id === id);
-          if (!project) return { ok: false, error: "Proyecto no encontrado." };
-          try {
-            const prevPool = get().reusableMaterials;
-            const res = ops.addMaterialUsage(project, prevPool, input, get().settings, ctx(actorOverride));
-            set({
-              projects: get().projects.map((p) => (p.id === id ? res.project : p)),
-              reusableMaterials: res.pool,
+        registerUsage: (id, input) =>
+          run(() => {
+            const project = find(id);
+            const res = ops.registerUsage(project, get().stock, input, get().settings, ctx());
+            commit({ projects: get().projects.map((p) => (p.id === id ? res.project : p)), stock: res.stock });
+            return undefined;
+          }),
+
+        logHours: (id, input) => mutate(id, (p) => ops.logHours(p, get().operators, input, get().settings, ctx())),
+
+        addActualEntry: (id, input) => mutate(id, (p) => ops.addActual(p, input, get().settings, ctx())),
+
+        assignOperators: (id, operatorIds) => mutate(id, (p) => ops.assignOperators(p, operatorIds, get().operators, ctx())),
+        addItem: (id, input) => mutate(id, (p) => ops.addItem(p, input, ctx())),
+        removeItem: (id, itemId) => mutate(id, (p) => ops.removeItem(p, itemId, ctx())),
+        addStageLog: (id, input) => mutate(id, (p) => ops.addStageLog(p, input, ctx()).project),
+        addAttachment: (id, attachment) => mutate(id, (p) => ops.addAttachment(p, attachment, ctx())),
+        removeAttachment: (id, attachmentId) => mutate(id, (p) => ops.removeAttachment(p, attachmentId, ctx())),
+
+        assignStock: (input) => mutateStock((s) => ops.assignStockToProject(s.projects, s.stock, input, ctx())),
+        releaseStock: (input) => mutateStock((s) => ops.releaseProjectStock(s.projects, s.stock, input, ctx())),
+        transferStock: (input) => mutateStock((s) => ops.transferProjectStock(s.projects, s.stock, input, ctx())),
+        returnStockToSupplier: (input) => mutateStock((s) => ops.returnProjectStockToSupplier(s.projects, s.stock, input, ctx())),
+        markLeftover: (input) => mutateStock((s) => ops.leftoverFromProject(s.projects, s.stock, input, ctx())),
+
+        addStockLot: (input) =>
+          run(() => {
+            requireManager("Cargar stock");
+            const c = ctx();
+            const received = receiveStock(
+              {
+                materialId: materialKey(input.materialId, input.materialName),
+                materialName: input.materialName,
+                unit: input.unit,
+                quantity: input.quantity,
+                unitCost: input.unitCost,
+                supplier: input.supplier,
+                location: input.location,
+                date: input.date,
+                destination: "warehouse",
+                kind: "opening",
+              },
+              c,
+            );
+            commit({ stock: applyChange(get().stock, received) });
+            return received.lot;
+          }),
+
+        updateLotLocation: (lotId, location) =>
+          run(() => {
+            requireManager("Editar la ubicación");
+            const stock = get().stock;
+            // La ubicación es un dato del lote, no un movimiento: se reemplaza el lote (el ledger no cambia).
+            const next = { ...stock, lots: stock.lots.map((l) => (l.id === lotId ? { ...l, location: location.trim() || undefined } : l)) };
+            set({ stock: next });
+            const lot = next.lots.find((l) => l.id === lotId);
+            if (lot) {
+              void persistRemote(async (db, org) => {
+                const res = await db.from("stock_lots").upsert(lotToRow(org, lot), { onConflict: "organization_id,id" });
+                if (res.error) throw new Error(res.error.message);
+              });
+            }
+            return undefined;
+          }),
+
+        createOperator: (input) =>
+          run(() => {
+            requireManager("Cargar operarios");
+            const operator = people.createOperator(input, new Date().toISOString());
+            commit({ operators: [...get().operators, operator] });
+            return operator.id;
+          }),
+
+        updateOperator: (id, input) =>
+          run(() => {
+            requireManager("Editar operarios");
+            commit({ operators: people.updateOperator(get().operators, id, input) });
+            return undefined;
+          }),
+
+        createMaterialRequest: (input) =>
+          run(() => {
+            const project = find(input.projectId);
+            if (!(input.quantity > 0)) throw new ops.DomainError("Indicá cuánto material falta.");
+            const identity = effectiveIdentity(get());
+            if (identity.role === "operator" && !(identity.operator && project.assignedOperatorIds.includes(identity.operator.id))) {
+              throw new ops.DomainError("No estás asignado a este proyecto.");
+            }
+            const request: MaterialRequest = {
+              id: createId("req"),
+              projectId: project.id,
+              materialId: input.materialId,
+              materialName: input.materialName,
+              quantity: input.quantity,
+              unit: input.unit,
+              note: input.note?.trim() || undefined,
+              requestedBy: identity.actor,
+              status: "open",
+              createdAt: new Date().toISOString(),
+            };
+            commit({ requests: [request, ...get().requests] });
+            return undefined;
+          }),
+
+        setRequestStatus: (id, status) =>
+          run(() => {
+            requireManager("Resolver pedidos de material");
+            const now = new Date().toISOString();
+            const actor = effectiveIdentity(get()).actor;
+            commit({
+              requests: get().requests.map((q) => (q.id === id ? { ...q, status, resolvedAt: now, resolvedBy: actor } : q)),
             });
-            void persistRemote(async (db, org) => {
-              await remote.syncProject(db, org, project, res.project);
-              await remote.syncPool(db, org, prevPool, res.pool);
-            });
-            return { ok: true, value: undefined };
-          } catch (e) {
-            return { ok: false, error: errorMessage(e) };
-          }
-        },
-
-        addActualEntry: (id, input, actorOverride) =>
-          mutate(id, (p) => ops.addActual(p, input, get().settings, ctx(actorOverride))),
-
-        closeProject: (id) => mutate(id, (p) => ops.closeProject(p, ctx())),
+            return undefined;
+          }),
 
         resolveAlert: (alertId) => {
           if (get().resolvedAlertIds.includes(alertId)) return;
@@ -226,18 +482,6 @@ export const useAppStore = create<AppState>()(
         reopenAlert: (alertId) => {
           set({ resolvedAlertIds: get().resolvedAlertIds.filter((a) => a !== alertId) });
           void persistRemote((db, org) => remote.setAlertResolved(db, org, alertId, false));
-        },
-
-        consumeReusableMaterial: (itemId, quantity) => {
-          try {
-            const prevPool = get().reusableMaterials;
-            const next = consumeFromPool(prevPool, itemId, quantity);
-            set({ reusableMaterials: next });
-            void persistRemote((db, org) => remote.syncPool(db, org, prevPool, next));
-            return { ok: true, value: undefined };
-          } catch (e) {
-            return { ok: false, error: errorMessage(e) };
-          }
         },
 
         updateSettings: (patch) => {
@@ -258,10 +502,10 @@ export const useAppStore = create<AppState>()(
     },
     {
       name: "nexo-ui-v2",
-      version: 2,
+      version: 3,
       storage: createJSONStorage(() => localStorage),
       skipHydration: true,
-      partialize: (s) => ({ currentMode: s.currentMode }),
+      partialize: (s) => ({ currentMode: s.currentMode, actingOperatorId: s.actingOperatorId }),
     },
   ),
 );

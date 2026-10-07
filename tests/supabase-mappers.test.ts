@@ -1,6 +1,20 @@
 import { describe, expect, it } from "vitest";
 import { buildSeed } from "@/lib/seed-data";
-import { CHILD_TABLES, childrenToRows, projectToRow, projectsFromRows, reusableFromRow, reusableToRow, type ChildKey } from "@/lib/supabase/mappers";
+import {
+  CHILD_TABLES,
+  childrenToRows,
+  lotFromRow,
+  lotToRow,
+  movementFromRow,
+  movementToRow,
+  operatorFromRow,
+  operatorToRow,
+  projectToRow,
+  projectsFromRows,
+  requestFromRow,
+  requestToRow,
+  type ChildKey,
+} from "@/lib/supabase/mappers";
 
 const ORG = "00000000-0000-0000-0000-000000000001";
 
@@ -25,8 +39,20 @@ describe("mappers de Supabase", () => {
     expect(rebuilt).toEqual(JSON.parse(JSON.stringify(seed.projects)));
   });
 
-  it("pool de sobrantes: ida y vuelta", () => {
-    const rows = asPostgres(seed.reusableMaterials.map((m, i) => reusableToRow(ORG, m, i)));
-    expect(rows.map(reusableFromRow)).toEqual(seed.reusableMaterials);
+  it("operarios: ida y vuelta", () => {
+    const rows = asPostgres(seed.operators.map((o, i) => operatorToRow(ORG, o, i)));
+    expect(rows.map(operatorFromRow)).toEqual(JSON.parse(JSON.stringify(seed.operators)));
+  });
+
+  it("lotes y movimientos de stock: ida y vuelta", () => {
+    const lots = asPostgres(seed.stock.lots.map((l) => lotToRow(ORG, l)));
+    expect(lots.map(lotFromRow)).toEqual(JSON.parse(JSON.stringify(seed.stock.lots)));
+    const movs = asPostgres(seed.stock.movements.map((m, i) => movementToRow(ORG, m, i)));
+    expect(movs.map(movementFromRow)).toEqual(JSON.parse(JSON.stringify(seed.stock.movements)));
+  });
+
+  it("pedidos de material: ida y vuelta", () => {
+    const q = { id: "req_1", projectId: "p", materialId: "m", materialName: "Placa", quantity: 2, unit: "placa", note: "urgente", requestedBy: "Juan", status: "open" as const, createdAt: "2026-10-01T10:00:00.000Z" };
+    expect(requestFromRow(asPostgres([requestToRow(ORG, q, 0)])[0])).toEqual(q);
   });
 });

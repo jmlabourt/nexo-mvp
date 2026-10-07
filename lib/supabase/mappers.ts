@@ -5,11 +5,19 @@
 import type {
   ActivityEvent,
   ActualEntry,
+  Attachment,
   BudgetLine,
+  MaterialRequest,
   MaterialUsageEntry,
+  Operator,
+  Place,
   Project,
+  ProjectItem,
   PurchaseEntry,
   ReusableMaterial,
+  StageLog,
+  StockLot,
+  StockMovement,
 } from "@/types";
 
 type Row = Record<string, unknown>;
@@ -31,6 +39,9 @@ export const CHILD_TABLES = {
   materialUsages: "material_usages",
   actualEntries: "actual_entries",
   activity: "activity_events",
+  items: "project_items",
+  stageLogs: "stage_logs",
+  attachments: "attachments",
 } as const;
 
 export type ChildKey = keyof typeof CHILD_TABLES;
@@ -52,8 +63,9 @@ export function projectToRow(org: string, p: Project): Row {
     created_at: p.createdAt,
     updated_at: p.updatedAt,
     sales_price: p.salesPrice,
-    progress_percent: p.progressPercent,
     owner: p.owner,
+    assigned_operator_ids: p.assignedOperatorIds,
+    baseline: p.baseline ?? null,
     is_closed: p.isClosed,
     closed_at: p.closedAt ?? null,
   };
@@ -109,6 +121,8 @@ const childToRow: { [K in ChildKey]: (org: string, projectId: string, item: Proj
     unit_cost_origin: u.unitCostOrigin,
     source: u.source,
     reusable_material_id: u.reusableMaterialId ?? null,
+    lot_id: u.lotId ?? null,
+    item_id: u.itemId ?? null,
     notes: u.notes ?? null,
     created_by: u.createdBy,
     created_at: u.createdAt,
@@ -125,6 +139,9 @@ const childToRow: { [K in ChildKey]: (org: string, projectId: string, item: Proj
     amount: a.amount,
     supplier: a.supplier ?? null,
     labor: a.labor ?? null,
+    operator_id: a.operatorId ?? null,
+    stage: a.stage ?? null,
+    item_id: a.itemId ?? null,
     notes: a.notes ?? null,
     created_by: a.createdBy,
     created_at: a.createdAt,
@@ -138,6 +155,44 @@ const childToRow: { [K in ChildKey]: (org: string, projectId: string, item: Proj
     actor: e.actor,
     kind: e.kind,
     message: e.message,
+  }),
+  items: (org, projectId, i: ProjectItem, position) => ({
+    organization_id: org,
+    id: i.id,
+    project_id: projectId,
+    position,
+    name: i.name,
+    description: i.description ?? null,
+    quantity: i.quantity,
+  }),
+  stageLogs: (org, projectId, l: StageLog, position) => ({
+    organization_id: org,
+    id: l.id,
+    project_id: projectId,
+    position,
+    stage: l.stage,
+    date: l.date,
+    kind: l.kind,
+    text: l.text,
+    responsible: l.responsible ?? null,
+    item_id: l.itemId ?? null,
+    created_by: l.createdBy,
+    created_at: l.createdAt,
+  }),
+  attachments: (org, projectId, a: Attachment, position) => ({
+    organization_id: org,
+    id: a.id,
+    project_id: projectId,
+    position,
+    item_id: a.itemId ?? null,
+    stage: a.stage ?? null,
+    stage_log_id: a.stageLogId ?? null,
+    name: a.name,
+    mime_type: a.mimeType,
+    size: a.size,
+    storage_path: a.storagePath,
+    uploaded_by: a.uploadedBy,
+    uploaded_at: a.uploadedAt,
   }),
 };
 
@@ -193,6 +248,8 @@ function usageFromRow(r: Row): MaterialUsageEntry {
     unitCostOrigin: r.unit_cost_origin as MaterialUsageEntry["unitCostOrigin"],
     source: r.source as MaterialUsageEntry["source"],
     reusableMaterialId: opt(r.reusable_material_id as string | null),
+    lotId: opt(r.lot_id as string | null),
+    itemId: opt(r.item_id as string | null),
     notes: opt(r.notes as string | null),
     createdBy: String(r.created_by),
     createdAt: iso(r.created_at),
@@ -210,6 +267,9 @@ function actualFromRow(r: Row): ActualEntry {
     amount: num(r.amount),
     supplier: opt(r.supplier as string | null),
     labor: opt(r.labor as ActualEntry["labor"] | null),
+    operatorId: opt(r.operator_id as string | null),
+    stage: opt(r.stage as ActualEntry["stage"] | null),
+    itemId: opt(r.item_id as string | null),
     notes: opt(r.notes as string | null),
     createdBy: String(r.created_by),
     createdAt: iso(r.created_at),
@@ -226,6 +286,46 @@ function activityFromRow(r: Row): ActivityEvent {
   };
 }
 
+function itemFromRow(r: Row): ProjectItem {
+  return {
+    id: String(r.id),
+    name: String(r.name),
+    description: opt(r.description as string | null),
+    quantity: num(r.quantity),
+  };
+}
+
+function stageLogFromRow(r: Row): StageLog {
+  return {
+    id: String(r.id),
+    projectId: String(r.project_id),
+    stage: r.stage as StageLog["stage"],
+    date: String(r.date),
+    kind: r.kind as StageLog["kind"],
+    text: String(r.text),
+    responsible: opt(r.responsible as string | null),
+    itemId: opt(r.item_id as string | null),
+    createdBy: String(r.created_by),
+    createdAt: iso(r.created_at),
+  };
+}
+
+function attachmentFromRow(r: Row): Attachment {
+  return {
+    id: String(r.id),
+    projectId: String(r.project_id),
+    itemId: opt(r.item_id as string | null),
+    stage: opt(r.stage as Attachment["stage"] | null),
+    stageLogId: opt(r.stage_log_id as string | null),
+    name: String(r.name),
+    mimeType: String(r.mime_type),
+    size: num(r.size),
+    storagePath: String(r.storage_path),
+    uploadedBy: String(r.uploaded_by),
+    uploadedAt: iso(r.uploaded_at),
+  };
+}
+
 export interface ProjectRows {
   projects: Row[];
   budgetLines: Row[];
@@ -233,6 +333,9 @@ export interface ProjectRows {
   materialUsages: Row[];
   actualEntries: Row[];
   activity: Row[];
+  items: Row[];
+  stageLogs: Row[];
+  attachments: Row[];
 }
 
 /** Arma los proyectos completos a partir de las filas (ya ordenadas por position). */
@@ -252,6 +355,9 @@ export function projectsFromRows(rows: ProjectRows): Project[] {
   const usages = byProject(rows.materialUsages, usageFromRow);
   const actuals = byProject(rows.actualEntries, actualFromRow);
   const activity = byProject(rows.activity, activityFromRow);
+  const items = byProject(rows.items, itemFromRow);
+  const stageLogs = byProject(rows.stageLogs, stageLogFromRow);
+  const attachments = byProject(rows.attachments, attachmentFromRow);
 
   return rows.projects.map((r) => {
     const id = String(r.id);
@@ -268,7 +374,6 @@ export function projectsFromRows(rows: ProjectRows): Project[] {
       createdAt: iso(r.created_at),
       updatedAt: iso(r.updated_at),
       salesPrice: num(r.sales_price),
-      progressPercent: num(r.progress_percent),
       owner: String(r.owner),
       budgetLines: lines.get(id) ?? [],
       purchaseEntries: purchases.get(id) ?? [],
@@ -277,6 +382,11 @@ export function projectsFromRows(rows: ProjectRows): Project[] {
       activity: activity.get(id) ?? [],
       isClosed: Boolean(r.is_closed),
       closedAt: r.closed_at ? iso(r.closed_at) : undefined,
+      assignedOperatorIds: (r.assigned_operator_ids as string[] | null) ?? [],
+      items: items.get(id) ?? [],
+      stageLogs: stageLogs.get(id) ?? [],
+      attachments: attachments.get(id) ?? [],
+      baseline: (r.baseline as Project["baseline"] | null) ?? undefined,
     };
   });
 }
@@ -310,5 +420,158 @@ export function reusableFromRow(r: Row): ReusableMaterial {
     originProjectId: String(r.origin_project_id),
     originProjectName: String(r.origin_project_name),
     createdAt: iso(r.created_at),
+  };
+}
+
+// ── Operarios ─────────────────────────────────────────────
+
+export function operatorToRow(org: string, o: Operator, position: number): Row {
+  return {
+    organization_id: org,
+    id: o.id,
+    position,
+    name: o.name,
+    role: o.role,
+    hourly_cost: o.hourlyCost,
+    active: o.active,
+    user_id: o.userId ?? null,
+    email: o.email ?? null,
+    created_at: o.createdAt,
+  };
+}
+
+export function operatorFromRow(r: Row): Operator {
+  return {
+    id: String(r.id),
+    name: String(r.name),
+    role: String(r.role),
+    hourlyCost: num(r.hourly_cost),
+    active: Boolean(r.active),
+    userId: opt(r.user_id as string | null),
+    email: opt(r.email as string | null),
+    createdAt: iso(r.created_at),
+  };
+}
+
+// ── Stock ─────────────────────────────────────────────────
+
+export function lotToRow(org: string, l: StockLot): Row {
+  return {
+    organization_id: org,
+    id: l.id,
+    material_id: l.materialId,
+    material_name: l.materialName,
+    unit: l.unit,
+    unit_cost: l.unitCost,
+    kind: l.kind,
+    supplier: l.supplier ?? null,
+    purchase_entry_id: l.purchaseEntryId ?? null,
+    origin_project_id: l.originProjectId ?? null,
+    origin_project_name: l.originProjectName ?? null,
+    parent_lot_id: l.parentLotId ?? null,
+    location: l.location ?? null,
+    dims: l.dims ?? null,
+    notes: l.notes ?? null,
+    created_by: l.createdBy,
+    created_at: l.createdAt,
+  };
+}
+
+export function lotFromRow(r: Row): StockLot {
+  return {
+    id: String(r.id),
+    materialId: String(r.material_id),
+    materialName: String(r.material_name),
+    unit: String(r.unit),
+    unitCost: num(r.unit_cost),
+    kind: r.kind as StockLot["kind"],
+    supplier: opt(r.supplier as string | null),
+    purchaseEntryId: opt(r.purchase_entry_id as string | null),
+    originProjectId: opt(r.origin_project_id as string | null),
+    originProjectName: opt(r.origin_project_name as string | null),
+    parentLotId: opt(r.parent_lot_id as string | null),
+    location: opt(r.location as string | null),
+    dims: opt(r.dims as StockLot["dims"] | null),
+    notes: opt(r.notes as string | null),
+    createdBy: String(r.created_by),
+    createdAt: iso(r.created_at),
+  };
+}
+
+export function movementToRow(org: string, m: StockMovement, position: number): Row {
+  return {
+    organization_id: org,
+    id: m.id,
+    lot_id: m.lotId,
+    position,
+    kind: m.kind,
+    quantity: m.quantity,
+    from_place: m.from,
+    to_place: m.to,
+    date: m.date,
+    project_id: m.projectId ?? null,
+    item_id: m.itemId ?? null,
+    into_lot_id: m.intoLotId ?? null,
+    group_id: m.groupId ?? null,
+    note: m.note ?? null,
+    created_by: m.createdBy,
+    created_at: m.createdAt,
+  };
+}
+
+export function movementFromRow(r: Row): StockMovement {
+  return {
+    id: String(r.id),
+    lotId: String(r.lot_id),
+    kind: r.kind as StockMovement["kind"],
+    quantity: num(r.quantity),
+    from: r.from_place as Place,
+    to: r.to_place as Place,
+    date: String(r.date),
+    projectId: opt(r.project_id as string | null),
+    itemId: opt(r.item_id as string | null),
+    intoLotId: opt(r.into_lot_id as string | null),
+    groupId: opt(r.group_id as string | null),
+    note: opt(r.note as string | null),
+    createdBy: String(r.created_by),
+    createdAt: iso(r.created_at),
+  };
+}
+
+// ── Pedidos de material ───────────────────────────────────
+
+export function requestToRow(org: string, q: MaterialRequest, position: number): Row {
+  return {
+    organization_id: org,
+    id: q.id,
+    position,
+    project_id: q.projectId,
+    material_id: q.materialId,
+    material_name: q.materialName,
+    quantity: q.quantity,
+    unit: q.unit,
+    note: q.note ?? null,
+    requested_by: q.requestedBy,
+    status: q.status,
+    created_at: q.createdAt,
+    resolved_at: q.resolvedAt ?? null,
+    resolved_by: q.resolvedBy ?? null,
+  };
+}
+
+export function requestFromRow(r: Row): MaterialRequest {
+  return {
+    id: String(r.id),
+    projectId: String(r.project_id),
+    materialId: String(r.material_id),
+    materialName: String(r.material_name),
+    quantity: num(r.quantity),
+    unit: String(r.unit),
+    note: opt(r.note as string | null),
+    requestedBy: String(r.requested_by),
+    status: r.status as MaterialRequest["status"],
+    createdAt: iso(r.created_at),
+    resolvedAt: r.resolved_at ? iso(r.resolved_at) : undefined,
+    resolvedBy: opt(r.resolved_by as string | null),
   };
 }

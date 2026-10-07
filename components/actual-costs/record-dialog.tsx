@@ -5,7 +5,9 @@ import type { ActualEntryType, Project } from "@/types";
 import { ACTUAL_TYPE_LABELS } from "@/lib/constants";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { UsageForm } from "@/components/materials/usage-form";
-import { LaborForm } from "./labor-form";
+import { HoursForm } from "./hours-form";
+import { canExecute } from "@/lib/project-rules";
+import { STATUS_LABELS } from "@/lib/constants";
 import { OtherCostForm } from "./other-cost-form";
 
 type Kind = "material" | ActualEntryType;
@@ -48,7 +50,11 @@ export function RecordDialog({ project, open, onOpenChange }: { project: Project
             {project.code} · {project.name}
           </DialogDescription>
         </DialogHeader>
-        {kind === null ? (
+        {!canExecute(project.status) ? (
+          <p className="rounded-md bg-amber-50 p-4 text-sm text-amber-900" role="alert">
+            Este proyecto está en {STATUS_LABELS[project.status]}: todavía no admite consumo de material, horas ni costos de ejecución. Pasalo a Compras para empezar.
+          </p>
+        ) : kind === null ? (
           <div>
             <p className="mb-3 font-medium text-slate-800">¿Qué querés registrar?</p>
             <div className="grid grid-cols-2 gap-3">
@@ -66,9 +72,9 @@ export function RecordDialog({ project, open, onOpenChange }: { project: Project
             </div>
           </div>
         ) : kind === "material" ? (
-          <UsageForm project={project} onDone={close} />
+          <UsageForm project={project} onDone={close} variant="management" />
         ) : kind === "labor" ? (
-          <LaborForm project={project} onDone={close} />
+          <HoursForm project={project} onDone={close} variant="management" />
         ) : (
           <OtherCostForm project={project} type={kind} onDone={close} />
         )}

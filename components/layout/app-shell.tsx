@@ -1,8 +1,8 @@
 "use client";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { useState } from "react";
-import { Bell, FolderKanban, History, LayoutDashboard, Layers, LogOut, Menu, Plus, RotateCcw, Search, Settings, TriangleAlert, X } from "lucide-react";
+import { Bell, Boxes, FolderKanban, History, HardHat, LayoutDashboard, LogOut, Menu, Plus, RotateCcw, Settings, TriangleAlert, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { APP_NAME, APP_SUBTITLE } from "@/lib/constants";
 import { useAppStore } from "@/store/use-app-store";
@@ -10,13 +10,15 @@ import { useAlerts } from "@/store/selectors";
 import { Button } from "@/components/ui/button";
 import { ModeSwitch } from "./mode-switch";
 import { WorkshopHome } from "@/components/workshop/workshop-home";
+import { GlobalSearch } from "./global-search";
 
 const NAV = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/projects", label: "Proyectos", icon: FolderKanban },
   { href: "/alerts", label: "Alertas", icon: TriangleAlert },
   { href: "/history", label: "Historial", icon: History },
-  { href: "/materials", label: "Sobrantes", icon: Layers },
+  { href: "/stock", label: "Stock", icon: Boxes },
+  { href: "/operators", label: "Operarios", icon: HardHat },
   { href: "/settings", label: "Configuración", icon: Settings },
 ];
 
@@ -111,8 +113,6 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
 
 function Header({ onMenu }: { onMenu: () => void }) {
   const crumbs = useBreadcrumb();
-  const router = useRouter();
-  const [q, setQ] = useState("");
   const { open } = useAlerts();
   const count = open.filter((a) => a.level !== "info").length;
   return (
@@ -128,28 +128,7 @@ function Header({ onMenu }: { onMenu: () => void }) {
           </span>
         ))}
       </nav>
-      <form
-        role="search"
-        className="ml-auto flex max-w-xs flex-1 items-center"
-        onSubmit={(e) => {
-          e.preventDefault();
-          router.push(`/projects?q=${encodeURIComponent(q.trim())}`);
-        }}
-      >
-        <label htmlFor="global-search" className="sr-only">
-          Buscar proyecto, cliente o código
-        </label>
-        <div className="relative w-full">
-          <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-slate-400" aria-hidden />
-          <input
-            id="global-search"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="Buscar proyecto, cliente o código"
-            className="h-9 w-full rounded-md border border-slate-200 bg-slate-50 pl-8 pr-3 text-sm placeholder:text-slate-400 focus:bg-white"
-          />
-        </div>
-      </form>
+      <GlobalSearch />
       <Link href="/alerts" className="relative rounded-md p-2 text-slate-600 hover:bg-slate-100" aria-label={`Alertas (${count} abiertas)`}>
         <Bell className="size-5" />
         {count > 0 && (
@@ -169,9 +148,10 @@ function Header({ onMenu }: { onMenu: () => void }) {
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const mode = useAppStore((s) => s.currentMode);
+  const role = useAppStore((s) => s.role);
   const [menuOpen, setMenuOpen] = useState(false);
 
-  if (mode === "workshop") return <WorkshopHome />;
+  if (role === "operator" || mode === "workshop") return <WorkshopHome />;
 
   return (
     <div className="min-h-screen">

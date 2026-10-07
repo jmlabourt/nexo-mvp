@@ -1,192 +1,280 @@
 "use client";
-import { useMemo } from "react";
-import { useForm, useWatch } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import type { MaterialSource, Project } from "@/types";
-import { OTHER_MATERIAL_ID, SOURCE_LABELS, UNIT_COST_ORIGIN_LABELS } from "@/lib/constants";
-import { projectMaterialOptions } from "@/lib/material-options";
-import { resolveUnitCost } from "@/lib/project-operations";
-import { usageSchema, type UsageValues } from "@/lib/schemas";
+import { useMemo, useState } from "react";
+import { PackageX } from "lucide-react";
+import type { Project } from "@/types";
+import { materialGroups, type MaterialGroup } from "@/lib/material-groups";
+import { dimFieldsForUnit, formatDims, parseDims, type DimsDraft } from "@/lib/material-kinds";
+import { parseDecimal } from "@/lib/schemas";
 import { formatCurrency, formatQty, todayISO } from "@/lib/formatting";
-import { slugify } from "@/lib/material-reconciliation";
-import { poolAvailableFor } from "@/lib/reusable-pool";
 import { useAppStore } from "@/store/use-app-store";
-import { Field } from "@/components/ui/field";
-import { Input, Select, Textarea } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Choice } from "@/components/ui/choice";
-import { DialogFooter } from "@/components/ui/dialog";
-import { MaterialSelect } from "./material-select";
+import { Input, Select } from "@/components/ui/input";
+import { QuantityInput } from "@/components/workshop/quantity-input";
+import { LeftoverDimsFields } from "@/components/stock/leftover-dims-fields";
+import { cn } from "@/lib/utils";
 
-export function UsageForm({ project, onDone }: { project: Project; onDone: () => void }) {
-  const addMaterialUsage = useAppStore((s) => s.addMaterialUsage);
-  const pool = useAppStore((s) => s.reusableMaterials);
-  const options = useMemo(() => projectMaterialOptions(project), [project]);
-  const { register, handleSubmit, control, setValue, setError, formState } = useForm<UsageValues>({
-    resolver: zodResolver(usageSchema),
-    defaultValues: {
-      materialId: "",
-      customName: "",
-      unit: "u",
-      source: "purchased_for_project",
-      hasWaste: false,
-      wasteQuantity: 0,
-      hasLeftover: false,
-      leftoverQuantity: 0,
-      date: todayISO(),
-      notes: "",
-    },
-  });
-  const v = useWatch({ control }) as UsageValues;
-  const e = formState.errors;
-  const isOther = v.materialId === OTHER_MATERIAL_ID;
-  const option = options.find((o) => o.id === v.materialId);
-  const poolItems = v.materialId && !isOther ? poolAvailableFor(pool, v.materialId) : [];
-  const poolItem = pool.find((p) => p.id === v.reusableMaterialId);
-  const resolved = v.materialId
-    ? resolveUnitCost(project, isOther ? `custom:${slugify(v.customName ?? "")}` : v.materialId, option?.name ?? v.customName ?? "", v.source, poolItem)
-    : null;
-  const unitCost = v.source === "reused_leftover" ? resolved?.unitCost ?? 0 : Number.isFinite(v.unitCost) && v.unitCost !== undefined ? v.unitCost : resolved?.unitCost ?? 0;
-  const consumed = Number(v.quantityConsumed) || 0;
-  const waste = v.hasWaste ? Number(v.wasteQuantity) || 0 : 0;
-  const left = v.hasLeftover ? Number(v.leftoverQuantity) || 0 : 0;
+type Variant = "workshop" | "management";
 
-  const onMaterial = (id: string) => {
-    setValue("materialId", id, { shouldValidate: true });
-    setValue("reusableMaterialId", undefined);
-    setValue("unitCost", undefined);
-    if (v.source === "reused_leftover") setValue("source", "purchased_for_project");
-    const o = options.find((x) => x.id === id);
-    if (o) setValue("unit", o.unit);
-  };
+function YesNo({ label, value, onChange, big }: { label: string; value: boolean; onChange: (v: boolean) => void; big: boolean }) {
+  return (
+    <fieldset>
+      <legend className={cn("mb-1.5 font-medium text-slate-800", big ? "text-base" : "text-sm")}>{label}</legend>
+      <Choice<"no" | "si">
+        name={label}
+        size={big ? "lg" : "default"}
+        value={value ? "si" : "no"}
+        onChange={(v) => onChange(v === "si")}
+        options={[
+          { value: "no", label: "No" },
+          { value: "si", label: "Sí" },
+        ]}
+      />
+    </fieldset>
+  );
+}
 
-  const submit = (val: UsageValues) => {
-    const edited = val.unitCost !== undefined && Number.isFinite(val.unitCost) && val.unitCost !== resolved?.unitCost;
-    const res = addMaterialUsage(project.id, {
-      materialId: isOther ? `custom:${slugify(val.customName ?? "")}` : val.materialId,
-      materialName: isOther ? (val.customName ?? "").trim() : option?.name ?? val.materialId,
-      unit: val.unit,
-      source: val.source,
-      reusableMaterialId: val.source === "reused_leftover" ? val.reusableMaterialId : undefined,
-      quantityConsumed: val.quantityConsumed,
-      wasteQuantity: val.hasWaste ? val.wasteQuantity : 0,
-      reusableLeftoverQuantity: val.hasLeftover ? val.leftoverQuantity : 0,
-      unitCost: edited ? val.unitCost : undefined,
-      date: val.date,
-      notes: val.notes || undefined,
+const num = (v: string) => {
+  const n = parseDecimal(v);
+  return Number.isFinite(n) ? n : 0;
+};
+
+/**
+ * Registro de material usado. SOLO se ofrece lo que el proyecto tiene asignado
+ * (comprado, tomado del stock o transferido): no se puede inventar ni pasarse de lo disponible.
+ * Consumo y desperdicio son costo; el sobrante conserva su valor. Se muestran separados.
+ */
+export function UsageForm({
+  project,
+  onDone,
+  variant,
+  onRequestMaterial,
+}: {
+  project: Project;
+  onDone: (summary: string) => void;
+  variant: Variant;
+  /** Taller: abre el pedido de material cuando no hay nada asignado. */
+  onRequestMaterial?: () => void;
+}) {
+  const big = variant === "workshop";
+  const stock = useAppStore((s) => s.stock);
+  const registerUsage = useAppStore((s) => s.registerUsage);
+  const groups = useMemo(() => materialGroups(stock, project.id), [stock, project.id]);
+
+  const [materialId, setMaterialId] = useState("");
+  const [lotId, setLotId] = useState("");
+  const [used, setUsed] = useState("");
+  const [hasWaste, setHasWaste] = useState(false);
+  const [waste, setWaste] = useState("");
+  const [hasLeftover, setHasLeftover] = useState(false);
+  const [leftover, setLeftover] = useState("");
+  const [dims, setDims] = useState<DimsDraft>({});
+  const [location, setLocation] = useState("");
+  const [itemId, setItemId] = useState("");
+  const [date, setDate] = useState(todayISO());
+  const [error, setError] = useState("");
+
+  const group: MaterialGroup | undefined = groups.find((g) => g.materialId === materialId);
+  const lot = group?.lots.find((l) => l.lot.id === lotId);
+  const available = lot ? lot.quantity : group?.quantity ?? 0;
+  const unit = group?.unit ?? "u";
+  const usedN = num(used);
+  const wasteN = hasWaste ? num(waste) : 0;
+  const leftoverN = hasLeftover ? num(leftover) : 0;
+  const total = usedN + wasteN + leftoverN;
+  const over = group ? total - available > 1e-6 : false;
+  // Costo estimado según los lotes que se usarían (sólo Gestión lo ve).
+  const unitCost = lot ? lot.lot.unitCost : group ? group.lots.reduce((s, l) => s + l.quantity * l.lot.unitCost, 0) / Math.max(group.quantity, 1e-9) : 0;
+
+  const submit = () => {
+    if (!group) return setError("Elegí un material.");
+    if (usedN + wasteN <= 0 && leftoverN <= 0) return setError("Indicá cuánto usaste.");
+    if (hasWaste && wasteN <= 0) return setError("Indicá cuánto se desperdició.");
+    if (hasLeftover && leftoverN <= 0) return setError("Indicá cuánto quedó reutilizable.");
+    if (over) return setError(`Solo hay ${formatQty(available, unit)} de ${group.name} para este proyecto.`);
+    const parsed = hasLeftover ? parseDims(dimFieldsForUnit(unit), dims) : { dims: undefined, error: undefined };
+    if (parsed.error) return setError(parsed.error);
+    if (usedN + wasteN <= 0) {
+      // Sólo sobrante: no hay consumo; se marca desde la pestaña de materiales.
+      return setError("Registrá también cuánto usaste. Para devolver material sin usarlo, usá las acciones de la pestaña Materiales.");
+    }
+    const res = registerUsage(project.id, {
+      materialId: group.materialId,
+      materialName: group.name,
+      unit,
+      consumed: usedN,
+      waste: wasteN,
+      lotId: lotId || undefined,
+      itemId: itemId || undefined,
+      date,
+      leftover: hasLeftover ? { quantity: leftoverN, dims: parsed.dims, location: location.trim() || undefined } : undefined,
     });
-    if (!res.ok) return setError("root", { message: res.error });
-    onDone();
+    if (!res.ok) return setError(res.error);
+    const parts = [`${formatQty(usedN, unit)} de ${group.name}`];
+    if (wasteN) parts.push(`${formatQty(wasteN, unit)} de desperdicio`);
+    if (leftoverN) parts.push(`${formatQty(leftoverN, unit)} reutilizable`);
+    onDone(parts.join(" · "));
   };
 
-  const sources: MaterialSource[] = ["purchased_for_project", "existing_stock", ...(poolItems.length ? (["reused_leftover"] as const) : [])];
+  if (groups.length === 0) {
+    return (
+      <div className="rounded-lg border border-dashed border-slate-300 p-6 text-center">
+        <PackageX className="mx-auto mb-3 size-8 text-slate-400" aria-hidden />
+        <p className="font-medium text-slate-800">Este proyecto no tiene material asignado</p>
+        <p className="mx-auto mt-1 max-w-sm text-sm text-slate-500">
+          {big
+            ? "Solo se puede registrar material que esté comprado o asignado a este proyecto. Pedilo y Gestión lo asigna, lo compra o lo transfiere."
+            : "Registrá una compra o asigná material del stock desde la pestaña Materiales. Solo se puede consumir lo que el proyecto tiene asignado."}
+        </p>
+        {big && onRequestMaterial && (
+          <Button size="xl" className="mt-4 w-full" onClick={onRequestMaterial}>
+            Solicitar material
+          </Button>
+        )}
+      </div>
+    );
+  }
+
+  const labelCls = cn("mb-2 block font-medium text-slate-800", big ? "text-base" : "text-sm");
+  const field = cn(big && "h-12 text-base");
 
   return (
-    <form onSubmit={handleSubmit(submit)} noValidate className="space-y-4">
-      <Field label="Material" htmlFor="u-material" error={e.materialId?.message}>
-        <MaterialSelect id="u-material" options={options} value={v.materialId} onChange={(ev) => onMaterial(ev.target.value)} aria-invalid={!!e.materialId} />
-      </Field>
-      {isOther && (
-        <div className="grid grid-cols-3 gap-3">
-          <Field label="Nombre" htmlFor="u-custom" error={e.customName?.message} className="col-span-2">
-            <Input id="u-custom" {...register("customName")} />
-          </Field>
-          <Field label="Unidad" htmlFor="u-unit" error={e.unit?.message}>
-            <Input id="u-unit" {...register("unit")} />
-          </Field>
-        </div>
-      )}
+    <div className="space-y-6">
       <fieldset>
-        <legend className="mb-1.5 text-sm font-medium text-slate-700">Origen</legend>
-        <Choice<MaterialSource>
-          name="Origen"
-          value={v.source}
-          onChange={(s) => {
-            setValue("source", s);
-            if (s !== "reused_leftover") setValue("reusableMaterialId", undefined);
-          }}
-          options={sources.map((s) => ({ value: s, label: SOURCE_LABELS[s] }))}
-        />
+        <legend className={labelCls}>¿Qué material?</legend>
+        <div className="grid gap-2" role="radiogroup" aria-label="Material">
+          {groups.map((g) => (
+            <button
+              key={g.materialId}
+              type="button"
+              role="radio"
+              aria-checked={materialId === g.materialId}
+              onClick={() => {
+                setMaterialId(g.materialId);
+                setLotId("");
+                setError("");
+              }}
+              className={cn(
+                "flex items-center justify-between gap-3 rounded-md border px-4 text-left",
+                big ? "min-h-14 py-3 text-base" : "min-h-11 py-2 text-sm",
+                materialId === g.materialId ? "border-blue-600 bg-blue-50 font-medium text-blue-900 ring-1 ring-blue-600" : "border-slate-300 bg-white",
+              )}
+            >
+              <span>{g.name}</span>
+              <span className="shrink-0 text-sm text-slate-600 tabular">Disponible: {formatQty(g.quantity, g.unit)}</span>
+            </button>
+          ))}
+        </div>
       </fieldset>
-      {v.source === "reused_leftover" && (
-        <Field label="Sobrante utilizado" htmlFor="u-pool" error={e.reusableMaterialId?.message}>
-          <Select id="u-pool" value={v.reusableMaterialId ?? ""} onChange={(ev) => setValue("reusableMaterialId", ev.target.value || undefined, { shouldValidate: true })}>
-            <option value="">Elegí un sobrante…</option>
-            {poolItems.map((p) => (
-              <option key={p.id} value={p.id}>
-                {formatQty(p.quantity, p.unit)} · de {p.originProjectName} · {formatCurrency(p.unitCost)}/{p.unit}
-              </option>
-            ))}
-          </Select>
-        </Field>
-      )}
-      <div className="grid grid-cols-2 gap-3">
-        <Field label={`Cantidad utilizada (${v.unit})`} htmlFor="u-qty" error={e.quantityConsumed?.message}>
-          <Input id="u-qty" type="number" step="any" min={0} {...register("quantityConsumed", { valueAsNumber: true })} aria-invalid={!!e.quantityConsumed} />
-        </Field>
-        <Field label="Fecha" htmlFor="u-date" error={e.date?.message}>
-          <Input id="u-date" type="date" {...register("date")} />
-        </Field>
-      </div>
-      <div className="grid gap-3 sm:grid-cols-2">
-        <fieldset className="space-y-2">
-          <legend className="mb-1.5 text-sm font-medium text-slate-700">¿Hubo desperdicio?</legend>
-          <Choice<"no" | "si"> name="Desperdicio" value={v.hasWaste ? "si" : "no"} onChange={(x) => setValue("hasWaste", x === "si")} options={[{ value: "no", label: "No" }, { value: "si", label: "Sí" }]} />
-          {v.hasWaste && (
-            <Field label="Cantidad desperdiciada" htmlFor="u-waste" error={e.wasteQuantity?.message}>
-              <Input id="u-waste" type="number" step="any" min={0} {...register("wasteQuantity", { valueAsNumber: true })} />
-            </Field>
+
+      {group && (
+        <>
+          {group.lots.length > 1 && (
+            <fieldset>
+              <legend className={labelCls}>¿De cuál?</legend>
+              <div className="grid gap-2">
+                <button
+                  type="button"
+                  aria-pressed={lotId === ""}
+                  onClick={() => setLotId("")}
+                  className={cn("rounded-md border px-4 py-2 text-left text-sm", lotId === "" ? "border-blue-600 bg-blue-50 ring-1 ring-blue-600" : "border-slate-300")}
+                >
+                  Automático (primero lo comprado, al final los sobrantes)
+                </button>
+                {group.lots.map((l) => (
+                  <button
+                    key={l.lot.id}
+                    type="button"
+                    aria-pressed={lotId === l.lot.id}
+                    onClick={() => setLotId(l.lot.id)}
+                    className={cn("rounded-md border px-4 py-2 text-left text-sm", lotId === l.lot.id ? "border-blue-600 bg-blue-50 ring-1 ring-blue-600" : "border-slate-300")}
+                  >
+                    <span className="font-medium">{formatQty(l.quantity, unit)}</span>{" "}
+                    {l.lot.kind === "leftover" ? `· sobrante${formatDims(l.lot.dims) ? ` (${formatDims(l.lot.dims)})` : ""}` : l.lot.originProjectId === project.id ? "· comprado para este proyecto" : "· del stock"}
+                    {l.lot.originProjectName && l.lot.kind === "leftover" ? ` · de ${l.lot.originProjectName}` : ""}
+                  </button>
+                ))}
+              </div>
+            </fieldset>
           )}
-        </fieldset>
-        <fieldset className="space-y-2">
-          <legend className="mb-1.5 text-sm font-medium text-slate-700">¿Quedó material reutilizable?</legend>
-          <Choice<"no" | "si"> name="Sobrante" value={v.hasLeftover ? "si" : "no"} onChange={(x) => setValue("hasLeftover", x === "si")} options={[{ value: "no", label: "No" }, { value: "si", label: "Sí" }]} />
-          {v.hasLeftover && (
-            <Field label="Cantidad reutilizable" htmlFor="u-left" error={e.leftoverQuantity?.message}>
-              <Input id="u-left" type="number" step="any" min={0} {...register("leftoverQuantity", { valueAsNumber: true })} />
-            </Field>
+
+          <QuantityInput id="u-used" label="Cantidad usada" value={used} onChange={setUsed} unit={unit} step={big ? 1 : 0.5} />
+
+          <div className="space-y-3">
+            <YesNo label="¿Hubo desperdicio? (no se puede reutilizar)" value={hasWaste} onChange={setHasWaste} big={big} />
+            {hasWaste && <QuantityInput id="u-waste" label="Cantidad desperdiciada" value={waste} onChange={setWaste} unit={unit} step={0.1} />}
+          </div>
+
+          <div className="space-y-3">
+            <YesNo label="¿Quedó material reutilizable? (conserva su valor)" value={hasLeftover} onChange={setHasLeftover} big={big} />
+            {hasLeftover && (
+              <>
+                <QuantityInput id="u-left" label="Cantidad reutilizable" value={leftover} onChange={setLeftover} unit={unit} step={0.1} />
+                <LeftoverDimsFields unit={unit} value={dims} onChange={setDims} big={big} idPrefix="u-dim" />
+                <div>
+                  <label htmlFor="u-loc" className="mb-1 block text-sm font-medium text-slate-700">
+                    Ubicación del sobrante <span className="font-normal text-slate-500">(opcional)</span>
+                  </label>
+                  <Input id="u-loc" value={location} onChange={(e) => setLocation(e.target.value)} className={field} />
+                </div>
+              </>
+            )}
+          </div>
+
+          {project.items.length > 0 && (
+            <div>
+              <label htmlFor="u-item" className="mb-1 block text-sm font-medium text-slate-700">
+                ¿Para qué mueble? <span className="font-normal text-slate-500">(opcional)</span>
+              </label>
+              <Select id="u-item" value={itemId} onChange={(e) => setItemId(e.target.value)} className={field}>
+                <option value="">General del proyecto</option>
+                {project.items.map((i) => (
+                  <option key={i.id} value={i.id}>
+                    {i.name}
+                  </option>
+                ))}
+              </Select>
+            </div>
           )}
-        </fieldset>
-      </div>
-      {v.materialId && (
-        <Field
-          label="Costo unitario (solo gestión)"
-          htmlFor="u-cost"
-          hint={resolved ? `Sugerido: ${formatCurrency(resolved.unitCost)} — ${UNIT_COST_ORIGIN_LABELS[resolved.origin]}` : undefined}
-        >
-          <Input
-            id="u-cost"
-            type="number"
-            step="any"
-            min={0}
-            disabled={v.source === "reused_leftover"}
-            placeholder={resolved ? String(resolved.unitCost) : ""}
-            {...register("unitCost", { setValueAs: (x: string) => (x === "" || x === undefined ? undefined : Number(x)) })}
-          />
-        </Field>
+
+          {!big && (
+            <div>
+              <label htmlFor="u-date" className="mb-1 block text-sm font-medium text-slate-700">
+                Fecha
+              </label>
+              <Input id="u-date" type="date" max={todayISO()} value={date} onChange={(e) => setDate(e.target.value)} />
+            </div>
+          )}
+
+          {over && (
+            <p role="alert" className="rounded-md bg-red-50 p-3 text-sm text-red-700">
+              Superás lo disponible: este proyecto tiene {formatQty(available, unit)} de {group.name}
+              {big ? ". Pedí más material." : "."}
+            </p>
+          )}
+
+          {!big && usedN + wasteN > 0 && (
+            <div className="rounded-md bg-slate-50 p-3 text-sm">
+              Se imputa al proyecto: <strong className="tabular">{formatCurrency((usedN + wasteN) * unitCost)}</strong>
+              <span className="text-slate-500"> (consumo + desperdicio, al costo del lote)</span>
+              {leftoverN > 0 && (
+                <div className="text-slate-500">
+                  Sobrante que conserva valor: <span className="tabular">{formatCurrency(leftoverN * unitCost)}</span> (no es costo)
+                </div>
+              )}
+            </div>
+          )}
+
+          {error && (
+            <p role="alert" className="rounded-md bg-red-50 p-3 text-sm text-red-700">
+              {error}
+            </p>
+          )}
+          <Button size={big ? "xl" : "default"} className="w-full" onClick={submit} disabled={over}>
+            Guardar
+          </Button>
+        </>
       )}
-      <Field label="Notas" htmlFor="u-notes">
-        <Textarea id="u-notes" rows={2} {...register("notes")} />
-      </Field>
-      <div className="grid grid-cols-3 gap-2 rounded-md bg-slate-50 p-3 text-center text-xs">
-        <div>
-          <div className="text-slate-500">Imputa al proyecto</div>
-          <div className="mt-0.5 text-sm font-semibold tabular text-slate-900">{formatCurrency((consumed + waste) * unitCost)}</div>
-        </div>
-        <div>
-          <div className="text-slate-500">De eso, desperdicio</div>
-          <div className="mt-0.5 text-sm font-semibold tabular text-slate-900">{formatCurrency(waste * unitCost)}</div>
-        </div>
-        <div>
-          <div className="text-slate-500">Va al pool de sobrantes</div>
-          <div className="mt-0.5 text-sm font-semibold tabular text-emerald-700">{formatCurrency(left * unitCost)}</div>
-        </div>
-      </div>
-      {e.root && <p role="alert" className="text-sm text-red-600">{e.root.message}</p>}
-      <DialogFooter>
-        <Button variant="outline" onClick={onDone}>Cancelar</Button>
-        <Button type="submit">Registrar uso</Button>
-      </DialogFooter>
-    </form>
+    </div>
   );
 }

@@ -1,5 +1,5 @@
 "use client";
-import { ArrowRightLeft, CircleDot, Flag, Layers, Package, Receipt, ShoppingCart, TrendingUp, TriangleAlert } from "lucide-react";
+import { ArrowRightLeft, Boxes, CircleDot, Flag, Layers, NotebookPen, Package, Receipt, ShoppingCart, TrendingUp, TriangleAlert } from "lucide-react";
 import type { ActivityKind, Project } from "@/types";
 import { formatDateTime } from "@/lib/formatting";
 
@@ -13,6 +13,8 @@ const ICONS: Record<ActivityKind, typeof CircleDot> = {
   leftover: Layers,
   deviation: TriangleAlert,
   progress: TrendingUp,
+  stock: Boxes,
+  stage: NotebookPen,
   closed: Flag,
 };
 

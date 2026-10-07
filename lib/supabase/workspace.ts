@@ -5,35 +5,49 @@
 // alcanza con comparar referencias).
 // ─────────────────────────────────────────────────────────────
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { AlertSettings, Project, ReusableMaterial } from "@/types";
+import type { AlertSettings, AppRole, MaterialRequest, Operator, Project } from "@/types";
 import { DEFAULT_SETTINGS } from "@/lib/constants";
+import type { StockState } from "@/lib/stock";
+import { deriveLedgerFromLegacy } from "@/lib/stock-legacy";
 import {
   CHILD_TABLES,
   childrenToRows,
+  lotFromRow,
+  lotToRow,
+  movementFromRow,
+  movementToRow,
+  operatorFromRow,
+  operatorToRow,
   projectToRow,
   projectsFromRows,
+  requestFromRow,
+  requestToRow,
   reusableFromRow,
-  reusableToRow,
   type ChildKey,
 } from "./mappers";
 
-export interface Workspace {
-  organizationId: string;
-  organizationName: string;
-  userName: string;
-  userEmail: string;
-  demoSeeded: boolean;
+export interface WorkspaceData {
   projects: Project[];
-  reusableMaterials: ReusableMaterial[];
+  operators: Operator[];
+  stock: StockState;
+  requests: MaterialRequest[];
   settings: AlertSettings;
   resolvedAlertIds: string[];
 }
 
-export interface WorkspaceData {
-  projects: Project[];
-  reusableMaterials: ReusableMaterial[];
-  settings: AlertSettings;
-  resolvedAlertIds: string[];
+export interface Workspace extends WorkspaceData {
+  organizationId: string;
+  organizationName: string;
+  userId: string;
+  userName: string;
+  userEmail: string;
+  role: AppRole;
+  demoSeeded: boolean;
+  /**
+   * true si la empresa tenía datos del modelo anterior (compras, usos, sobrantes) y todavía no tenía
+   * stock: el ledger se derivó en memoria y hay que guardarlo.
+   */
+  stockMigrated: boolean;
 }
 
 function check<T>(res: { data: T; error: { message: string } | null }): T {
@@ -53,7 +67,7 @@ export async function loadWorkspace(db: SupabaseClient): Promise<Workspace> {
   const membership = check(
     await db
       .from("organization_members")
-      .select("organization_id, display_name, organizations(name, demo_seeded, alert_settings)")
+      .select("organization_id, display_name, role, organizations(name, demo_seeded, alert_settings)")
       .eq("user_id", user.id)
       .order("created_at")
       .limit(1)
@@ -61,12 +75,29 @@ export async function loadWorkspace(db: SupabaseClient): Promise<Workspace> {
   ) as {
     organization_id: string;
     display_name: string;
+    role: AppRole;
     organizations: { name: string; demo_seeded: boolean; alert_settings: AlertSettings | null } | null;
   } | null;
   if (!membership || !membership.organizations) throw new Error("Tu usuario no tiene una empresa asociada.");
 
   const org = membership.organization_id;
-  const [projects, budgetLines, purchaseEntries, materialUsages, actualEntries, activity, pool, resolved] = await Promise.all([
+  const [
+    projects,
+    budgetLines,
+    purchaseEntries,
+    materialUsages,
+    actualEntries,
+    activity,
+    items,
+    stageLogs,
+    attachments,
+    pool,
+    operators,
+    lots,
+    movements,
+    requests,
+    resolved,
+  ] = await Promise.all([
     check(await db.from("projects").select("*").eq("organization_id", org).order("created_at", { ascending: false })) as Record<
       string,
       unknown
@@ -76,18 +107,40 @@ export async function loadWorkspace(db: SupabaseClient): Promise<Workspace> {
     selectAll(db, CHILD_TABLES.materialUsages, org),
     selectAll(db, CHILD_TABLES.actualEntries, org),
     selectAll(db, CHILD_TABLES.activity, org),
+    selectAll(db, CHILD_TABLES.items, org),
+    selectAll(db, CHILD_TABLES.stageLogs, org),
+    selectAll(db, CHILD_TABLES.attachments, org),
     selectAll(db, "reusable_materials", org),
+    selectAll(db, "operators", org),
+    check(await db.from("stock_lots").select("*").eq("organization_id", org).order("created_at").order("id")) as Record<string, unknown>[],
+    selectAll(db, "stock_movements", org),
+    selectAll(db, "material_requests", org),
     check(await db.from("resolved_alerts").select("alert_id").eq("organization_id", org)) as { alert_id: string }[],
   ]);
+
+  const domainProjects = projectsFromRows({ projects, budgetLines, purchaseEntries, materialUsages, actualEntries, activity, items, stageLogs, attachments });
+  let stock: StockState = { lots: lots.map(lotFromRow), movements: movements.map(movementFromRow) };
+  let stockMigrated = false;
+  const hasLegacy = pool.length > 0 || domainProjects.some((p) => p.purchaseEntries.length > 0 || p.materialUsages.length > 0);
+  if (stock.lots.length === 0 && stock.movements.length === 0 && hasLegacy) {
+    // Empresa con datos del modelo anterior: se traducen a lotes y movimientos (sin tocar lo original).
+    stock = deriveLedgerFromLegacy(domainProjects, pool.map(reusableFromRow));
+    stockMigrated = true;
+  }
 
   return {
     organizationId: org,
     organizationName: membership.organizations.name,
+    userId: user.id,
     userName: membership.display_name || user.email?.split("@")[0] || "Usuario",
     userEmail: user.email ?? "",
+    role: membership.role,
     demoSeeded: membership.organizations.demo_seeded,
-    projects: projectsFromRows({ projects, budgetLines, purchaseEntries, materialUsages, actualEntries, activity }),
-    reusableMaterials: pool.map(reusableFromRow),
+    projects: domainProjects,
+    operators: operators.map(operatorFromRow),
+    stock,
+    requests: requests.map(requestFromRow),
+    stockMigrated,
     settings: { ...DEFAULT_SETTINGS, ...(membership.organizations.alert_settings ?? {}) },
     resolvedAlertIds: resolved.map((r) => r.alert_id),
   };
@@ -118,9 +171,39 @@ export async function syncProject(db: SupabaseClient, org: string, prev: Project
   }
 }
 
-export async function syncPool(db: SupabaseClient, org: string, prev: ReusableMaterial[], next: ReusableMaterial[]) {
+/** El ledger de stock sólo crece: se insertan los lotes y movimientos nuevos. */
+export async function syncStock(db: SupabaseClient, org: string, prev: StockState, next: StockState) {
   if (prev === next) return;
-  await replaceList(db, "reusable_materials", next.map((m, i) => reusableToRow(org, m, i)), removed(prev, next), org);
+  const knownLots = new Set(prev.lots.map((l) => l.id));
+  const knownMovs = new Set(prev.movements.map((m) => m.id));
+  const lots = next.lots.filter((l) => !knownLots.has(l.id));
+  const movs = next.movements.map((m, i) => ({ m, i })).filter(({ m }) => !knownMovs.has(m.id));
+  if (lots.length) check(await db.from("stock_lots").upsert(lots.map((l) => lotToRow(org, l)), { onConflict: "organization_id,id" }));
+  if (movs.length) {
+    check(
+      await db
+        .from("stock_movements")
+        .upsert(movs.map(({ m, i }) => movementToRow(org, m, i)), { onConflict: "organization_id,id" }),
+    );
+  }
+}
+
+export async function syncOperators(db: SupabaseClient, org: string, prev: Operator[], next: Operator[]) {
+  if (prev === next) return;
+  const before = new Map(prev.map((o) => [o.id, o]));
+  const changed = next.map((o, i) => ({ o, i })).filter(({ o }) => before.get(o.id) !== o);
+  if (changed.length) {
+    check(await db.from("operators").upsert(changed.map(({ o, i }) => operatorToRow(org, o, i)), { onConflict: "organization_id,id" }));
+  }
+}
+
+export async function syncRequests(db: SupabaseClient, org: string, prev: MaterialRequest[], next: MaterialRequest[]) {
+  if (prev === next) return;
+  const before = new Map(prev.map((q) => [q.id, q]));
+  const changed = next.map((q, i) => ({ q, i })).filter(({ q }) => before.get(q.id) !== q);
+  if (changed.length) {
+    check(await db.from("material_requests").upsert(changed.map(({ q, i }) => requestToRow(org, q, i)), { onConflict: "organization_id,id" }));
+  }
 }
 
 export async function saveSettings(db: SupabaseClient, org: string, settings: AlertSettings) {
@@ -139,10 +222,22 @@ export async function setAlertResolved(db: SupabaseClient, org: string, alertId:
 export async function replaceWorkspace(db: SupabaseClient, org: string, data: WorkspaceData | null) {
   // Los hijos de proyectos se borran en cascada.
   check(await db.from("projects").delete().eq("organization_id", org));
+  check(await db.from("stock_movements").delete().eq("organization_id", org));
+  check(await db.from("stock_lots").delete().eq("organization_id", org));
+  check(await db.from("material_requests").delete().eq("organization_id", org));
   check(await db.from("reusable_materials").delete().eq("organization_id", org));
   check(await db.from("resolved_alerts").delete().eq("organization_id", org));
+  // Los operarios vinculados a un usuario (con login) se conservan; el resto se reemplaza.
+  check(await db.from("operators").delete().eq("organization_id", org).is("user_id", null));
 
   if (data) {
+    if (data.operators.length) {
+      check(
+        await db
+          .from("operators")
+          .upsert(data.operators.map((o, i) => operatorToRow(org, o, i)), { onConflict: "organization_id,id" }),
+      );
+    }
     if (data.projects.length) {
       check(await db.from("projects").insert(data.projects.map((p) => projectToRow(org, p))));
       for (const key of CHILD_KEYS) {
@@ -150,9 +245,11 @@ export async function replaceWorkspace(db: SupabaseClient, org: string, data: Wo
         if (rows.length) check(await db.from(CHILD_TABLES[key]).insert(rows));
       }
     }
-    if (data.reusableMaterials.length) {
-      check(await db.from("reusable_materials").insert(data.reusableMaterials.map((m, i) => reusableToRow(org, m, i))));
+    if (data.stock.lots.length) check(await db.from("stock_lots").insert(data.stock.lots.map((l) => lotToRow(org, l))));
+    if (data.stock.movements.length) {
+      check(await db.from("stock_movements").insert(data.stock.movements.map((m, i) => movementToRow(org, m, i))));
     }
+    if (data.requests.length) check(await db.from("material_requests").insert(data.requests.map((q, i) => requestToRow(org, q, i))));
     if (data.resolvedAlertIds.length) {
       check(await db.from("resolved_alerts").insert(data.resolvedAlertIds.map((alert_id) => ({ organization_id: org, alert_id }))));
     }

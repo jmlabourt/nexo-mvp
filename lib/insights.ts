@@ -12,6 +12,8 @@ import {
   reusedMaterialValue,
 } from "./calculations";
 import { materialRows } from "./material-reconciliation";
+import { projectMaterialFlow } from "./material-flow";
+import type { StockState } from "./stock";
 import {
   formatCurrency,
   formatNumber,
@@ -72,18 +74,22 @@ export function projectInsights(project: Project): Insight[] {
   return out;
 }
 
-export function materialInsights(project: Project): Insight[] {
+export function materialInsights(project: Project, stock?: StockState): Insight[] {
   const out: Insight[] = [];
   const rows = materialRows(project);
+  const flow = stock ? projectMaterialFlow(stock, project.id) : null;
   for (const r of rows) {
-    const extraPurchase = r.purchasedQty - r.budgetQty;
-    if (r.budgetQty > 0 && extraPurchase > 0.001 && r.leftoverQty > 0) {
+    const line = flow?.lines.find((l) => l.key === r.key);
+    const bought = line ? line.purchased.qty : r.purchasedQty;
+    const extraPurchase = bought - r.budgetQty;
+    const recovered = line ? line.recovered.qty + line.transferredOut.qty : r.leftoverQty;
+    if (r.budgetQty > 0 && extraPurchase > 0.001 && recovered > 0) {
       out.push({
         tone: "neutral",
         text: `Compraste ${formatQty(extraPurchase, r.unit)} más de ${r.name} que lo presupuestado, pero ${formatQty(
-          r.leftoverQty,
+          recovered,
           r.unit,
-        )} ${r.leftoverQty === 1 ? "quedó disponible" : "quedaron disponibles"} para futuros proyectos.`,
+        )} no se usaron en este proyecto (volvieron al stock o pasaron a otro): no son costo.`,
       });
     }
     if (r.budgetQty > 0 && r.usedQty > r.budgetQty + 0.001) {
@@ -104,6 +110,12 @@ export function materialInsights(project: Project): Insight[] {
   const reused = reusedMaterialValue(project.materialUsages);
   if (reused > 0) {
     out.push({ tone: "positive", text: `Este proyecto utilizó ${formatCurrency(reused)} de material reutilizado.` });
+  }
+  if (flow && flow.totals.held > 0 && project.status !== "completed") {
+    out.push({
+      tone: "neutral",
+      text: `Hay ${formatCurrency(flow.totals.held)} en material asignado al proyecto que todavía no se consumió. Antes de cerrar hay que darle destino.`,
+    });
   }
   return out;
 }

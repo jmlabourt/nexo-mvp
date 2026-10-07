@@ -20,7 +20,8 @@ export function project(extra: Partial<Project> = {}): Project {
   return {
     id: "p", code: "P-1", name: "Test", client: "C", projectType: "Local comercial", description: "",
     status: "production", startDate: "2026-01-01", dueDate: "2026-03-01", createdAt: "2026-01-01T00:00:00Z",
-    updatedAt: "2026-01-01T00:00:00Z", salesPrice: 1000, progressPercent: 50, owner: "o",
-    budgetLines: [], actualEntries: [], materialUsages: [], purchaseEntries: [], activity: [], isClosed: false, ...extra,
+    updatedAt: "2026-01-01T00:00:00Z", salesPrice: 1000, owner: "o",
+    budgetLines: [], actualEntries: [], materialUsages: [], purchaseEntries: [], activity: [], isClosed: false,
+    assignedOperatorIds: [], items: [], stageLogs: [], attachments: [], ...extra,
   };
 }

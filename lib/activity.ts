@@ -26,8 +26,8 @@ export function usageMessage(u: MaterialUsageEntry): string {
   return `${parts.join(", ")}${origin}.`;
 }
 
-export function leftoverMessage(u: MaterialUsageEntry): string {
-  return `Se generaron ${formatQty(u.reusableLeftoverQuantity, u.unit)} reutilizables de ${u.materialName}.`;
+export function leftoverMessage(materialName: string, quantity: number, unit: string): string {
+  return `Quedaron ${formatQty(quantity, unit)} reutilizables de ${materialName} como sobrante.`;
 }
 
 export function purchaseMessage(p: PurchaseEntry): string {
