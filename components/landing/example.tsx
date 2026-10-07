@@ -1,3 +1,4 @@
+import { APP_NAME } from "@/lib/constants";
 import { EXAMPLE_STATS } from "@/lib/landing-content";
 import { Container, SectionHeading } from "./primitives";
 
@@ -12,7 +13,7 @@ export function Example() {
               Compraste $ 600.000. Al proyecto le corresponden <span className="text-gradient">$ 500.000</span>.
             </>
           }
-          subtitle="Imputar la compra completa infla el costo y esconde el sobrante. NEXO separa cada cosa."
+          subtitle={`Imputar la compra completa infla el costo y esconde el sobrante. ${APP_NAME} separa cada cosa.`}
         />
         <div className="mt-14 grid grid-cols-2 gap-px overflow-hidden rounded-3xl border border-line bg-line lg:grid-cols-4">
           {EXAMPLE_STATS.map((s) => (

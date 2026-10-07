@@ -1,3 +1,4 @@
+import { APP_NAME } from "@/lib/constants";
 import { ArrowRight, Check } from "lucide-react";
 import { DEMO_HREF, PILOT_ASKS, PILOT_CONTACT_HREF, PILOT_GIVES } from "@/lib/landing-content";
 import { Container, CtaLink, SectionHeading } from "./primitives";
@@ -23,7 +24,7 @@ export function Pilot() {
         <SectionHeading
           eyebrow="Piloto"
           title="Probalo con tus proyectos reales"
-          subtitle="Buscamos PyMEs argentinas que fabriquen por proyecto para validar si NEXO resuelve un problema real."
+          subtitle={`Buscamos PyMEs argentinas que fabriquen por proyecto para validar si ${APP_NAME} resuelve un problema real.`}
         />
         <div className="mx-auto mt-14 grid max-w-4xl gap-4 md:grid-cols-2">
           <div className="flex flex-col rounded-3xl border border-line bg-white p-8 shadow-[0_1px_2px_rgb(11_13_23/0.04)]">
@@ -31,12 +32,12 @@ export function Pilot() {
             <div className="mt-4 flex items-baseline gap-2">
               <span className="text-4xl font-semibold tracking-[-0.04em] text-ink">Abierta</span>
             </div>
-            <p className="mt-2 text-sm text-ink-soft">Explorá NEXO con la empresa ficticia Madera Sur S.R.L.</p>
+            <p className="mt-2 text-sm text-ink-soft">Explorá {APP_NAME} con la empresa ficticia Madera Sur S.R.L.</p>
             <List
               items={[
                 "Modo Gestión y Modo Taller",
                 "Un proyecto principal con desvío real de materiales",
-                "Registro de taller desde el QR",
+                "Registro de taller desde el celular",
                 "Alertas, sobrantes, cierre e historial",
                 "Tus datos quedan guardados en tu cuenta",
                 "Vaciá la demo y cargá tus proyectos reales",

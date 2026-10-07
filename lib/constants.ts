@@ -10,7 +10,7 @@ import type {
   UnitCostOrigin,
 } from "@/types";
 
-export const APP_NAME = "NEXO";
+export const APP_NAME = "Blerp";
 export const APP_SUBTITLE = "Rentabilidad por proyecto";
 export const COMPANY_NAME = "Madera Sur S.R.L.";
 
@@ -41,58 +41,68 @@ export const ACTIVE_STATUSES: ProjectStatus[] = ["approved", "purchasing", "prod
 /** El presupuesto base solo se edita antes de ejecutar. Luego es la línea base contra la que se mide. */
 export const BUDGET_EDITABLE_STATUSES: ProjectStatus[] = ["quotation", "approved"];
 
+/** Las siete categorías de costo, siempre en este orden y con estos nombres. */
 export const CATEGORY_ORDER: BudgetCategory[] = [
   "materials",
   "labor",
+  "machines",
   "outsourcing",
-  "finishing",
   "logistics",
   "installation",
   "contingency",
-  "other",
 ];
 
 export const CATEGORY_LABELS: Record<BudgetCategory, string> = {
   materials: "Materiales",
   labor: "Mano de obra",
+  machines: "Máquinas",
   outsourcing: "Tercerizaciones",
-  finishing: "Terminaciones",
   logistics: "Logística",
   installation: "Instalación",
   contingency: "Imprevistos",
-  other: "Otros",
 };
 
 /** Concordancia gramatical: "Materiales superaron" vs. "Mano de obra superó". */
 export const CATEGORY_IS_PLURAL: Record<BudgetCategory, boolean> = {
   materials: true,
   labor: false,
+  machines: true,
   outsourcing: true,
-  finishing: true,
   logistics: false,
   installation: false,
   contingency: true,
-  other: true,
 };
 
+/**
+ * Normaliza categorías guardadas antes de unificar las siete:
+ * "finishing" (Terminaciones) → Tercerizaciones; "other" → Máquinas si la línea es de una máquina, si no Imprevistos.
+ */
+export function normalizeCategory(raw: string, description = ""): BudgetCategory {
+  if ((CATEGORY_ORDER as string[]).includes(raw)) return raw as BudgetCategory;
+  if (raw === "finishing") return "outsourcing";
+  if (raw === "other" && /^m[aá]quina/i.test(description.trim())) return "machines";
+  return "contingency";
+}
+
+/** Tipos de costo real que se ofrecen al registrar. "finishing" queda solo para registros viejos. */
 export const ACTUAL_TYPE_LABELS: Record<ActualEntryType, string> = {
   labor: "Horas trabajadas",
+  other: "Uso de máquinas",
   outsourcing: "Tercerización",
-  finishing: "Terminaciones",
+  finishing: "Tercerización (terminaciones)",
   logistics: "Logística",
   installation: "Instalación",
   unexpected: "Imprevisto",
-  other: "Otro",
 };
 
 export const ACTUAL_TYPE_TO_CATEGORY: Record<ActualEntryType, BudgetCategory> = {
   labor: "labor",
+  other: "machines",
   outsourcing: "outsourcing",
-  finishing: "finishing",
+  finishing: "outsourcing",
   logistics: "logistics",
   installation: "installation",
   unexpected: "contingency",
-  other: "other",
 };
 
 export const SOURCE_LABELS: Record<MaterialSource, string> = {
@@ -122,6 +132,12 @@ export const MATERIAL_CATALOG: CatalogMaterial[] = [
 
 export const OTHER_MATERIAL_ID = "__other__";
 
+/**
+ * D4: mínimo de proyectos comparables para estimar con el modelo de predicción.
+ * El modelo todavía no existe; con menos proyectos solo se muestran promedios simples.
+ */
+export const MIN_COMPARABLE_PROJECTS = 10;
+
 export const DEFAULT_SETTINGS: AlertSettings = {
   categoryWarningPct: 10,
   categoryCriticalPct: 20,
@@ -149,10 +165,19 @@ export const PROJECT_TYPES = [
 
 // ── Semántica visual centralizada ──────────────────────────────
 export const HEALTH_LABELS: Record<EconomicHealth, string> = {
-  healthy: "Saludable",
+  no_data: "Sin datos todavía",
+  healthy: "Sin desvíos",
   attention: "Atención",
   risk: "En riesgo",
 };
+
+/** Regla de la salud del proyecto, en palabras (se muestra en Configuración). */
+export const HEALTH_RULES: Array<{ health: EconomicHealth; rule: string }> = [
+  { health: "risk", rule: "Hay al menos una alerta Crítica abierta." },
+  { health: "attention", rule: "Hay alertas de Atención abiertas y ninguna Crítica." },
+  { health: "healthy", rule: "Hay consumos o costos registrados y no hay alertas abiertas." },
+  { health: "no_data", rule: "Todavía no hay consumos ni costos registrados." },
+];
 
 export const ALERT_LEVEL_LABELS: Record<AlertLevel, string> = {
   info: "Info",
@@ -163,6 +188,7 @@ export const ALERT_LEVEL_LABELS: Record<AlertLevel, string> = {
 export type Tone = "green" | "yellow" | "red" | "blue" | "gray";
 
 export const HEALTH_TONE: Record<EconomicHealth, Tone> = {
+  no_data: "gray",
   healthy: "green",
   attention: "yellow",
   risk: "red",
@@ -213,4 +239,4 @@ export const TONE_CLASSES: Record<Tone, { badge: string; text: string; bg: strin
 };
 
 export const MARGIN_TOOLTIP =
-  "Estimación del margen final considerando los costos registrados hasta hoy y el presupuesto que todavía queda por ejecutar.";
+  "Margen proyectado: costo real hasta hoy + lo que falta del costo presupuestado. Es un cálculo por reglas, no una predicción.";

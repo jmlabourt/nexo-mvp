@@ -1,10 +1,11 @@
 /**
  * Textos del landing. Todo sale de PRODUCT_CONTEXT.md: no hay testimonios, logos de clientes
- * ni precios inventados, porque NEXO todavía está validando Problem–Solution Fit.
+ * ni precios inventados, porque el producto todavía está validando Problem–Solution Fit.
  */
+import { APP_NAME } from "@/lib/constants";
 
 /** Reemplazar por el mail o formulario real del equipo antes de publicar. */
-export const PILOT_CONTACT_HREF = "mailto:equipo@nexo.example?subject=Quiero%20sumarme%20al%20piloto%20de%20NEXO";
+export const PILOT_CONTACT_HREF = `mailto:equipo@blerp.example?subject=${encodeURIComponent(`Quiero sumarme al piloto de ${APP_NAME}`)}`;
 
 export const DEMO_HREF = "/dashboard";
 
@@ -48,12 +49,12 @@ export const FEATURES = [
   {
     key: "margin",
     title: "Margen proyectado, no solo el final",
-    body: "En cada categoría asumimos que lo que queda del presupuesto se va a consumir. Así ves el margen real a mitad de obra, sin números inflados.",
+    body: "En cada categoría asumimos que lo que queda del costo presupuestado se va a gastar. Así ves cómo viene el margen a mitad de obra, sin números inflados.",
   },
   {
     key: "workshop",
     title: "Registro de taller en menos de 30 segundos",
-    body: "Un QR por proyecto. El operario elige material, origen y cantidades. Sin precios ni márgenes en pantalla.",
+    body: "Desde el celular, el operario elige el proyecto, el material y las cantidades. Sin precios ni márgenes en pantalla.",
   },
   {
     key: "purchase",
@@ -79,20 +80,20 @@ export const FEATURES = [
 
 export const STEPS = [
   {
-    title: "Cargás el presupuesto",
-    body: "Materiales, mano de obra, tercerizaciones, logística e instalación. NEXO calcula el margen esperado.",
+    title: "Cargás el costo presupuestado",
+    body: `Materiales, mano de obra, máquinas, tercerizaciones, logística, instalación e imprevistos. Con el precio de venta, ${APP_NAME} calcula el margen esperado.`,
   },
   {
     title: "El taller registra lo que pasó",
-    body: "Desde el QR del proyecto: “usé 2 placas, 0,2 fueron desperdicio, quedó 0,3 reutilizable”.",
+    body: "Desde el celular, en el proyecto asignado: “usé 2 placas, 0,2 fueron desperdicio, quedó 0,3 reutilizable”.",
   },
   {
-    title: "NEXO lo traduce a costo",
-    body: "Valoriza con reglas explícitas (sobrante, última compra, presupuesto o catálogo) y guarda de dónde salió el precio.",
+    title: `${APP_NAME} lo traduce a costo`,
+    body: "Valoriza con reglas explícitas (el costo del lote del que sale el material) y guarda de dónde salió el precio.",
   },
   {
     title: "Gestión ve el margen y decide",
-    body: "Costo real, costo proyectado, desvíos, alertas y actividad: quién, qué y cuándo.",
+    body: "Costo real hasta hoy, margen proyectado, desvíos, alertas y actividad: quién, qué y cuándo.",
   },
 ];
 
@@ -105,7 +106,7 @@ export const WORKSHOP_POINTS = [
 
 export const MANAGEMENT_POINTS = [
   "KPIs y proyectos que necesitan atención",
-  "Presupuesto vs. real por categoría",
+  "Costo presupuestado vs. real por categoría",
   "Reconciliación de lo comprado vs. lo explicado",
   "Actividad de cada proyecto",
 ];
@@ -129,9 +130,9 @@ export const FINDINGS = [
 ];
 
 export const PILOT_GIVES = [
-  "Acceso a NEXO durante la validación",
+  `Acceso a ${APP_NAME} durante la validación`,
   "Acompañamiento para cargar tus primeros proyectos",
-  "Un QR por proyecto para el registro de taller",
+  "Registro de taller desde el celular de cada operario",
   "Los resultados de la investigación cuando termine",
 ];
 
@@ -144,16 +145,16 @@ export const PILOT_ASKS = [
 
 export const FAQS = [
   {
-    q: "¿NEXO es un ERP?",
+    q: `¿${APP_NAME} es un ERP?`,
     a: "No. Contabilidad, facturación, payroll, CRM, órdenes de compra complejas, múltiples depósitos o planificación de producción quedan afuera a propósito. El stock aparece solo porque ayuda a explicar el costo real y la rentabilidad.",
   },
   {
     q: "¿Qué es el margen proyectado?",
-    a: "Si a mitad de proyecto calculás venta menos costo registrado, el margen sale artificialmente alto. Por eso, en cada categoría asumimos que lo que queda del presupuesto se va a consumir y, cuando lo real ya lo superó, tomamos lo real. El margen real final existe recién cuando el proyecto termina.",
+    a: "Si a mitad de proyecto calculás venta menos costo registrado, el margen sale artificialmente alto. Por eso, en cada categoría asumimos que lo que queda del costo presupuestado se va a gastar y, cuando lo real ya lo superó, tomamos lo real. El margen real final existe recién cuando el proyecto termina.",
   },
   {
     q: "¿Quién registra en el taller?",
-    a: "Es una de las preguntas que queremos responder con el piloto. El registro está pensado para que cualquier operario lo haga en menos de 30 segundos desde el QR del proyecto, sin ver precios ni márgenes.",
+    a: "Es una de las preguntas que queremos responder con el piloto. El registro está pensado para que cualquier operario lo haga en menos de 30 segundos desde el celular, sin ver precios ni márgenes.",
   },
   {
     q: "¿Tengo que dejar mi Excel?",
@@ -161,7 +162,7 @@ export const FAQS = [
   },
   {
     q: "¿Cuánto cuesta?",
-    a: "NEXO es parte de una tesis de la Licenciatura en Gestión de Negocios y Tecnología del ITBA. Todavía no investigamos la disposición a pagar: primero queremos validar que el problema y la solución tienen sentido.",
+    a: `${APP_NAME} es parte de una tesis de la Licenciatura en Gestión de Negocios y Tecnología del ITBA. Todavía no investigamos la disposición a pagar: primero queremos validar que el problema y la solución tienen sentido.`,
   },
   {
     q: "¿Los números de la demo son reales?",

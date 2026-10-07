@@ -8,7 +8,7 @@ export function ProgressBar({ value, className, label }: { value: number; classN
       aria-valuenow={v}
       aria-valuemin={0}
       aria-valuemax={100}
-      aria-label={label ?? "Avance"}
+      aria-label={label ?? "Plazo transcurrido"}
       className={cn("h-1.5 w-full overflow-hidden rounded-full bg-slate-200", className)}
     >
       <div className="h-full rounded-full bg-blue-600 transition-all" style={{ width: `${v}%` }} />

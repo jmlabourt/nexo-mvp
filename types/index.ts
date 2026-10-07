@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────────
-// NEXO — Modelo de dominio
+// Blerp — Modelo de dominio
 // Estas entidades son independientes de la UI y de la persistencia.
 // Hoy se guardan en localStorage (Zustand persist); el mismo modelo
 // puede servirse luego desde una API/base de datos.
@@ -13,16 +13,21 @@ export type ProjectStatus =
   | "installation"
   | "completed";
 
+/** Las siete categorías de costo. Son las mismas en todas las pantallas. */
 export type BudgetCategory =
   | "materials"
   | "labor"
+  | "machines"
   | "outsourcing"
-  | "finishing"
   | "logistics"
   | "installation"
-  | "contingency"
-  | "other";
+  | "contingency";
 
+/**
+ * Tipo de un costo real (no material). Los valores coinciden con la base de datos:
+ * "other" se usa para el uso de máquinas y "finishing" solo existe en registros viejos
+ * (se imputa en Tercerizaciones).
+ */
 export type ActualEntryType =
   | "labor"
   | "outsourcing"
@@ -41,7 +46,12 @@ export type AppMode = "management" | "workshop";
 
 export type AlertLevel = "info" | "warning" | "critical";
 
-export type EconomicHealth = "healthy" | "attention" | "risk";
+/**
+ * Salud de un proyecto en curso (los finalizados no llevan chip):
+ * risk = al menos una alerta Crítica abierta · attention = alertas de Atención y ninguna Crítica
+ * · healthy = hay datos y no hay alertas · no_data = todavía no hay consumos ni costos.
+ */
+export type EconomicHealth = "no_data" | "healthy" | "attention" | "risk";
 
 export interface BudgetLine {
   id: string;
@@ -374,6 +384,11 @@ export interface Alert {
   impactAmount?: number;
   expectedMargin?: number;
   projectedMargin?: number;
+  /**
+   * Clave con la que se marca como resuelta: alerta + día + última modificación del proyecto.
+   * Si el problema persiste (al día siguiente o después de un nuevo registro), la alerta reaparece.
+   */
+  resolutionKey: string;
 }
 
 export interface DemoUser {

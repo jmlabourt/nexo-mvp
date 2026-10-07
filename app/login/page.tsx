@@ -1,3 +1,4 @@
+import { APP_NAME } from "@/lib/constants";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
@@ -6,7 +7,7 @@ import { Logo } from "@/components/landing/primitives";
 import { safeNext } from "@/lib/supabase/safe-next";
 import { isSupabaseConfigured, SUPABASE_NOT_CONFIGURED } from "@/lib/supabase/env";
 
-export const metadata: Metadata = { title: "Acceder · NEXO" };
+export const metadata: Metadata = { title: `Acceder · ${APP_NAME}` };
 
 export default async function LoginPage({ searchParams }: PageProps<"/login">) {
   const params = await searchParams;
@@ -26,10 +27,10 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
 
       <main className="relative flex flex-1 items-center justify-center px-4 py-16">
         <div className="w-full max-w-sm rounded-3xl border border-line bg-white/80 p-8 text-center shadow-[0_40px_80px_-40px_rgb(39_45_120/0.35)] backdrop-blur-xl sm:p-10">
-          <Link href="/" aria-label="NEXO, inicio" className="inline-block">
+          <Link href="/" aria-label={`${APP_NAME}, inicio`} className="inline-block">
             <Logo />
           </Link>
-          <h1 className="mt-8 text-2xl font-semibold tracking-[-0.03em] text-ink">Accedé a NEXO</h1>
+          <h1 className="mt-8 text-2xl font-semibold tracking-[-0.03em] text-ink">Accedé a {APP_NAME}</h1>
           <p className="mt-2 text-sm text-pretty text-ink-soft">
             Entrá con tu cuenta de Google. La primera vez creamos tu empresa con los datos demo de Madera Sur S.R.L.
           </p>

@@ -39,7 +39,6 @@ export interface CalcMachine {
 
 export interface CalcDirectCosts {
   outsourcing: number;
-  finishing: number;
   logistics: number;
   installation: number;
 }
@@ -65,7 +64,7 @@ export interface CalcAdjustment {
   projectType: string;
 }
 
-export const EMPTY_DIRECT: CalcDirectCosts = { outsourcing: 0, finishing: 0, logistics: 0, installation: 0 };
+export const EMPTY_DIRECT: CalcDirectCosts = { outsourcing: 0, logistics: 0, installation: 0 };
 
 // ── Cantidades y costos ───────────────────────────────────────
 
@@ -119,7 +118,7 @@ export function buildBudgetLines(input: CalculatorInput, adjustments: CalcAdjust
   for (const m of input.machines) {
     if (!m.name.trim() || !(m.hours > 0)) continue;
     lines.push({
-      category: "other",
+      category: "machines",
       description: `Máquina: ${m.name.trim()}`,
       quantity: finite(m.hours),
       unit: "h",
@@ -128,7 +127,6 @@ export function buildBudgetLines(input: CalculatorInput, adjustments: CalcAdjust
   }
   const directs: [keyof CalcDirectCosts, BudgetCategory, string][] = [
     ["outsourcing", "outsourcing", "Tercerizaciones"],
-    ["finishing", "finishing", "Terminaciones"],
     ["logistics", "logistics", "Logística"],
     ["installation", "installation", "Instalación"],
   ];
@@ -214,6 +212,11 @@ export function addWorkingDays(startISO: string, days: number): string {
 }
 
 // ── Sensibilidad al atraso ────────────────────────────────────
+
+/** El gráfico “¿Qué pasa si el proyecto se alarga?” solo tiene sentido con precio de venta, costo y más de un día laboral. */
+export function showDelayChart(p: { salesPrice: number; workingDays: number; dailyCost: number; cost: number }): boolean {
+  return p.salesPrice > 0 && p.workingDays > 1 && p.dailyCost > 0 && p.cost > 0;
+}
 
 export interface DelayPoint {
   extraDays: number;

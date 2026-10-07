@@ -62,7 +62,7 @@ export function WorkshopHome() {
                   <Link href={`/taller/${p.id}`} className="flex min-h-16 items-center gap-3 rounded-lg border border-slate-200 p-4 hover:bg-slate-50">
                     <div className="min-w-0 flex-1">
                       <div className="text-xs font-medium text-slate-500">{p.code}</div>
-                      <div className="truncate font-medium text-slate-900">{p.name}</div>
+                      <div className="break-words font-medium text-slate-900">{p.name}</div>
                     </div>
                     <StatusBadge status={p.status} />
                     <ChevronRight className="size-5 text-slate-400" aria-hidden />

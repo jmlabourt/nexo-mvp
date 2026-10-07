@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { ArrowLeft, Clock, Hammer, Package, PaintBucket, Sparkles, Truck, Wrench, Zap } from "lucide-react";
+import { ArrowLeft, Clock, Cog, Hammer, Package, Truck, Wrench, Zap } from "lucide-react";
 import type { ActualEntryType, Project } from "@/types";
 import { ACTUAL_TYPE_LABELS } from "@/lib/constants";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -10,17 +10,17 @@ import { canExecute } from "@/lib/project-rules";
 import { STATUS_LABELS } from "@/lib/constants";
 import { OtherCostForm } from "./other-cost-form";
 
-type Kind = "material" | ActualEntryType;
+type Kind = "material" | Exclude<ActualEntryType, "finishing">;
 
+/** Una tarjeta por cada una de las siete categorías de costo. */
 const CARDS: Array<{ kind: Kind; label: string; icon: typeof Package }> = [
   { kind: "material", label: "Material utilizado", icon: Package },
   { kind: "labor", label: "Horas trabajadas", icon: Clock },
+  { kind: "other", label: ACTUAL_TYPE_LABELS.other, icon: Cog },
   { kind: "outsourcing", label: "Tercerización", icon: Hammer },
-  { kind: "finishing", label: "Terminaciones", icon: PaintBucket },
   { kind: "logistics", label: "Logística", icon: Truck },
   { kind: "installation", label: "Instalación", icon: Wrench },
   { kind: "unexpected", label: "Imprevisto", icon: Zap },
-  { kind: "other", label: "Otro", icon: Sparkles },
 ];
 
 export function RecordDialog({ project, open, onOpenChange }: { project: Project; open: boolean; onOpenChange: (o: boolean) => void }) {

@@ -2,6 +2,7 @@
 // Traducción entre el modelo de dominio (types/) y las filas de Supabase.
 // El dominio no conoce la base: todo el snake_case vive acá.
 // ─────────────────────────────────────────────────────────────
+import { normalizeCategory } from "@/lib/constants";
 import type {
   ActivityEvent,
   ActualEntry,
@@ -21,6 +22,12 @@ import type {
 } from "@/types";
 
 type Row = Record<string, unknown>;
+
+/** La línea base se guarda como JSON: sus líneas también pasan por la normalización de categorías. */
+function baselineFromJson(b: Project["baseline"] | null): Project["baseline"] {
+  if (!b) return undefined;
+  return { ...b, lines: b.lines.map((l) => ({ ...l, category: normalizeCategory(String(l.category), l.description) })) };
+}
 
 /** Postgres devuelve timestamptz como "…+00:00"; el dominio usa ISO con "Z". */
 function iso(v: unknown): string {
@@ -204,7 +211,7 @@ export function childrenToRows<K extends ChildKey>(key: K, org: string, projectI
 function budgetLineFromRow(r: Row): BudgetLine {
   return {
     id: String(r.id),
-    category: r.category as BudgetLine["category"],
+    category: normalizeCategory(String(r.category), String(r.description)),
     description: String(r.description),
     materialId: opt(r.material_id as string | null),
     quantity: r.quantity === null ? null : num(r.quantity),
@@ -262,7 +269,7 @@ function actualFromRow(r: Row): ActualEntry {
     projectId: String(r.project_id),
     date: String(r.date),
     type: r.type as ActualEntry["type"],
-    category: r.category as ActualEntry["category"],
+    category: normalizeCategory(String(r.category), String(r.description)),
     description: String(r.description),
     amount: num(r.amount),
     supplier: opt(r.supplier as string | null),
@@ -386,7 +393,7 @@ export function projectsFromRows(rows: ProjectRows): Project[] {
       items: items.get(id) ?? [],
       stageLogs: stageLogs.get(id) ?? [],
       attachments: attachments.get(id) ?? [],
-      baseline: (r.baseline as Project["baseline"] | null) ?? undefined,
+      baseline: baselineFromJson(r.baseline as Project["baseline"] | null),
     };
   });
 }

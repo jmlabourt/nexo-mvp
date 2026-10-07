@@ -86,21 +86,21 @@ function PositionCard({ project, canManage }: { project: Project; canManage: boo
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Requerido vs. disponible</CardTitle>
+        <CardTitle>Requerido vs. asignado a este proyecto</CardTitle>
         <CardDescription>
           Taller sólo puede consumir lo <strong>asignado</strong> a este proyecto. Lo que falta se cubre con stock existente o con una compra.
         </CardDescription>
       </CardHeader>
       {rows.length === 0 ? (
-        <CardContent><p className="text-sm text-slate-500">El presupuesto no tiene materiales con cantidad.</p></CardContent>
+        <CardContent><p className="text-sm text-slate-500">El costo presupuestado no tiene materiales con cantidad.</p></CardContent>
       ) : (
         <Table>
           <THead>
             <TR>
               <TH>Material</TH>
               <TH className="text-right">Requerido</TH>
-              <TH className="text-right">Disponible en stock</TH>
-              <TH className="text-right">Asignado al proyecto</TH>
+              <TH className="text-right">Disponible (libre en depósito)</TH>
+              <TH className="text-right">Asignado a este proyecto</TH>
               <TH className="text-right">Usado</TH>
               <TH className="text-right">Falta</TH>
               {canManage && <TH>Acciones</TH>}
@@ -190,7 +190,7 @@ export function MaterialsTab({
   );
 
   if (rows.length === 0 && movements.length === 0) {
-    return <EmptyState icon={Package} title="Todavía no hay materiales" description="Agregá materiales al presupuesto o registrá una compra o un consumo." />;
+    return <EmptyState icon={Package} title="Todavía no hay materiales" description="Agregá materiales al costo presupuestado o registrá una compra o un consumo." />;
   }
 
   return (

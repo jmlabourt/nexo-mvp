@@ -58,10 +58,10 @@ export function ProjectsPage({ initialQuery = "" }: { initialQuery?: string }) {
     <div>
       <PageHeader
         title="Proyectos"
-        subtitle="Cada proyecto conecta su presupuesto con lo que realmente ocurre en fábrica."
+        subtitle="Cada proyecto conecta su costo presupuestado con lo que realmente ocurre en fábrica."
       />
       <Tabs value={tab} onValueChange={(v) => setTab(v as ProjectStatus | "all")}>
-        <TabsList aria-label="Filtrar por estado">
+        <TabsList aria-label="Filtrar por etapa">
           {TABS.map((t) => (
             <TabsTrigger key={t.value} value={t.value}>
               {t.label} <span className="ml-1 text-xs text-slate-400 tabular">{counts[t.value] ?? 0}</span>
@@ -76,9 +76,9 @@ export function ProjectsPage({ initialQuery = "" }: { initialQuery?: string }) {
           <Input id="project-search" className="pl-8" placeholder="Buscar por proyecto, cliente o código" value={q} onChange={(e) => setQ(e.target.value)} />
         </div>
         <div className="flex gap-3">
-          <label htmlFor="risk-filter" className="sr-only">Riesgo</label>
+          <label htmlFor="risk-filter" className="sr-only">Salud del proyecto</label>
           <Select id="risk-filter" value={risk} onChange={(e) => setRisk(e.target.value as EconomicHealth | "all")} className="w-44">
-            <option value="all">Todo riesgo</option>
+            <option value="all">Cualquier salud</option>
             {(Object.keys(HEALTH_LABELS) as EconomicHealth[]).map((h) => (
               <option key={h} value={h}>{HEALTH_LABELS[h]}</option>
             ))}

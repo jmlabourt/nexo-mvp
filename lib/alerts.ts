@@ -7,7 +7,7 @@ import { projectEconomics, lastRecordDate } from "./calculations";
 import { projectSchedule } from "./project-rules";
 import { projectHoldings, type StockState } from "./stock";
 import { CATEGORY_IS_PLURAL, CATEGORY_LABELS, STATUS_LABELS } from "./constants";
-import { daysBetween, formatCurrency, formatNumber, formatPercent, formatQty, formatSignedCurrency } from "./formatting";
+import { daysBetween, formatCurrency, formatDays, formatMarginPoints, formatPercent, formatQty, formatSignedCurrency } from "./formatting";
 
 export const LEVEL_RANK: Record<AlertLevel, number> = { info: 0, warning: 1, critical: 2 };
 
@@ -28,10 +28,15 @@ function base(project: Project) {
   return { projectId: project.id, projectCode: project.code, projectName: project.name };
 }
 
+/** Clave de resolución: si cambia el día o se registra algo nuevo en el proyecto, la alerta vuelve a evaluarse. */
+export function alertResolutionKey(alertId: string, project: Pick<Project, "updatedAt">, today: string): string {
+  return `${alertId}~${today}~${project.updatedAt}`;
+}
+
 export function projectAlerts(project: Project, settings: AlertSettings, today: string, stock?: StockState): Alert[] {
   if (project.status === "completed" || project.status === "quotation") return [];
   const econ = projectEconomics(project);
-  const alerts: Alert[] = [];
+  const alerts: Omit<Alert, "resolutionKey">[] = [];
 
   // 1. Categorías por encima del presupuesto
   for (const row of econ.categories) {
@@ -46,7 +51,7 @@ export function projectAlerts(project: Project, settings: AlertSettings, today: 
         kind: "category",
         level: "warning",
         title: `${label}: costo no presupuestado`,
-        message: `${label} registra ${formatSignedCurrency(over)} sin presupuesto asignado.`,
+        message: `${label} registra ${formatSignedCurrency(over)} sin costo presupuestado.`,
         impactAmount: over,
         expectedMargin: econ.expectedMargin ?? undefined,
         projectedMargin: econ.projectedMargin ?? undefined,
@@ -60,7 +65,7 @@ export function projectAlerts(project: Project, settings: AlertSettings, today: 
       id: `${project.id}:category:${row.category}:${level}`,
       kind: "category",
       level,
-      title: `${label} ${pl ? "superaron" : "superó"} el presupuesto en ${formatPercent(pct, 0)}`,
+      title: `${label} ${pl ? "superaron" : "superó"} su costo presupuestado en ${formatPercent(pct, 0)}`,
       message: `${label} ${pl ? "están" : "está"} ${formatCurrency(over)} por encima de lo presupuestado.`,
       impactAmount: over,
       expectedMargin: econ.expectedMargin ?? undefined,
@@ -77,7 +82,7 @@ export function projectAlerts(project: Project, settings: AlertSettings, today: 
       id: `${project.id}:margin:${level}`,
       kind: "margin",
       level,
-      title: `El margen proyectado cayó ${formatNumber(drop, 1)} puntos`,
+      title: `El margen proyectado cayó ${formatMarginPoints(drop)}`,
       message: `Con los costos registrados hasta hoy, el margen pasó de ${formatPercent(econ.expectedMargin)} a ${formatPercent(econ.projectedMargin)}.`,
       impactAmount: econ.costOverrun,
       expectedMargin: econ.expectedMargin ?? undefined,
@@ -96,7 +101,7 @@ export function projectAlerts(project: Project, settings: AlertSettings, today: 
         kind: "stale",
         level: "warning",
         title: "Sin registros recientes",
-        message: `Hace ${days} días que no se registran consumos o costos en este proyecto.`,
+        message: `Hace ${formatDays(days)} que no se registran consumos o costos en este proyecto.`,
       });
     }
   }
@@ -111,7 +116,7 @@ export function projectAlerts(project: Project, settings: AlertSettings, today: 
       kind: "due",
       level: "critical",
       title: "Entrega vencida",
-      message: `La entrega venció hace ${Math.abs(sched.remainingDays)} días y el proyecto sigue en ${STATUS_LABELS[project.status]}.`,
+      message: `La entrega venció hace ${formatDays(Math.abs(sched.remainingDays))} y el proyecto sigue en la etapa ${STATUS_LABELS[project.status]}.`,
     });
   } else if (preProduction && sched.remainingDays <= settings.dueSoonDays) {
     alerts.push({
@@ -120,7 +125,7 @@ export function projectAlerts(project: Project, settings: AlertSettings, today: 
       kind: "due",
       level: "warning",
       title: `Entrega próxima y todavía en ${STATUS_LABELS[project.status]}`,
-      message: `Faltan ${sched.remainingDays} días para la entrega y el proyecto aún no pasó a Producción.`,
+      message: `Faltan ${formatDays(sched.remainingDays)} para la entrega y el proyecto aún no pasó a la etapa Producción.`,
     });
   } else if (preProduction && sched.elapsedPct >= settings.deadlineNoProductionPct) {
     alerts.push({
@@ -129,7 +134,7 @@ export function projectAlerts(project: Project, settings: AlertSettings, today: 
       kind: "due",
       level: "warning",
       title: "Mucho plazo consumido sin empezar a producir",
-      message: `Pasó el ${sched.elapsedPct}% del plazo y el proyecto sigue en ${STATUS_LABELS[project.status]}.`,
+      message: `Pasó el ${sched.elapsedPct}% del plazo y el proyecto sigue en la etapa ${STATUS_LABELS[project.status]}.`,
     });
   }
 
@@ -160,7 +165,7 @@ export function projectAlerts(project: Project, settings: AlertSettings, today: 
     }
   }
 
-  return sortAlerts(alerts);
+  return sortAlerts(alerts.map((a) => ({ ...a, resolutionKey: alertResolutionKey(a.id, project, today) })));
 }
 
 export function sortAlerts(alerts: Alert[]): Alert[] {
@@ -171,20 +176,31 @@ export function allAlerts(projects: Project[], settings: AlertSettings, today: s
   return sortAlerts(projects.flatMap((p) => projectAlerts(p, settings, today, stock)));
 }
 
-/**
- * Estado económico: se basa SOLO en alertas económicas (categoría y margen).
- * Fechas o reconciliación pendiente se muestran aparte, no cambian la salud económica.
- */
-export function economicHealth(project: Project, settings: AlertSettings, today: string): EconomicHealth {
-  const econ = projectAlerts(project, settings, today).filter((a) => a.kind === "category" || a.kind === "margin");
-  if (econ.some((a) => a.level === "critical")) return "risk";
-  if (econ.some((a) => a.level === "warning")) return "attention";
-  return "healthy";
+/** Separa abiertas y resueltas. Es la ÚNICA cuenta: el globo, la pestaña "Todas" y la salud salen de acá. */
+export function splitAlerts(alerts: Alert[], resolvedKeys: readonly string[]): { open: Alert[]; resolved: Alert[] } {
+  const set = new Set(resolvedKeys);
+  return { open: alerts.filter((a) => !set.has(a.resolutionKey)), resolved: alerts.filter((a) => set.has(a.resolutionKey)) };
 }
 
-/** Estado económico para proyectos finalizados, según margen real vs. esperado. */
-export function closedHealth(dropPp: number | null, settings: AlertSettings): EconomicHealth {
-  if (dropPp === null || dropPp < settings.marginWarningPp) return "healthy";
-  if (dropPp > settings.marginCriticalPp) return "risk";
-  return "attention";
+/** Número del globo de alertas = cantidad de alertas abiertas (la misma lista que la pestaña "Todas"). */
+export function openAlertCount(open: readonly Alert[]): number {
+  return open.length;
+}
+
+/** ¿Hay datos de ejecución? Consumos de material o costos registrados (las compras no cuentan). */
+export function hasExecutionData(project: Pick<Project, "materialUsages" | "actualEntries">): boolean {
+  return project.materialUsages.length > 0 || project.actualEntries.length > 0;
+}
+
+/**
+ * Salud del proyecto según sus alertas ABIERTAS (ver HEALTH_RULES). Los finalizados no llevan chip: null.
+ * `openAlerts` puede incluir alertas de otros proyectos; se filtran por id.
+ */
+export function projectHealth(project: Project, openAlerts: readonly Alert[]): EconomicHealth | null {
+  if (project.status === "completed") return null;
+  const own = openAlerts.filter((a) => a.projectId === project.id);
+  if (own.some((a) => a.level === "critical")) return "risk";
+  if (own.some((a) => a.level === "warning")) return "attention";
+  if (!hasExecutionData(project)) return "no_data";
+  return "healthy";
 }

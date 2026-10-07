@@ -130,7 +130,7 @@ export function StockPage({ material, lot, tab }: { material?: string; lot?: str
                     <TH>Material</TH>
                     <TH className="text-right">Físico</TH>
                     <TH className="text-right">Disponible</TH>
-                    <TH className="text-right">Asignado</TH>
+                    <TH className="text-right">Asignado a proyectos</TH>
                     <TH className="text-right">Costo unit.</TH>
                     <TH className="text-right">Valor</TH>
                     <TH className="text-right">Sobrantes</TH>

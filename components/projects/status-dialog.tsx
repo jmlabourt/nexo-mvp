@@ -8,8 +8,8 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Button } from "@/components/ui/button";
 
 const NOTES: Partial<Record<ProjectStatus, string>> = {
-  approved: "Al aprobar, el presupuesto queda guardado como línea base: no se modifica, sólo se compara.",
-  purchasing: "Desde Compras ya se puede registrar compras y asignar material.",
+  approved: "Al aprobar, el costo presupuestado queda guardado como presupuesto base (línea base): no se modifica, solo se compara.",
+  purchasing: "En la etapa Compras se registran las compras y se asigna material al proyecto.",
   production: "Desde Producción, Taller puede registrar horas y consumos de los operarios asignados.",
 };
 

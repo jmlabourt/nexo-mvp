@@ -6,7 +6,7 @@ import { CATEGORY_LABELS } from "@/lib/constants";
 import { projectEconomics } from "@/lib/calculations";
 import { projectMaterialFlow, unresolvedMaterial } from "@/lib/material-flow";
 import { closingSummary } from "@/lib/insights";
-import { formatCurrency, formatPercent, formatPp, formatQty, formatSignedCurrency, todayISO } from "@/lib/formatting";
+import { formatCurrency, formatCurrencyOrDash, formatMarginPoints, formatPercent, formatQty, formatSignedCurrency, todayISO } from "@/lib/formatting";
 import { useAppStore } from "@/store/use-app-store";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -92,10 +92,10 @@ export function CloseDialog({ project, open, onOpenChange }: { project: Project;
         ) : (
           <div className="space-y-5">
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <Kpi label="Precio de venta" value={formatCurrency(econ.salesPrice)} />
-              <Kpi label="Presupuesto" value={formatCurrency(econ.budgetTotal)} />
+              <Kpi label="Precio de venta" value={econ.hasSalesPrice ? formatCurrency(econ.salesPrice) : "—"} />
+              <Kpi label="Costo presupuestado" value={formatCurrency(econ.budgetTotal)} />
               <Kpi label="Costo real final" value={formatCurrency(econ.actualCostToDate)} />
-              <Kpi label="Ganancia esperada → real" value={`${formatCurrency(econ.expectedProfit)} → ${formatCurrency(econ.finalProfit ?? 0)}`} small />
+              <Kpi label="Ganancia esperada → real" value={econ.hasSalesPrice ? `${formatCurrencyOrDash(econ.expectedProfit)} → ${formatCurrencyOrDash(econ.finalProfit)}` : "—"} small />
             </div>
             <div className="flex flex-wrap items-end gap-6 rounded-lg bg-slate-50 p-4">
               <div>
@@ -103,10 +103,10 @@ export function CloseDialog({ project, open, onOpenChange }: { project: Project;
                 <div className="text-3xl font-semibold tabular">{formatPercent(econ.expectedMargin)}</div>
               </div>
               <div>
-                <div className="text-xs text-slate-500">Margen real</div>
+                <div className="text-xs text-slate-500">Margen real final</div>
                 <div className="text-3xl font-semibold tabular">{formatPercent(econ.finalMargin)}</div>
               </div>
-              <div className="pb-1 text-lg font-medium tabular text-slate-700">{formatPp(econ.marginDeltaPp)}</div>
+              <div className="pb-1 text-lg font-medium tabular text-slate-700">{formatMarginPoints(econ.marginDeltaPp, { signed: true })}</div>
             </div>
             {econ.categories.some((c) => c.budget > 0 && c.actual === 0) && (
               <div className="rounded-md bg-amber-50 p-3 text-sm text-amber-900" role="alert">
@@ -130,8 +130,8 @@ export function CloseDialog({ project, open, onOpenChange }: { project: Project;
               <THead>
                 <TR>
                   <TH>Categoría</TH>
-                  <TH className="text-right">Presupuestado</TH>
-                  <TH className="text-right">Real</TH>
+                  <TH className="text-right">Costo presupuestado</TH>
+                  <TH className="text-right">Costo real final</TH>
                   <TH className="text-right">Desvío</TH>
                 </TR>
               </THead>

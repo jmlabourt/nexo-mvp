@@ -1,3 +1,4 @@
+import { APP_NAME } from "@/lib/constants";
 import { ArrowRight, Play } from "lucide-react";
 import { DEMO_HREF, SEGMENTS } from "@/lib/landing-content";
 import { Container, CtaLink, Eyebrow } from "./primitives";
@@ -18,7 +19,7 @@ export function Hero() {
             Sabé si cada proyecto <span className="text-gradient">sigue siendo rentable</span>
           </h1>
           <p className="mt-6 max-w-xl animate-fade-up text-base leading-relaxed text-pretty text-ink-soft [animation-delay:160ms] sm:text-lg">
-            NEXO conecta lo que presupuestaste con lo que realmente ocurre en el taller, para que veas el margen mientras se
+            {APP_NAME} conecta lo que presupuestaste con lo que realmente ocurre en el taller, para que veas el margen mientras se
             fabrica y no cuando ya es tarde.
           </p>
           <div className="mt-9 flex w-full animate-fade-up flex-col items-center justify-center gap-3 [animation-delay:240ms] sm:w-auto sm:flex-row">

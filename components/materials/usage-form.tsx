@@ -41,7 +41,7 @@ const num = (v: string) => {
 
 /**
  * Registro de material usado. SOLO se ofrece lo que el proyecto tiene asignado
- * (comprado, tomado del stock o transferido): no se puede inventar ni pasarse de lo disponible.
+ * (comprado, tomado del stock o transferido): no se puede inventar ni pasarse de lo asignado.
  * Consumo y desperdicio son costo; el sobrante conserva su valor. Se muestran separados.
  */
 export function UsageForm({
@@ -161,7 +161,7 @@ export function UsageForm({
               )}
             >
               <span>{g.name}</span>
-              <span className="shrink-0 text-sm text-slate-600 tabular">Disponible: {formatQty(g.quantity, g.unit)}</span>
+              <span className="shrink-0 text-sm text-slate-600 tabular">Asignado a este proyecto: {formatQty(g.quantity, g.unit)}</span>
             </button>
           ))}
         </div>
@@ -248,7 +248,7 @@ export function UsageForm({
 
           {over && (
             <p role="alert" className="rounded-md bg-red-50 p-3 text-sm text-red-700">
-              Superás lo disponible: este proyecto tiene {formatQty(available, unit)} de {group.name}
+              Superás lo asignado a este proyecto: tiene {formatQty(available, unit)} de {group.name}
               {big ? ". Pedí más material." : "."}
             </p>
           )}

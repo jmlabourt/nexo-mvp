@@ -44,8 +44,7 @@ function useBreadcrumb(): string[] {
 function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
   const resetDemo = useAppStore((s) => s.resetDemo);
-  const { open } = useAlerts();
-  const critical = open.filter((a) => a.level !== "info").length;
+  const { count } = useAlerts();
   const userName = useAppStore((s) => s.userName);
   const userEmail = useAppStore((s) => s.userEmail);
   const organizationName = useAppStore((s) => s.organizationName);
@@ -72,8 +71,8 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
             >
               <item.icon className="size-4" aria-hidden />
               {item.label}
-              {item.href === "/alerts" && critical > 0 && (
-                <span className="ml-auto rounded-full bg-red-100 px-1.5 text-xs font-semibold text-red-700 tabular">{critical}</span>
+              {item.href === "/alerts" && count > 0 && (
+                <span className="ml-auto rounded-full bg-red-100 px-1.5 text-xs font-semibold text-red-700 tabular">{count}</span>
               )}
             </Link>
           );
@@ -86,8 +85,8 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
             {userName.split(" ").filter(Boolean).slice(0, 2).map((w) => w[0]?.toUpperCase()).join("")}
           </div>
           <div className="min-w-0">
-            <div className="truncate text-sm font-medium text-slate-900">{userName}</div>
-            <div className="truncate text-xs text-slate-500" title={userEmail}>
+            <div className="break-words text-sm font-medium text-slate-900">{userName}</div>
+            <div className="break-words text-xs text-slate-500" title={userEmail}>
               {organizationName}
             </div>
           </div>
@@ -114,8 +113,7 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
 
 function Header({ onMenu }: { onMenu: () => void }) {
   const crumbs = useBreadcrumb();
-  const { open } = useAlerts();
-  const count = open.filter((a) => a.level !== "info").length;
+  const { count } = useAlerts();
   return (
     <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-slate-200 bg-white/95 px-4 backdrop-blur lg:px-8">
       <Button variant="ghost" size="icon" className="lg:hidden" onClick={onMenu} aria-label="Abrir menú">

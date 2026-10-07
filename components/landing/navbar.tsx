@@ -1,3 +1,4 @@
+import { APP_NAME } from "@/lib/constants";
 import Link from "next/link";
 import { ArrowRight, Menu } from "lucide-react";
 import { DEMO_HREF, LOGIN_HREF, NAV_LINKS } from "@/lib/landing-content";
@@ -7,7 +8,7 @@ export function Navbar() {
   return (
     <header className="sticky top-0 z-50 px-3 pt-3 sm:px-6 sm:pt-4">
       <div className="mx-auto flex h-14 max-w-6xl items-center gap-4 rounded-full border border-line/80 bg-white/75 pl-5 pr-2 shadow-[0_8px_30px_-12px_rgb(11_13_23/0.15)] backdrop-blur-xl">
-        <Link href="/" aria-label="NEXO, inicio">
+        <Link href="/" aria-label={`${APP_NAME}, inicio`}>
           <Logo />
         </Link>
         <nav aria-label="Secciones" className="mx-auto hidden items-center gap-1 md:flex">

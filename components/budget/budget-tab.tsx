@@ -3,9 +3,8 @@ import { useState } from "react";
 import { Lock, Pencil } from "lucide-react";
 import type { Project } from "@/types";
 import { BUDGET_EDITABLE_STATUSES, CATEGORY_LABELS, CATEGORY_ORDER } from "@/lib/constants";
-import { budgetByCategory, budgetTotal } from "@/lib/calculations";
-import { formatCurrency, formatNumber, formatPercent } from "@/lib/formatting";
-import { marginPercent } from "@/lib/calculations";
+import { budgetByCategory, budgetTotal, hasSalesPrice, marginPercent, profitOrNull } from "@/lib/calculations";
+import { formatCurrency, formatCurrencyOrDash, formatNumber, formatPercent } from "@/lib/formatting";
 import { useAppStore } from "@/store/use-app-store";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
@@ -51,12 +50,13 @@ export function BudgetTab({ project }: { project: Project }) {
       <div className="flex flex-col gap-3 rounded-lg border border-slate-200 bg-white p-4 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-sm text-slate-600">
           {editable ? null : <Lock className="mr-1.5 inline size-4 text-slate-400" aria-hidden />}
-          Este es el presupuesto base contra el que se medirán los desvíos.
-          {!editable && " Quedó bloqueado cuando el proyecto pasó a ejecución."}
+          {editable
+            ? "Costo presupuestado del proyecto. Se puede editar hasta que pase a Compras. Al aprobarlo se guarda una copia congelada: el presupuesto base."
+            : "Presupuesto base: es la línea base contra la que se miden los desvíos. Quedó bloqueado cuando el proyecto pasó a ejecución."}
         </p>
         {editable && !editing && (
           <Button variant="outline" size="sm" onClick={start}>
-            <Pencil /> Editar presupuesto
+            <Pencil /> Editar costo presupuestado
           </Button>
         )}
       </div>
@@ -68,7 +68,7 @@ export function BudgetTab({ project }: { project: Project }) {
             {msg && <p role="alert" className="mt-2 text-sm text-red-600">{msg}</p>}
             <div className="mt-4 flex justify-end gap-2">
               <Button variant="outline" onClick={() => setEditing(false)}>Cancelar</Button>
-              <Button onClick={save}>Guardar presupuesto</Button>
+              <Button onClick={save}>Guardar costo presupuestado</Button>
             </div>
           </CardContent>
         </Card>
@@ -100,7 +100,7 @@ export function BudgetTab({ project }: { project: Project }) {
                     </TR>
                   ))}
                 <TR className="bg-slate-50 font-semibold">
-                  <TD colSpan={5}>Total presupuestado</TD>
+                  <TD colSpan={5}>Costo presupuestado total</TD>
                   <TD className="text-right tabular">{formatCurrency(total)}</TD>
                 </TR>
               </TBody>
@@ -109,10 +109,10 @@ export function BudgetTab({ project }: { project: Project }) {
           <Card>
             <CardHeader>
               <CardTitle>Resumen</CardTitle>
-              <CardDescription>Margen esperado al cotizar</CardDescription>
+              <CardDescription>Las siete categorías y el margen esperado</CardDescription>
             </CardHeader>
             <CardContent className="space-y-2 text-sm">
-              {CATEGORY_ORDER.filter((c) => byCat[c] > 0).map((c) => (
+              {CATEGORY_ORDER.map((c) => (
                 <div key={c} className="flex justify-between">
                   <span className="text-slate-500">{CATEGORY_LABELS[c]}</span>
                   <span className="tabular">{formatCurrency(byCat[c])}</span>
@@ -120,7 +120,11 @@ export function BudgetTab({ project }: { project: Project }) {
               ))}
               <div className="flex justify-between border-t border-slate-100 pt-2">
                 <span className="text-slate-500">Precio de venta</span>
-                <span className="tabular">{formatCurrency(project.salesPrice)}</span>
+                <span className="tabular">{hasSalesPrice(project.salesPrice) ? formatCurrency(project.salesPrice) : "—"}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">Ganancia esperada</span>
+                <span className="tabular">{formatCurrencyOrDash(profitOrNull(project.salesPrice, total))}</span>
               </div>
               <div className="flex justify-between font-semibold">
                 <span>Margen esperado</span>

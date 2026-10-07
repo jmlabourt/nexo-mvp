@@ -1,4 +1,4 @@
-# NEXO — Contexto de producto (tesis)
+# Blerp (antes NEXO) — Contexto de producto (tesis)
 
 ## Contexto de tesis
 
@@ -13,7 +13,7 @@ Somos estudiantes de la Licenciatura en Gestión de Negocios y Tecnología del I
 7. Validar **Problem–Solution Fit**.
 8. Recién después, investigar la disposición a pagar.
 
-**NEXO es una herramienta de investigación y validación.** No afirmamos haber alcanzado Product-Market Fit.
+**Blerp es una herramienta de investigación y validación.** No afirmamos haber alcanzado Product-Market Fit. Las reglas del producto son decisiones de diseño todavía no validadas con fabricantes, y el modelo de predicción es un objetivo futuro que hoy no existe.
 
 ## Segmento (hipótesis)
 
@@ -68,10 +68,10 @@ Ejemplo: se compran 12 placas ($ 600.000), se consumen 9, se desperdicia 1 y que
 
 ## Captura: mundo físico → dato → costo → margen
 
-- Un QR por proyecto abre el registro de taller.
+- El operario entra desde su celular y ve solo los proyectos que tiene asignados.
 - El operario elige el material, el origen y las cantidades.
-- El sistema valoriza con reglas explícitas: sobrante del pool, última compra, presupuesto o catálogo, y guarda de dónde salió el precio.
-- Gestión ve el efecto sobre el costo real, el costo proyectado, el margen, las alertas y la actividad (quién, qué y cuándo).
+- El sistema valoriza con reglas explícitas (el consumo se valoriza al costo del lote del que sale) y guarda de dónde salió el precio.
+- Gestión ve el efecto sobre el costo real hasta hoy, el margen proyectado, las alertas y la actividad (quién, qué y cuándo).
 
 ## Propuesta de valor (provisoria)
 
@@ -85,7 +85,7 @@ Ejemplo: se compran 12 placas ($ 600.000), se consumen 9, se desperdicia 1 y que
 - ¿Aporta valor ver el presupuesto contra lo real y el margen **proyectado**, no solo el final?
 - ¿Las alertas son útiles o generan ruido?
 - ¿Quién debería registrar? ¿Qué es realista registrar y qué no quieren registrar?
-- ¿Usarían el QR en la orden de producción?
+- ¿Registrarían desde el celular durante la producción?
 - ¿Separarían compra de consumo en su operación real?
 - ¿Tiene valor identificar sobrantes reutilizables?
 - ¿Cambiarían su Excel por una herramienta así? ¿Qué falta?
@@ -120,4 +120,34 @@ El stock aparece solo porque ayuda a explicar el **costo real y la rentabilidad*
 - Múltiples depósitos, transferencias, FIFO/LIFO, stock mínimo, lotes y códigos de barra empresariales.
 - Planificación de producción, nesting, CNC e IA generativa.
 
-Convertir NEXO en un ERP diluiría la hipótesis que queremos testear (la captura del mundo físico conectada al margen) y aumentaría la fricción de adopción en PyMEs que hoy trabajan con planillas.
+Convertir Blerp en un ERP diluiría la hipótesis que queremos testear (la captura del mundo físico conectada al margen) y aumentaría la fricción de adopción en PyMEs que hoy trabajan con planillas.
+
+## Glosario (una palabra, un significado)
+
+| Término | Significado |
+|---|---|
+| Costo presupuestado | Lo que se calculó que va a costar el proyecto. |
+| Precio de venta | Lo que se le cobra al cliente. |
+| Presupuesto base (línea base) | El costo presupuestado aprobado y congelado. No se dice "presupuesto" suelto. |
+| Margen esperado | Sale del presupuesto base: (precio de venta − costo presupuestado) / precio de venta. |
+| Margen proyectado | Costo real hasta hoy + lo que falta del costo presupuestado. Es un cálculo por reglas, no una predicción. |
+| Margen real final | Solo existe al cierre, en proyectos finalizados. |
+| Etapa | Cotización, Aprobado, Compras, Producción, Instalación, Finalizado. |
+| Disponible | Solo lo libre en depósito. |
+| Asignado a este proyecto | Lo que el proyecto tiene para usar (lo que ve Taller). |
+| Costo real hasta hoy / Costo real final | El primero solo en proyectos activos; el segundo solo en finalizados. |
+| Plazo transcurrido | Tiempo que pasó entre inicio y entrega (no es avance de obra). |
+| Puntos de margen | Diferencia entre dos márgenes (nunca "%" ni "pp"). |
+| Comprado ≠ Consumido ≠ Desperdicio ≠ Sobrante | Siempre se muestran por separado. Solo consumido + desperdicio es costo. |
+
+Las siete categorías de costo, iguales en todas las pantallas: **Materiales, Mano de obra, Máquinas, Tercerizaciones, Logística, Instalación, Imprevistos.** Los registros viejos de "Terminaciones" se cuentan en Tercerizaciones; los de "Otros", en Máquinas si eran líneas de máquina y si no en Imprevistos.
+
+## Decisiones tomadas (oct 2026)
+
+- **D1.** Las horas de la etapa Instalación van a la categoría Instalación; el resto, a Mano de obra.
+- **D2.** Solo se compra desde la etapa Compras.
+- **D3.** El consumo se valoriza al costo del lote del que sale.
+- **D4.** El mínimo para estimar con el modelo es 10 proyectos comparables (el modelo todavía no existe).
+- **D5.** El proyecto referencia un id de cliente.
+
+D1, D2 y D5 se implementan en lotes posteriores.

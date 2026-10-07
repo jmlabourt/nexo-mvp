@@ -10,7 +10,7 @@ export function MaterialSelect({ id, options, ...props }: { id: string; options:
     <Select id={id} {...props}>
       <option value="">Elegí un material…</option>
       {inBudget.length > 0 && (
-        <optgroup label="Del presupuesto / compras del proyecto">
+        <optgroup label="Del costo presupuestado / compras del proyecto">
           {inBudget.map((o) => (
             <option key={o.id} value={o.id}>{o.name}</option>
           ))}
@@ -20,7 +20,7 @@ export function MaterialSelect({ id, options, ...props }: { id: string; options:
         {rest.map((o) => (
           <option key={o.id} value={o.id}>{o.name}</option>
         ))}
-        <option value={OTHER_MATERIAL_ID}>Otro…</option>
+        <option value={OTHER_MATERIAL_ID}>Otro material</option>
       </optgroup>
     </Select>
   );

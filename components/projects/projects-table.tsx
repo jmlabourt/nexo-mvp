@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import type { ProjectView } from "@/store/selectors";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { HealthBadge, StatusBadge } from "@/components/shared/badges";
-import { DeltaPp } from "@/components/shared/margin-shift";
+import { DeltaPoints } from "@/components/shared/margin-shift";
 import { ProgressBar } from "@/components/ui/progress";
 import { projectSchedule } from "@/lib/project-rules";
 import { formatCurrency, formatDate, formatPercent, todayISO } from "@/lib/formatting";
@@ -17,14 +17,14 @@ export function ProjectsTable({ views, showSchedule = true }: { views: ProjectVi
         <TR>
           <TH>Proyecto</TH>
           <TH>Cliente</TH>
-          <TH>Estado</TH>
+          <TH>Etapa</TH>
           <TH>Entrega</TH>
           {showSchedule && <TH>Plazo transcurrido</TH>}
-          <TH className="text-right">Venta</TH>
+          <TH className="text-right">Precio de venta</TH>
           <TH className="text-right">Margen esperado</TH>
-          <TH className="text-right">Margen proyectado</TH>
-          <TH className="text-right">Desvío</TH>
-          <TH>Estado económico</TH>
+          <TH className="text-right">Margen proyectado / real final</TH>
+          <TH className="text-right">Desvío (puntos de margen)</TH>
+          <TH>Salud</TH>
         </TR>
       </THead>
       <TBody>
@@ -58,15 +58,13 @@ export function ProjectsTable({ views, showSchedule = true }: { views: ProjectVi
                 })()}
               </TD>
             )}
-            <TD className="whitespace-nowrap text-right tabular">{formatCurrency(p.salesPrice)}</TD>
+            <TD className="whitespace-nowrap text-right tabular">{econ.hasSalesPrice ? formatCurrency(p.salesPrice) : "—"}</TD>
             <TD className="text-right tabular">{formatPercent(econ.expectedMargin)}</TD>
-            <TD className="text-right font-medium tabular text-slate-900">{formatPercent(econ.currentMargin)}</TD>
+            <TD className="text-right font-medium tabular text-slate-900">{econ.hasExecutionData || p.status === "completed" ? formatPercent(econ.currentMargin) : "—"}</TD>
             <TD className="text-right whitespace-nowrap">
-              <DeltaPp value={econ.marginDeltaPp} />
+              <DeltaPoints value={econ.hasExecutionData || p.status === "completed" ? econ.marginDeltaPp : null} />
             </TD>
-            <TD>
-              <HealthBadge health={health} />
-            </TD>
+            <TD>{health ? <HealthBadge health={health} /> : <span className="text-xs text-slate-500">Finalizado</span>}</TD>
           </TR>
         ))}
       </TBody>

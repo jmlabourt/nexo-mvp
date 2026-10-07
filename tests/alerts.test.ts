@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { categoryAlertLevel, economicHealth, marginAlertLevel, projectAlerts } from "@/lib/alerts";
+import { categoryAlertLevel, marginAlertLevel, projectAlerts, projectHealth } from "@/lib/alerts";
 import { DEFAULT_SETTINGS as S } from "@/lib/constants";
 import { line, project, usage } from "./helpers";
 
@@ -56,7 +56,7 @@ describe("alertas derivadas", () => {
       budgetLines: [line("materials", null, 1000)],
       materialUsages: [usage({ quantityConsumed: 1, unitCost: 1300, date: "2026-01-10" })],
     });
-    expect(economicHealth(p, S, "2026-01-11")).toBe("risk");
+    expect(projectHealth(p, projectAlerts(p, S, "2026-01-11"))).toBe("risk");
   });
   it("proyecto finalizado no genera alertas", () => {
     const p = project({ status: "completed", isClosed: true, dueDate: "2020-01-01" });

@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Copia vieja de la calculadora subida a mano: no forma parte de la app.
+    "arreglo-calculadora/**",
   ]),
 ]);
 

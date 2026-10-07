@@ -3,8 +3,9 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { RotateCcw } from "lucide-react";
 import { PROJECT_TYPES } from "@/lib/constants";
-import { formatCurrency, formatDate, formatPercent, todayISO, toISODate } from "@/lib/formatting";
-import { marginPercent } from "@/lib/calculations";
+import { formatCurrency, formatCurrencyOrDash, formatDate, formatPercent, todayISO, toISODate } from "@/lib/formatting";
+import { marginPercent, profitOrNull } from "@/lib/calculations";
+import { addWorkingDays, totalWorkingDays } from "@/lib/budget-calculator";
 import { useAppStore } from "@/store/use-app-store";
 import { PageHeader } from "@/components/shared/page-header";
 import { Card, CardContent } from "@/components/ui/card";
@@ -22,6 +23,12 @@ function in30days() {
   return toISODate(d);
 }
 
+/** Entrega estimada: solo existe si hay horas cargadas (de ahí sale la duración). Nunca un valor fijo. */
+function estimatedDelivery(input: Parameters<typeof totalWorkingDays>[0], startDate: string): string | null {
+  const days = totalWorkingDays(input);
+  return days > 0 ? addWorkingDays(startDate, days) : null;
+}
+
 /** Cotizador: calcula costo, precio sugerido y margen ANTES de existir un proyecto. */
 export function QuotePage() {
   const router = useRouter();
@@ -29,25 +36,29 @@ export function QuotePage() {
   const [state, setState] = useState<CalcState>(initialCalcState);
   const [projectType, setProjectType] = useState<string>(PROJECT_TYPES[0]);
   const [startDate, setStartDate] = useState(todayISO());
-  const [dueDate, setDueDate] = useState(in30days());
+  /** Fecha elegida con “Usar esta fecha”; si no, se usa la estimada. */
+  const [chosenDueDate, setChosenDueDate] = useState<string | null>(null);
   const [salesPrice, setSalesPrice] = useState(0);
   const [error, setError] = useState("");
 
   const calc = useMemo(() => computeCalculator(state, startDate, projectType, projects), [state, startDate, projectType, projects]);
-  const profit = salesPrice - calc.total;
-  const margin = marginPercent(profit, salesPrice);
+  const profit = profitOrNull(salesPrice, calc.total);
+  const margin = marginPercent(salesPrice - calc.total, salesPrice);
+  const estimated = estimatedDelivery(calc.input, startDate);
+  const dueDate = chosenDueDate ?? estimated;
 
   const toProject = (mode: "calculator" | "manual") => {
     if (!calc.hasContent) return setError("Cargá al menos un material, horas de trabajo o un costo para armar la cotización.");
     if (!(salesPrice > 0)) return setError("Definí el precio de venta (podés usar el sugerido) para crear el proyecto.");
     setError("");
-    setQuoteDraft({ state, projectType, startDate, dueDate, salesPrice, mode });
+    setQuoteDraft({ state, projectType, startDate, dueDate: dueDate ?? in30days(), salesPrice, mode });
     router.push("/projects/new");
   };
 
   const reset = () => {
     setState(initialCalcState());
     setSalesPrice(0);
+    setChosenDueDate(null);
     setError("");
   };
 
@@ -85,7 +96,7 @@ export function QuotePage() {
             projectType={projectType}
             salesPrice={salesPrice}
             onSalesPrice={setSalesPrice}
-            onDueDate={setDueDate}
+            onDueDate={setChosenDueDate}
             onEditManually={() => toProject("manual")}
           />
           {error && (
@@ -98,20 +109,22 @@ export function QuotePage() {
         <aside className="lg:sticky lg:top-20 lg:self-start" aria-label="Resumen de la cotización">
           <Card>
             <CardContent className="space-y-3 pt-5 text-sm">
-              <Row label="Costo estimado" value={formatCurrency(calc.total)} />
+              <Row label="Costo presupuestado" value={formatCurrency(calc.total)} />
               <Row label="Precio de venta" value={salesPrice > 0 ? formatCurrency(salesPrice) : "Sin definir"} />
-              <Row label="Ganancia esperada" value={salesPrice > 0 ? formatCurrency(profit) : "—"} strong />
+              <Row label="Ganancia esperada" value={formatCurrencyOrDash(profit)} strong />
               <div className="border-t border-slate-100 pt-3">
                 <div className="text-xs text-slate-500">Margen esperado</div>
                 <div className={cn("text-3xl font-semibold tabular", margin !== null && margin < 15 ? "text-amber-700" : "text-slate-900")} aria-live="polite">
                   {salesPrice > 0 ? formatPercent(margin) : "—"}
                 </div>
               </div>
-              <p className="text-xs text-slate-500">Entrega estimada: {formatDate(dueDate)}</p>
+              <p className="text-xs text-slate-500">
+                {dueDate ? `Entrega estimada: ${formatDate(dueDate)}` : "Entrega estimada: cargá horas de trabajo para calcularla."}
+              </p>
               <Button className="w-full" onClick={() => toProject("calculator")} disabled={!calc.hasContent || !(salesPrice > 0)}>
                 Crear proyecto con esta cotización
               </Button>
-              <p className="text-xs text-slate-500">Es una estimación hecha con lo que cargaste. Recién al crear el proyecto se convierte en la línea base de presupuesto.</p>
+              <p className="text-xs text-slate-500">Es una estimación hecha con lo que cargaste. Recién al crear el proyecto se convierte en su costo presupuestado; al aprobarlo, en el presupuesto base.</p>
             </CardContent>
           </Card>
         </aside>

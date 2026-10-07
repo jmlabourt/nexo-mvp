@@ -33,7 +33,6 @@ export interface CalcState {
   labor: LaborRow[];
   machines: MachineRow[];
   outsourcing: string;
-  finishing: string;
   logistics: string;
   installation: string;
   contingencyPct: string;
@@ -57,7 +56,6 @@ export function initialCalcState(): CalcState {
     labor: [newLaborRow()],
     machines: [],
     outsourcing: "",
-    finishing: "",
     logistics: "",
     installation: "",
     contingencyPct: "5",
@@ -85,7 +83,7 @@ export function calcStateToInput(s: CalcState, startDate: string): CalculatorInp
     })),
     labor: s.labor.map((l) => ({ role: l.role, workers: Math.max(1, Math.round(n(l.workers))), hours: n(l.hours), hourlyCost: n(l.hourlyCost) })),
     machines: s.machines.map((m) => ({ name: m.name, hours: n(m.hours), hourlyCost: n(m.hourlyCost) })),
-    direct: { ...EMPTY_DIRECT, outsourcing: n(s.outsourcing), finishing: n(s.finishing), logistics: n(s.logistics), installation: n(s.installation) },
+    direct: { ...EMPTY_DIRECT, outsourcing: n(s.outsourcing), logistics: n(s.logistics), installation: n(s.installation) },
     contingencyPct: n(s.contingencyPct),
     hoursPerDay: n(s.hoursPerDay),
     installationDays: n(s.installationDays),

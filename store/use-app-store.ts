@@ -114,6 +114,7 @@ interface AppState {
   }) => Result;
   setRequestStatus: (id: string, status: "resolved" | "cancelled") => Result;
 
+  /** Recibe Alert.resolutionKey: si el problema persiste, la alerta reaparece. */
   resolveAlert: (alertId: string) => void;
   reopenAlert: (alertId: string) => void;
   updateSettings: (patch: Partial<AlertSettings>) => void;
@@ -329,17 +330,17 @@ export const useAppStore = create<AppState>()(
 
         addBudgetLine: (id, input) =>
           mutate(id, (p) => {
-            requireManager("Editar el presupuesto");
+            requireManager("Editar el costo presupuestado");
             return ops.addBudgetLine(p, input, ctx());
           }),
         updateBudgetLine: (id, lineId, input) =>
           mutate(id, (p) => {
-            requireManager("Editar el presupuesto");
+            requireManager("Editar el costo presupuestado");
             return ops.updateBudgetLine(p, lineId, input, ctx());
           }),
         removeBudgetLine: (id, lineId) =>
           mutate(id, (p) => {
-            requireManager("Editar el presupuesto");
+            requireManager("Editar el costo presupuestado");
             return ops.removeBudgetLine(p, lineId, ctx());
           }),
 

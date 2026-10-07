@@ -2,9 +2,10 @@
 import Link from "next/link";
 import { useMemo } from "react";
 import { ArrowRight, CheckCircle2 } from "lucide-react";
+import type { EconomicHealth } from "@/types";
 import { aggregateMargins, isActiveProject } from "@/lib/calculations";
 import { CATEGORY_LABELS, MARGIN_TOOLTIP } from "@/lib/constants";
-import { formatCompactCurrency, formatPercent, formatPp, formatSignedCurrency } from "@/lib/formatting";
+import { formatCompactCurrency, formatMarginPoints, formatPercent, formatSignedCurrency } from "@/lib/formatting";
 import { useProjectViews, type ProjectView } from "@/store/selectors";
 import { PageHeader } from "@/components/shared/page-header";
 import { Stat } from "@/components/shared/stat";
@@ -23,7 +24,7 @@ function greeting(): string {
   return "Buenas noches";
 }
 
-const HEALTH_RANK = { risk: 0, attention: 1, healthy: 2 } as const;
+const HEALTH_RANK: Record<EconomicHealth, number> = { risk: 0, attention: 1, no_data: 2, healthy: 3 };
 
 function AttentionCard({ view }: { view: ProjectView }) {
   const { project: p, econ, health } = view;
@@ -33,14 +34,14 @@ function AttentionCard({ view }: { view: ProjectView }) {
       <div className="flex flex-1 flex-col gap-4 p-5">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
-            <div className="truncate font-semibold text-slate-900">{p.name}</div>
+            <div className="break-words font-semibold text-slate-900">{p.name}</div>
             <div className="text-sm text-slate-500">
               {p.client} · {p.code}
             </div>
           </div>
-          <HealthBadge health={health} />
+          {health && <HealthBadge health={health} />}
         </div>
-        <MarginShift from={econ.expectedMargin} to={econ.projectedMargin} />
+        <MarginShift from={econ.expectedMargin} to={econ.hasExecutionData ? econ.projectedMargin : undefined} />
         <div className="rounded-md bg-slate-50 px-3 py-2 text-sm">
           <span className="text-slate-500">Principal causa del desvío: </span>
           {dev ? (
@@ -72,13 +73,13 @@ export function Dashboard() {
   const attention = useMemo(
     () =>
       active
-        .filter((v) => v.health !== "healthy")
-        .sort((a, b) => HEALTH_RANK[a.health] - HEALTH_RANK[b.health] || (a.econ.marginDeltaPp ?? 0) - (b.econ.marginDeltaPp ?? 0))
+        .filter((v) => v.health === "risk" || v.health === "attention")
+        .sort((a, b) => HEALTH_RANK[a.health ?? "healthy"] - HEALTH_RANK[b.health ?? "healthy"] || (a.econ.marginDeltaPp ?? 0) - (b.econ.marginDeltaPp ?? 0))
         .slice(0, 4),
     [active],
   );
   const chartData = active
-    .filter((v) => v.econ.expectedMargin !== null && v.econ.projectedMargin !== null)
+    .filter((v) => v.econ.hasExecutionData && v.econ.expectedMargin !== null && v.econ.projectedMargin !== null)
     .map((v) => ({ code: v.project.code, name: v.project.name, expected: Number(v.econ.expectedMargin!.toFixed(1)), projected: Number(v.econ.projectedMargin!.toFixed(1)) }));
   const aggDelta =
     agg.expectedAggregateMargin !== null && agg.projectedAggregateMargin !== null
@@ -91,14 +92,14 @@ export function Dashboard() {
 
       <section aria-label="Indicadores" className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
         <Stat label="Proyectos activos" value={agg.count} hint="Aprobados a instalación" />
-        <Stat label="Venta total activa" value={formatCompactCurrency(agg.totalSales)} />
+        <Stat label="Precio de venta total (activos)" value={formatCompactCurrency(agg.totalSales)} />
         <Stat label="Margen esperado agregado" value={formatPercent(agg.expectedAggregateMargin)} hint="Ponderado por venta" />
         <Stat
           label="Margen proyectado agregado"
           value={formatPercent(agg.projectedAggregateMargin)}
           tooltip={MARGIN_TOOLTIP}
           tone={aggDelta !== null && aggDelta < -2 ? "yellow" : "default"}
-          hint={aggDelta !== null ? `${formatPp(aggDelta)} vs. esperado` : undefined}
+          hint={aggDelta !== null ? `${formatMarginPoints(aggDelta, { signed: true })} vs. esperado` : undefined}
         />
         <Stat label="Proyectos en riesgo" value={atRisk} tone={atRisk > 0 ? "red" : "green"} hint={`${attention.length} necesitan atención`} className="col-span-2 md:col-span-1" />
       </section>
@@ -108,7 +109,7 @@ export function Dashboard() {
           Necesitan atención
         </h2>
         {attention.length === 0 ? (
-          <EmptyState icon={CheckCircle2} title="Todos los proyectos activos están dentro de presupuesto" />
+          <EmptyState icon={CheckCircle2} title="Ningún proyecto activo tiene alertas de Atención o Críticas" />
         ) : (
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             {attention.map((v) => (
@@ -147,7 +148,7 @@ export function Dashboard() {
         </div>
       </Card>
       <p className="mt-3 text-xs text-slate-500">
-        Desvío = margen proyectado − margen esperado, en puntos porcentuales (pp).
+        Desvío = margen proyectado − margen esperado, en puntos de margen.
       </p>
     </div>
   );

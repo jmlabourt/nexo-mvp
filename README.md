@@ -1,6 +1,10 @@
-# NEXO — Rentabilidad por proyecto
+# Blerp (antes NEXO) — Rentabilidad por proyecto
 
 MVP de investigación (tesis ITBA, Gestión de Negocios y Tecnología) para PyMEs que fabrican por proyecto: muebles a medida, mobiliario comercial y corporativo, exhibidores, stands.
+
+Núcleo: `presupuesto → ejecución → captura → costo → desvío → margen`. Son decisiones de diseño todavía no validadas con fabricantes. **No afirmamos Product-Market Fit.** Un modelo de predicción es un objetivo futuro: hoy no existe; todos los cálculos son reglas explícitas.
+
+El nombre de la app sale de una sola constante: `APP_NAME` en `lib/constants.ts`.
 
 > Pregunta que tiene que responder en menos de 10 segundos: **“¿Estoy ganando lo que pensé que iba a ganar? Y si no, ¿por qué?”**
 
@@ -13,13 +17,13 @@ Nuestra hipótesis es que lo difícil **no es el dashboard de presupuesto vs. re
 ## Producto
 
 - **Modo Gestión** (desktop): pensado para ver rentabilidad, excepciones y desvíos, y decidir.
-- **Modo Taller** (mobile, desde un QR): registra qué se usó, cuánto, si hubo desperdicio y si quedó sobrante. **No muestra precios ni márgenes.**
+- **Modo Taller** (mobile, en el celular del operario, solo sus proyectos asignados): registra qué se usó, cuánto, si hubo desperdicio y si quedó sobrante. **No muestra precios ni márgenes.**
 
 Flujo central: `presupuesto → compra → consumo → desperdicio/sobrante → costo imputable → margen proyectado → alertas → cierre → historial`.
 
 ## Stack
 
-Next.js 16 (App Router) · TypeScript strict · Tailwind CSS v4 · componentes estilo shadcn/ui (Radix + cva) · Lucide · Recharts · Zustand · Supabase (Postgres + Auth con Google, `@supabase/ssr`) · React Hook Form + Zod · qrcode.react · Vitest.
+Next.js 16 (App Router) · TypeScript strict · Tailwind CSS v4 · componentes estilo shadcn/ui (Radix + cva) · Lucide · Recharts · Zustand · Supabase (Postgres + Auth con Google, `@supabase/ssr`) · React Hook Form + Zod · Vitest.
 
 Los datos viven en Supabase (proyecto `nexo`, región São Paulo). El landing es público; el resto pide iniciar sesión con Google.
 
@@ -42,15 +46,15 @@ npm run build && npm start
 |---|---|
 | `/` | Landing pública (estática, sin store): propuesta de valor, producto, cómo funciona, piloto y FAQ |
 | `/dashboard` | Dashboard: KPIs, “Necesitan atención”, gráfico esperado vs. proyectado, tabla de activos |
-| `/projects` | Proyectos: tabs por estado, búsqueda y filtros por riesgo y fecha |
-| `/projects/new` | Wizard: información → presupuesto (con resumen sticky) → resumen |
-| `/projects/[id]` | **Detalle** con tabs Resumen · Presupuesto · Materiales · Costos reales · Actividad, más los diálogos Registrar lo que pasó · Registrar compra · QR · Cambiar estado · Cerrar |
+| `/projects` | Proyectos: tabs por etapa, búsqueda y filtros por salud y fecha |
+| `/projects/new` | Wizard: información → costo presupuestado (con resumen sticky) → resumen |
+| `/projects/[id]` | **Detalle** con tabs Resumen · Costo presupuestado · Materiales · Costos reales · Etapas · Muebles y archivos · Actividad, más los diálogos Registrar lo que pasó · Registrar compra · Cambiar etapa · Cerrar |
 | `/alerts` | Alertas: Todas · Críticas · Atención · Resueltas |
 | `/history` | Proyectos finalizados y aprendizajes |
 | `/materials` | Pool simple de sobrantes reutilizables (no es un módulo de stock) |
-| `/settings` | Umbrales de alertas, reset de la demo y vaciar datos |
+| `/settings` | Umbrales de alertas, regla de salud del proyecto, reset de la demo y vaciar datos |
 | `/login` | Acceso con Google (público) |
-| `/registro/[projectId]` | Registro de taller mobile, sin sidebar (destino del QR) |
+| `/taller/[projectId]` | Registro de taller mobile, sin sidebar |
 
 ## Arquitectura
 
@@ -74,7 +78,7 @@ lib/
   landing-content.ts      textos del landing (sin testimonios, logos ni precios inventados)
   constants.ts            nombre de la app, labels, catálogo, umbrales, semántica de color
   supabase/               clientes (browser/server), proxy de sesión, mappers y lectura/escritura del workspace
-  formatting.ts           es-AR, ARS, dd/mm/yyyy, pp
+  formatting.ts           es-AR, ARS, dd/mm/yyyy, puntos de margen, días
 store/
   use-app-store.ts        Zustand: estado en memoria + cola de escrituras a Supabase
   selectors.ts            hooks derivados memoizados
@@ -102,7 +106,7 @@ Para que Google funcione hay que configurarlo una vez:
 
 La app arranca con **Madera Sur S.R.L.** (empresa ficticia) ya cargada: 8 proyectos activos o en cotización y 4 finalizados. Las fechas se generan relativas a “hoy”, para que las alertas de fecha y de inactividad tengan sentido cada vez que se abre la demo.
 
-El proyecto principal es **P-1042 · Local Palermo – Mobiliario comercial** (Retail Sur): venta $ 12.000.000, presupuesto $ 7.200.000, margen esperado 40%, proyectado ≈ 30,8% y estado *En riesgo* por materiales (+$ 850.000).
+El proyecto principal es **P-1042 · Local Palermo – Mobiliario comercial** (Retail Sur): precio de venta $ 12.000.000, costo presupuestado $ 7.200.000, margen esperado 40%, proyectado ≈ 30,8% y salud *En riesgo* por materiales (+$ 850.000).
 
 La primera vez que alguien entra, su empresa se carga con esta demo. Después:
 
@@ -116,16 +120,17 @@ Los datos se guardan en Supabase, por empresa. Solo el modo Gestión/Taller eleg
 | Concepto | Fórmula |
 |---|---|
 | Total línea | `quantity × unitCost` (o monto directo si no aplica cantidad) |
-| Presupuesto | `Σ budgetLines.total` |
-| Ganancia / margen esperado | `salesPrice − budget` · `/ salesPrice × 100` (`salesPrice = 0` → “—”) |
+| Costo presupuestado | `Σ budgetLines.total` (al aprobar se congela una copia: el **presupuesto base**) |
+| Ganancia / margen esperado | `salesPrice − costo presupuestado` · `/ salesPrice × 100` (sin precio de venta → “—”, nunca un negativo) |
 | Costo material real | `Σ (consumido + desperdicio) × unitCost` de **MaterialUsageEntry** |
 | Costo no material | `Σ actualEntries.amount` (horas = `hours × hourlyCost`) |
 | Costo real hasta hoy | material + no material |
-| Desvío por categoría | `real − presupuesto`; `% = / presupuesto` (presupuesto 0 → sin %) |
-| **Costo final proyectado** | `Σ_categoría max(presupuesto, real)` |
+| Desvío por categoría | `real − presupuestado`; `% = / presupuestado` (presupuestado 0 → sin %). Siempre las siete categorías: Materiales, Mano de obra, Máquinas, Tercerizaciones, Logística, Instalación, Imprevistos |
+| **Costo final proyectado** | `Σ_categoría max(presupuestado, real)` |
+| Diferencia y “¿Por qué?” | `Σ_categoría (proyectado − presupuestado)`: el “¿Por qué?” lista cada categoría con desvío ≠ 0 y su total es exactamente la Diferencia |
 | **Margen proyectado** | `(venta − costo final proyectado) / venta` |
 | **Margen real final** | solo en `completed`: `(venta − costo real) / venta` |
-| Delta de margen | `proyectado − esperado`, en **puntos porcentuales (pp)** |
+| Delta de margen | `proyectado − esperado`, en **puntos de margen** |
 | Márgenes agregados | ponderados por venta: `(Σventa − Σcosto) / Σventa` (no es un promedio simple) |
 
 ## Materiales: compra ≠ consumo ≠ desperdicio ≠ sobrante
@@ -140,19 +145,21 @@ Ejemplo (spec §10, reproducido en P-1042): compradas 12 placas × $ 50.000 = $ 
 
 ## Margen proyectado (por qué no “margen real” a mitad de proyecto)
 
-Si a mitad de camino se calcula `venta − costo registrado`, el margen sale artificialmente alto, porque falta ejecutar parte del presupuesto. Por eso, en cada categoría se asume que lo que queda de presupuesto se va a consumir, y cuando el real ya lo superó se toma el real. El “margen real” solo existe cuando el proyecto está **finalizado**.
+Si a mitad de camino se calcula `venta − costo registrado`, el margen sale artificialmente alto, porque falta ejecutar parte del presupuesto. Por eso, en cada categoría se asume que lo que queda del costo presupuestado se va a gastar, y cuando el real ya lo superó se toma el real (cálculo por reglas, no una predicción). El “margen real” solo existe cuando el proyecto está **finalizado**.
 
 ## Alertas (umbrales configurables en /settings)
 
 | Alerta | Condición |
 |---|---|
-| Categoría | real > presupuesto: ≤10% info · 10–20% atención · >20% crítica |
-| Margen | caída <5 pp info · 5–10 pp atención · >10 pp crítica |
+| Categoría | real > presupuestado: ≤10% info · 10–20% atención · >20% crítica |
+| Margen | caída <5 puntos de margen info · 5–10 atención · >10 crítica |
 | Sin registros | en Producción, 7 días sin consumos ni costos |
-| Entrega | ≤5 días para la entrega con avance <80% |
+| Entrega | vencida (crítica) · ≤5 días para la entrega y todavía antes de Producción · mucho plazo transcurrido sin llegar a Producción |
 | Reconciliación | lo comprado no coincide con lo explicado (info en Producción, atención en Instalación) |
 
-El **estado económico** (Saludable / Atención / En riesgo) usa solo las alertas de categoría y de margen. Marcar una alerta como resuelta no cambia los números, y si la situación empeora de nivel, la alerta vuelve a aparecer.
+**Salud del proyecto** (según sus alertas abiertas): *En riesgo* si hay al menos una alerta Crítica · *Atención* si hay alertas de Atención y ninguna Crítica · *Sin desvíos* si hay datos y no hay alertas · *Sin datos todavía* si no hay consumos ni costos. Los finalizados no llevan chip. La regla se muestra en Configuración.
+
+El número del globo de alertas y la pestaña “Todas” salen de la misma cuenta (alertas abiertas). “Ver proyecto” no cambia nada; solo “Marcar resuelta” la oculta, y si el problema persiste (al día siguiente o con un nuevo registro en el proyecto) vuelve a aparecer.
 
 ## Verificación realizada
 
@@ -163,16 +170,14 @@ El **estado económico** (Saludable / Atención / En riesgo) usa solo las alerta
 ## Limitaciones (conscientes)
 
 - “Gestión / Taller” sigue siendo un selector de modo: no hay roles con permisos distintos.
-- Una persona = una empresa. Todavía no hay invitaciones: para que un operario registre desde el QR en su celular tiene que entrar con la misma cuenta (o hay que sumarlo a mano a `organization_members`).
 - Las escrituras son optimistas: si una falla, la pantalla muestra el aviso pero no deshace el cambio en memoria; al recargar se ve lo que quedó guardado.
 - No es inventario: no hay depósitos, lotes, FIFO, stock mínimo ni transferencias. El pool de sobrantes es deliberadamente simple.
-- El avance (%) es manual.
+- No hay avance físico (%): se muestra el **plazo transcurrido**, que es tiempo y no trabajo hecho.
 - El costo por hora del registro de taller sale de la tarifa presupuestada (o de un valor por defecto de $ 14.000).
 - Los insights son reglas determinísticas: con pocos proyectos son indicios, no conclusiones.
 
 ## Futuras mejoras (a validar con usuarios antes de construir)
 
-- Invitaciones a la empresa y roles (gestión / taller) para usar el QR desde el celular de cada operario.
 - Fotos o voz en el registro de taller, si las entrevistas muestran que reducen la fricción.
 - Plantillas de presupuesto construidas a partir del historial (“proyectos tipo Local comercial usan +8% material”).
 - Exportar el cierre a PDF o planilla.

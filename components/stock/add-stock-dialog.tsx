@@ -80,7 +80,7 @@ export function AddStockDialog({ open, onOpenChange }: { open: boolean; onOpenCh
               {MATERIAL_CATALOG.map((m) => (
                 <option key={m.id} value={m.id}>{m.name}</option>
               ))}
-              <option value={OTHER_MATERIAL_ID}>Otro…</option>
+              <option value={OTHER_MATERIAL_ID}>Otro material</option>
             </Select>
           </Field>
           {materialId === OTHER_MATERIAL_ID && (

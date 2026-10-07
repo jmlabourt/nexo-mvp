@@ -20,7 +20,7 @@ function List({ alerts, resolved = false }: { alerts: Alert[]; resolved?: boolea
 }
 
 export function AlertsPage() {
-  const { open, resolved } = useAlerts();
+  const { open, resolved, count } = useAlerts();
   const [tab, setTab] = useState("all");
   const critical = open.filter((a) => a.level === "critical");
   const warning = open.filter((a) => a.level === "warning");
@@ -29,7 +29,7 @@ export function AlertsPage() {
       <PageHeader title="Alertas" subtitle="Se calculan automáticamente a partir de los registros y de los umbrales de Configuración." />
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList>
-          <TabsTrigger value="all">Todas <span className="ml-1 text-xs text-slate-400">{open.length}</span></TabsTrigger>
+          <TabsTrigger value="all">Todas <span className="ml-1 text-xs text-slate-400">{count}</span></TabsTrigger>
           <TabsTrigger value="critical">Críticas <span className="ml-1 text-xs text-slate-400">{critical.length}</span></TabsTrigger>
           <TabsTrigger value="warning">Atención <span className="ml-1 text-xs text-slate-400">{warning.length}</span></TabsTrigger>
           <TabsTrigger value="resolved">Resueltas <span className="ml-1 text-xs text-slate-400">{resolved.length}</span></TabsTrigger>
@@ -38,7 +38,7 @@ export function AlertsPage() {
         <TabsContent value="critical"><List alerts={critical} /></TabsContent>
         <TabsContent value="warning"><List alerts={warning} /></TabsContent>
         <TabsContent value="resolved">
-          <p className="mb-3 text-sm text-slate-500">Marcar una alerta como resuelta no cambia los números: si la situación empeora, vuelve a aparecer con el nuevo nivel.</p>
+          <p className="mb-3 text-sm text-slate-500">Marcar una alerta como resuelta no cambia los números. Si el problema persiste (al día siguiente o con un nuevo registro en el proyecto), vuelve a aparecer.</p>
           <List alerts={resolved} resolved />
         </TabsContent>
       </Tabs>

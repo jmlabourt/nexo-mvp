@@ -5,7 +5,7 @@ import { APP_NAME, APP_SUBTITLE } from "@/lib/constants";
 
 export const metadata: Metadata = {
   title: `${APP_NAME} · ${APP_SUBTITLE}`,
-  description: "MVP de investigación: presupuesto → ejecución → costo → margen por proyecto.",
+  description: "MVP de investigación: presupuesto → ejecución → captura → costo → desvío → margen por proyecto.",
 };
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });

@@ -4,7 +4,8 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useState } from "react";
 import type { AlertSettings } from "@/types";
-import { APP_NAME, APP_SUBTITLE, COMPANY_NAME, DEFAULT_SETTINGS } from "@/lib/constants";
+import { APP_NAME, APP_SUBTITLE, COMPANY_NAME, DEFAULT_SETTINGS, HEALTH_RULES } from "@/lib/constants";
+import { HealthBadge } from "@/components/shared/badges";
 import { useAppStore } from "@/store/use-app-store";
 import { PageHeader } from "@/components/shared/page-header";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -27,12 +28,12 @@ const schema = z
   .refine((v) => v.marginCriticalPp > v.marginWarningPp, { path: ["marginCriticalPp"], message: "Debe ser mayor que el de atención" });
 
 const FIELDS: Array<{ key: keyof AlertSettings; label: string; hint: string }> = [
-  { key: "categoryWarningPct", label: "Atención por categoría (%)", hint: "Real supera al presupuesto de la categoría en más de…" },
-  { key: "categoryCriticalPct", label: "Crítico por categoría (%)", hint: "Por encima de este % la categoría pone el proyecto En riesgo." },
-  { key: "marginWarningPp", label: "Atención por margen (pp)", hint: "Caída del margen proyectado vs. esperado, en puntos." },
-  { key: "marginCriticalPp", label: "Crítico por margen (pp)", hint: "Caída mayor a estos puntos = crítico." },
+  { key: "categoryWarningPct", label: "Atención por categoría (%)", hint: "El costo real supera al costo presupuestado de la categoría en más de este porcentaje." },
+  { key: "categoryCriticalPct", label: "Crítica por categoría (%)", hint: "Por encima de este porcentaje la alerta de la categoría es Crítica." },
+  { key: "marginWarningPp", label: "Atención por margen (puntos de margen)", hint: "Caída del margen proyectado respecto del esperado, en puntos de margen." },
+  { key: "marginCriticalPp", label: "Crítica por margen (puntos de margen)", hint: "Una caída mayor a estos puntos de margen es Crítica." },
   { key: "daysWithoutRecords", label: "Días sin registros", hint: "En Producción, avisar si no se registran consumos ni costos." },
-  { key: "dueSoonDays", label: "Días antes de la entrega", hint: "Avisar si faltan estos días o menos…" },
+  { key: "dueSoonDays", label: "Días antes de la entrega", hint: "Avisar si faltan estos días o menos para la entrega y el proyecto todavía no llegó a Producción." },
   { key: "deadlineNoProductionPct", label: "Plazo transcurrido sin producción (%)", hint: "Avisar si pasó este % del plazo y el proyecto todavía no llegó a Producción." },
 ];
 
@@ -56,6 +57,20 @@ export function SettingsPage() {
           <CardDescription>Cambian cómo se clasifican los desvíos en todo el sistema, al instante.</CardDescription>
         </CardHeader>
         <CardContent>
+          <div className="mb-5 rounded-lg border border-slate-200 bg-slate-50 p-4">
+            <p className="text-sm font-medium text-slate-900">Cómo se calcula la salud de cada proyecto</p>
+            <p className="mt-1 text-xs text-slate-500">
+              Se mira solo a las alertas abiertas del proyecto. Los proyectos finalizados no llevan chip de salud.
+            </p>
+            <ul className="mt-3 space-y-2">
+              {HEALTH_RULES.map((r) => (
+                <li key={r.health} className="flex flex-wrap items-center gap-2 text-sm text-slate-700">
+                  <HealthBadge health={r.health} />
+                  <span>{r.rule}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
           <form
             noValidate
             onSubmit={handleSubmit((v) => {

@@ -2,7 +2,7 @@
 // Hooks derivados: combinan estado + funciones puras. Memoizados para no recalcular en cada render.
 import { useMemo } from "react";
 import type { Alert, EconomicHealth, Project } from "@/types";
-import { allAlerts, closedHealth, economicHealth, projectAlerts } from "@/lib/alerts";
+import { allAlerts, openAlertCount, projectHealth, splitAlerts } from "@/lib/alerts";
 import { projectEconomics, type ProjectEconomics } from "@/lib/calculations";
 import { todayISO } from "@/lib/formatting";
 import { effectiveIdentity, useAppStore } from "./use-app-store";
@@ -11,52 +11,37 @@ export function useToday(): string {
   return useMemo(() => todayISO(), []);
 }
 
-export function useAlerts(): { open: Alert[]; resolved: Alert[] } {
+/** Alertas abiertas y resueltas. Es la única cuenta: globo, pestaña "Todas", alertas del proyecto y salud. */
+export function useAlerts(): { open: Alert[]; resolved: Alert[]; count: number } {
   const projects = useAppStore((s) => s.projects);
   const settings = useAppStore((s) => s.settings);
-  const resolvedIds = useAppStore((s) => s.resolvedAlertIds);
+  const resolvedKeys = useAppStore((s) => s.resolvedAlertIds);
   const stock = useAppStore((s) => s.stock);
   const today = useToday();
   return useMemo(() => {
-    const all = allAlerts(projects, settings, today, stock);
-    const set = new Set(resolvedIds);
-    return { open: all.filter((a) => !set.has(a.id)), resolved: all.filter((a) => set.has(a.id)) };
-  }, [projects, settings, resolvedIds, today, stock]);
+    const split = splitAlerts(allAlerts(projects, settings, today, stock), resolvedKeys);
+    return { ...split, count: openAlertCount(split.open) };
+  }, [projects, settings, resolvedKeys, today, stock]);
 }
 
 export function useProjectAlerts(project: Project | undefined): Alert[] {
-  const settings = useAppStore((s) => s.settings);
-  const resolvedIds = useAppStore((s) => s.resolvedAlertIds);
-  const stock = useAppStore((s) => s.stock);
-  const today = useToday();
-  return useMemo(() => {
-    if (!project) return [];
-    const set = new Set(resolvedIds);
-    return projectAlerts(project, settings, today, stock).filter((a) => !set.has(a.id));
-  }, [project, settings, resolvedIds, today, stock]);
+  const { open } = useAlerts();
+  return useMemo(() => (project ? open.filter((a) => a.projectId === project.id) : []), [project, open]);
 }
 
 export interface ProjectView {
   project: Project;
   econ: ProjectEconomics;
-  health: EconomicHealth;
+  /** null en los finalizados: no llevan chip de salud. */
+  health: EconomicHealth | null;
 }
 
 export function useProjectViews(): ProjectView[] {
   const projects = useAppStore((s) => s.projects);
-  const settings = useAppStore((s) => s.settings);
-  const today = useToday();
+  const { open } = useAlerts();
   return useMemo(
-    () =>
-      projects.map((project) => {
-        const econ = projectEconomics(project);
-        const health =
-          project.status === "completed"
-            ? closedHealth(econ.marginDeltaPp === null ? null : -econ.marginDeltaPp, settings)
-            : economicHealth(project, settings, today);
-        return { project, econ, health };
-      }),
-    [projects, settings, today],
+    () => projects.map((project) => ({ project, econ: projectEconomics(project), health: projectHealth(project, open) })),
+    [projects, open],
   );
 }
 

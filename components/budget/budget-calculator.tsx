@@ -1,9 +1,9 @@
 "use client";
 import { Plus, Trash2 } from "lucide-react";
 import type { BudgetCategory } from "@/types";
-import { CATEGORY_LABELS, MATERIAL_CATALOG } from "@/lib/constants";
-import { addWorkingDays, dailyCrewCost, delayAnalysis, marginAt, suggestedSalesPrice, totalWorkingDays, productionDays } from "@/lib/budget-calculator";
-import { formatCurrency, formatDate, formatPercent } from "@/lib/formatting";
+import { CATEGORY_LABELS, MATERIAL_CATALOG, MIN_COMPARABLE_PROJECTS } from "@/lib/constants";
+import { addWorkingDays, dailyCrewCost, delayAnalysis, marginAt, showDelayChart, suggestedSalesPrice, totalWorkingDays, productionDays } from "@/lib/budget-calculator";
+import { formatCurrency, formatDate, formatPercent, formatWorkingDays } from "@/lib/formatting";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DelayChart } from "@/components/charts/delay-chart";
@@ -68,10 +68,10 @@ export function BudgetCalculator({ state, onState, result, projectType, salesPri
   const days = totalWorkingDays(input);
   const prodDays = productionDays(input.labor, input.hoursPerDay);
   const dueDate = days > 0 ? addWorkingDays(input.startDate, days) : null;
-  const refPrice = salesPrice > 0 ? salesPrice : suggested ?? 0;
   const margin = marginAt(salesPrice, total);
   const daily = dailyCrewCost(input.labor, input.hoursPerDay);
-  const delay = delayAnalysis({ baseCost: total, salesPrice: refPrice, dailyCost: daily, targetMarginPct: input.targetMarginPct });
+  const delay = delayAnalysis({ baseCost: total, salesPrice, dailyCost: daily, targetMarginPct: input.targetMarginPct });
+  const usesSuggestedPrice = suggested !== null && salesPrice === suggested;
 
   const byCat = new Map<BudgetCategory, number>();
   for (const l of result.lines) byCat.set(l.category, (byCat.get(l.category) ?? 0) + (l.quantity === null ? l.unitCost : l.quantity * l.unitCost));
@@ -166,9 +166,8 @@ export function BudgetCalculator({ state, onState, result, projectType, salesPri
       </Section>
 
       <Section title="4 · Otros costos" hint="Montos globales estimados. Dejá en 0 lo que no aplique.">
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
-          <NumField id="c-out" label="Tercerizaciones" suffix="$" value={state.outsourcing} onChange={(v) => set({ outsourcing: v })} />
-          <NumField id="c-fin" label="Terminaciones" suffix="$" value={state.finishing} onChange={(v) => set({ finishing: v })} />
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <NumField id="c-out" label="Tercerizaciones (incluye terminaciones)" suffix="$" value={state.outsourcing} onChange={(v) => set({ outsourcing: v })} />
           <NumField id="c-log" label="Logística" suffix="$" value={state.logistics} onChange={(v) => set({ logistics: v })} />
           <NumField id="c-inst" label="Instalación" suffix="$" value={state.installation} onChange={(v) => set({ installation: v })} />
           <NumField id="c-cont" label="Imprevistos" suffix="%" value={state.contingencyPct} onChange={(v) => set({ contingencyPct: v })} />
@@ -200,8 +199,12 @@ export function BudgetCalculator({ state, onState, result, projectType, salesPri
             ))}
           </ul>
         )}
-        {result.benchmarks.sampleSize > 0 && result.benchmarks.sampleSize < 5 && (
-          <p className="mt-2 text-xs text-slate-500">Muestra chica: tomalo como un indicio, no como una conclusión.</p>
+        {result.benchmarks.sampleSize > 0 && (
+          <p className="mt-2 text-xs text-slate-500">
+            Es un promedio simple de proyectos finalizados, no una predicción.
+            {result.benchmarks.sampleSize < MIN_COMPARABLE_PROJECTS &&
+              ` Con menos de ${MIN_COMPARABLE_PROJECTS} proyectos comparables, tomalo como un indicio, no como una conclusión.`}
+          </p>
         )}
       </Section>
 
@@ -240,12 +243,12 @@ export function BudgetCalculator({ state, onState, result, projectType, salesPri
               <p className="text-slate-500">Cargá costos y un margen objetivo menor a 100% para ver un precio sugerido.</p>
             )}
             {margin !== null && (
-              <p>Con ese precio el <strong>margen esperado</strong> es <strong className="tabular">{formatPercent(margin)}</strong>.</p>
+              <p>Con ese precio{usesSuggestedPrice ? " (el sugerido)" : ""} el <strong>margen esperado</strong> es <strong className="tabular">{formatPercent(margin)}</strong>.</p>
             )}
             {dueDate ? (
               <div className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-white p-2.5">
                 <span>
-                  Duración estimada: <strong>{days} días laborales</strong> ({prodDays} de producción{days - prodDays > 0 ? ` + ${days - prodDays} de instalación` : ""}). Entrega: <strong>{formatDate(dueDate)}</strong>
+                  Duración estimada: <strong>{formatWorkingDays(days)}</strong> ({prodDays} de producción{days - prodDays > 0 ? ` + ${days - prodDays} de instalación` : ""}). Entrega estimada: <strong>{formatDate(dueDate)}</strong>
                 </span>
                 <Button size="sm" variant="outline" onClick={() => onDueDate(dueDate)}>Usar esta fecha</Button>
               </div>
@@ -255,27 +258,34 @@ export function BudgetCalculator({ state, onState, result, projectType, salesPri
           </div>
         </div>
 
-        {daily > 0 && refPrice > 0 && total > 0 && (
+        {!showDelayChart({ salesPrice, workingDays: days, dailyCost: daily, cost: total }) ? (
+          <p className="mt-5 border-t border-blue-200 pt-4 text-sm text-slate-500">
+            “¿Qué pasa si el proyecto se alarga?” aparece cuando haya precio de venta y una duración estimada de más de un día laboral.
+          </p>
+        ) : (
           <div className="mt-5 border-t border-blue-200 pt-4">
             <h4 className="text-sm font-semibold text-slate-900">¿Qué pasa si el proyecto se alarga?</h4>
             <p className="mt-1 text-sm text-slate-600">
               Con el equipo asignado, cada día laboral extra cuesta <strong className="tabular">{formatCurrency(daily)}</strong>
-              {" "}(≈ {formatPercent((daily / refPrice) * 100)} del precio de venta).{" "}
+              {" "}(≈ {formatPercent((daily / salesPrice) * 100)} del precio de venta).{" "}
               {delay.belowTargetAtBase
                 ? "Con este costo ya no llegás al margen objetivo, incluso en fecha."
                 : delay.extraDaysBeforeTarget === 0
                   ? "Desde el primer día de atraso el margen baja del objetivo."
-                  : `Podés absorber ${delay.extraDaysBeforeTarget} ${delay.extraDaysBeforeTarget === 1 ? "día" : "días"} de atraso antes de bajar del margen objetivo.`}
-              {delay.extraDaysToBreakEven !== null && ` Con ${delay.extraDaysToBreakEven + 1} ${delay.extraDaysToBreakEven + 1 === 1 ? "día" : "días"} extra la ganancia llegaría a cero.`}
+                  : `Podés absorber ${formatWorkingDays(delay.extraDaysBeforeTarget ?? 0)} de atraso antes de bajar del margen objetivo.`}
+              {delay.extraDaysToBreakEven !== null && ` Con ${formatWorkingDays(delay.extraDaysToBreakEven + 1)} extra la ganancia llegaría a cero.`}
             </p>
             <DelayChart points={delay.points} targetMarginPct={input.targetMarginPct} />
-            <p className="text-xs text-slate-500">Estimación: supone que todo el equipo sigue asignado al proyecto durante el atraso. La línea punteada es tu margen objetivo.</p>
+            <p className="text-xs text-slate-500">
+              Estimación: supone que todo el equipo sigue asignado al proyecto durante el atraso. La línea punteada es tu margen objetivo.
+              {usesSuggestedPrice && " Está calculado con el precio sugerido."}
+            </p>
           </div>
         )}
 
         <div className="mt-4 flex flex-wrap items-center gap-3">
           <Button variant="outline" size="sm" onClick={onEditManually} disabled={!result.hasContent}>Pasar a carga manual para editar línea por línea</Button>
-          <p className="text-xs text-slate-500">Al continuar, este cálculo se guarda como el presupuesto base del proyecto.</p>
+          <p className="text-xs text-slate-500">Al continuar, este cálculo se guarda como el costo presupuestado del proyecto.</p>
         </div>
       </section>
     </div>
