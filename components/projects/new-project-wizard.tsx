@@ -1,5 +1,6 @@
 "use client";
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -19,6 +20,7 @@ import { BudgetEditor, draftFromInput, draftToInput, draftTotal, newDraftLine, t
 import { BudgetCalculator } from "@/components/budget/budget-calculator";
 import { computeCalculator, initialCalcState, type CalcState } from "@/components/budget/calculator-state";
 import { totalOfLines } from "@/lib/budget-calculator";
+import { clearQuoteDraft, peekQuoteDraft } from "@/components/budget/quote-draft";
 import { cn } from "@/lib/utils";
 
 const STEPS = ["Datos del proyecto", "Presupuesto", "Revisar y crear"];
@@ -34,10 +36,15 @@ export function NewProjectWizard() {
   const projects = useAppStore((s) => s.projects);
   const createProject = useAppStore((s) => s.createProject);
   const code = useMemo(() => nextProjectCode(projects), [projects]);
+  const [draft] = useState(peekQuoteDraft);
   const [step, setStep] = useState(0);
-  const [lines, setLines] = useState<DraftLine[]>(() => [newDraftLine("materials"), newDraftLine("labor"), newDraftLine("installation")]);
-  const [mode, setMode] = useState<"calculator" | "manual">("calculator");
-  const [calcState, setCalcState] = useState<CalcState>(initialCalcState);
+  const [lines, setLines] = useState<DraftLine[]>(() =>
+    draft?.mode === "manual"
+      ? computeCalculator(draft.state, draft.startDate, draft.projectType, projects).lines.map(draftFromInput)
+      : [newDraftLine("materials"), newDraftLine("labor"), newDraftLine("installation")],
+  );
+  const [mode, setMode] = useState<"calculator" | "manual">(draft ? draft.mode : "manual");
+  const [calcState, setCalcState] = useState<CalcState>(() => draft?.state ?? initialCalcState());
   const [priceError, setPriceError] = useState("");
   const [lineErrors, setLineErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState("");
@@ -47,12 +54,12 @@ export function NewProjectWizard() {
     defaultValues: {
       name: "",
       client: "",
-      projectType: PROJECT_TYPES[0],
+      projectType: draft?.projectType ?? PROJECT_TYPES[0],
       description: "",
-      startDate: todayISO(),
-      dueDate: in30days(),
+      startDate: draft?.startDate ?? todayISO(),
+      dueDate: draft?.dueDate ?? in30days(),
       owner: useAppStore.getState().userName,
-      salesPrice: undefined as unknown as number,
+      salesPrice: (draft?.salesPrice ?? undefined) as unknown as number,
     },
     mode: "onTouched",
   });
@@ -114,6 +121,7 @@ export function NewProjectWizard() {
     const v = getValues();
     const res = createProject({ ...v, salesPrice: Number(v.salesPrice), code, budgetLines: inputs });
     if (!res.ok) return setFormError(res.error);
+    clearQuoteDraft();
     router.push(`/projects/${res.value}`);
   };
 
@@ -145,7 +153,7 @@ export function NewProjectWizard() {
         ))}
       </ol>
 
-      <div className="grid gap-6 lg:grid-cols-[1fr_300px]">
+      <div className={cn("grid gap-6", step > 0 && "lg:grid-cols-[1fr_300px]")}>
         <div>
           {step === 0 && (
             <Card>
@@ -175,14 +183,18 @@ export function NewProjectWizard() {
                 <Field label="Responsable" htmlFor="owner" error={formState.errors.owner?.message}>
                   <Input id="owner" {...register("owner")} />
                 </Field>
-                <Field label="Precio de venta (ARS)" htmlFor="salesPrice" error={formState.errors.salesPrice?.message} hint="Opcional por ahora: si todavía no lo definiste, la calculadora te sugiere uno según el margen que busques.">
-                  <Input id="salesPrice" type="number" min={0} step="any" inputMode="numeric" {...register("salesPrice", { valueAsNumber: true })} aria-invalid={!!formState.errors.salesPrice} />
-                </Field>
               </CardContent>
             </Card>
           )}
           {step === 1 && (
             <div className="space-y-4">
+              {draft ? (
+                <p className="rounded-md bg-blue-50 p-3 text-sm text-blue-900">Partís de la cotización que armaste en el Cotizador. Podés ajustarla antes de crear el proyecto.</p>
+              ) : (
+                <p className="rounded-md bg-slate-50 p-3 text-sm text-slate-700">
+                  ¿Todavía no sabés el precio? Calculalo primero en el <Link href="/quotes" className="font-medium text-blue-700 underline">Cotizador</Link> y después convertilo en proyecto.
+                </p>
+              )}
               <Card>
                 <CardHeader>
                   <CardTitle>Presupuesto</CardTitle>
@@ -261,14 +273,14 @@ export function NewProjectWizard() {
             </Card>
           )}
           <div className="mt-4 flex justify-between">
-            <Button variant="outline" onClick={() => (step === 0 ? router.push("/projects") : setStep(step - 1))}>
+            <Button variant="outline" onClick={() => (step === 0 ? (clearQuoteDraft(), router.push("/projects")) : setStep(step - 1))}>
               {step === 0 ? "Cancelar" : "Atrás"}
             </Button>
             {step < 2 ? <Button onClick={next}>Continuar</Button> : <Button onClick={submit}>Crear proyecto</Button>}
           </div>
         </div>
 
-        <aside className="lg:sticky lg:top-20 lg:self-start" aria-label="Resumen económico">
+        {step > 0 && <aside className="lg:sticky lg:top-20 lg:self-start" aria-label="Resumen económico">
           <Card>
             <CardContent className="space-y-3 pt-5 text-sm">
               <Row label="Precio de venta" value={formatCurrency(salesPrice)} />
@@ -282,7 +294,7 @@ export function NewProjectWizard() {
               </div>
             </CardContent>
           </Card>
-        </aside>
+        </aside>}
       </div>
     </div>
   );

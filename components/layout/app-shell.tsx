@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
-import { Bell, Boxes, FolderKanban, History, HardHat, LayoutDashboard, LogOut, Menu, Plus, RotateCcw, Settings, TriangleAlert, X } from "lucide-react";
+import { Bell, Boxes, Calculator, FolderKanban, History, HardHat, LayoutDashboard, LogOut, Menu, Plus, RotateCcw, Settings, TriangleAlert, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { APP_NAME, APP_SUBTITLE } from "@/lib/constants";
 import { useAppStore } from "@/store/use-app-store";
@@ -15,6 +15,7 @@ import { GlobalSearch } from "./global-search";
 const NAV = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/projects", label: "Proyectos", icon: FolderKanban },
+  { href: "/quotes", label: "Cotizador", icon: Calculator },
   { href: "/alerts", label: "Alertas", icon: TriangleAlert },
   { href: "/history", label: "Historial", icon: History },
   { href: "/stock", label: "Stock", icon: Boxes },
