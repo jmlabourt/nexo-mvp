@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { ArrowRightLeft, ClipboardPen, FolderX, Lock, QrCode, ShoppingCart } from "lucide-react";
+import { ArrowRightLeft, ClipboardPen, FolderX, Lock, ShoppingCart } from "lucide-react";
 import { formatDate, daysBetween, todayISO } from "@/lib/formatting";
 import { projectInsights } from "@/lib/insights";
 import { useAppStore } from "@/store/use-app-store";
@@ -10,7 +10,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { ProgressBar } from "@/components/ui/progress";
 import { HealthBadge, StatusBadge } from "@/components/shared/badges";
 import { EmptyState } from "@/components/shared/empty-state";
 import { InsightList } from "@/components/shared/insight-list";
@@ -18,7 +17,10 @@ import { StatusTimeline } from "./status-timeline";
 import { EconomicSummary } from "./economic-summary";
 import { DeviationSection } from "./deviation-section";
 import { ActivityTab } from "./activity-tab";
-import { QrDialog } from "./qr-dialog";
+import { ScheduleCard } from "./schedule-card";
+import { TeamCard } from "./team-card";
+import { StagesTab } from "./stages-tab";
+import { ItemsTab } from "./items-tab";
 import { StatusDialog } from "./status-dialog";
 import { CloseDialog } from "./close-dialog";
 import { BudgetTab } from "@/components/budget/budget-tab";
@@ -28,14 +30,16 @@ import { RecordDialog } from "@/components/actual-costs/record-dialog";
 import { PurchaseForm } from "@/components/materials/purchase-form";
 import { AlertItem } from "@/components/alerts/alert-item";
 
-type DialogName = "record" | "purchase" | "qr" | "status" | "close" | null;
+type DialogName = "record" | "purchase" | "status" | "close" | null;
 
-export function ProjectDetail({ id }: { id: string }) {
+const TABS = ["summary", "budget", "materials", "costs", "stages", "items", "activity"] as const;
+
+export function ProjectDetail({ id, tab: initialTab, purchase }: { id: string; tab?: string; purchase?: string }) {
   const view = useProjectView(id);
   const settings = useAppStore((s) => s.settings);
   const alerts = useProjectAlerts(view?.project);
   const [dialog, setDialog] = useState<DialogName>(null);
-  const [tab, setTab] = useState("summary");
+  const [tab, setTab] = useState<string>(TABS.includes(initialTab as (typeof TABS)[number]) ? (initialTab as string) : purchase ? "materials" : "summary");
   const insights = useMemo(() => (view ? projectInsights(view.project) : []), [view]);
 
   if (!view) {
@@ -77,11 +81,6 @@ export function ProjectDetail({ id }: { id: string }) {
                 Entrega: <strong className="tabular text-slate-900">{formatDate(p.dueDate)}</strong>
                 {!closed && <span className={daysLeft < 0 ? "text-red-700" : "text-slate-500"}> ({daysLeft < 0 ? `vencida hace ${-daysLeft} días` : `en ${daysLeft} días`})</span>}
               </span>
-              <span className="flex items-center gap-2">
-                Avance
-                <ProgressBar value={p.progressPercent} className="w-28" />
-                <strong className="tabular text-slate-900">{p.progressPercent}%</strong>
-              </span>
               {closed && p.closedAt && <span>Cerrado el {formatDate(p.closedAt)}</span>}
             </div>
           </div>
@@ -92,9 +91,6 @@ export function ProjectDetail({ id }: { id: string }) {
               </Button>
               <Button variant="outline" onClick={openDialog("purchase")} size="lg">
                 <ShoppingCart /> Registrar compra
-              </Button>
-              <Button variant="outline" onClick={openDialog("qr")} size="lg">
-                <QrCode /> Generar QR
               </Button>
               <Button variant="outline" onClick={openDialog("status")} size="lg">
                 <ArrowRightLeft /> Cambiar estado
@@ -116,11 +112,17 @@ export function ProjectDetail({ id }: { id: string }) {
           <TabsTrigger value="budget">Presupuesto</TabsTrigger>
           <TabsTrigger value="materials">Materiales</TabsTrigger>
           <TabsTrigger value="costs">Costos reales</TabsTrigger>
+          <TabsTrigger value="stages">Etapas</TabsTrigger>
+          <TabsTrigger value="items">Muebles y archivos</TabsTrigger>
           <TabsTrigger value="activity">Actividad</TabsTrigger>
         </TabsList>
 
         <TabsContent value="summary" className="space-y-6">
           <EconomicSummary project={p} econ={econ} />
+          <div className="grid gap-4 lg:grid-cols-2">
+            <ScheduleCard project={p} />
+            <TeamCard project={p} />
+          </div>
           <div className="grid gap-4 lg:grid-cols-2">
             <Card>
               <CardHeader>
@@ -154,10 +156,16 @@ export function ProjectDetail({ id }: { id: string }) {
           <BudgetTab project={p} />
         </TabsContent>
         <TabsContent value="materials">
-          <MaterialsTab project={p} />
+          <MaterialsTab project={p} highlightPurchaseId={purchase} />
         </TabsContent>
         <TabsContent value="costs">
           <ActualCostsTab project={p} />
+        </TabsContent>
+        <TabsContent value="stages">
+          <StagesTab project={p} />
+        </TabsContent>
+        <TabsContent value="items">
+          <ItemsTab project={p} />
         </TabsContent>
         <TabsContent value="activity">
           <ActivityTab project={p} />
@@ -178,7 +186,6 @@ export function ProjectDetail({ id }: { id: string }) {
               <PurchaseForm project={p} onDone={() => setDialog(null)} />
             </DialogContent>
           </Dialog>
-          <QrDialog project={p} open={dialog === "qr"} onOpenChange={onOpenChange} />
           <StatusDialog project={p} open={dialog === "status"} onOpenChange={onOpenChange} />
           <CloseDialog project={p} open={dialog === "close"} onOpenChange={onOpenChange} />
         </>

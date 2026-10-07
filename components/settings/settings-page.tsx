@@ -21,7 +21,7 @@ const schema = z
     marginCriticalPp: pct,
     daysWithoutRecords: z.number({ error: "Ingresá un número" }).int("Días enteros").min(1).max(90),
     dueSoonDays: z.number({ error: "Ingresá un número" }).int("Días enteros").min(0).max(60),
-    dueSoonProgressPct: pct,
+    deadlineNoProductionPct: pct,
   })
   .refine((v) => v.categoryCriticalPct > v.categoryWarningPct, { path: ["categoryCriticalPct"], message: "Debe ser mayor que el de atención" })
   .refine((v) => v.marginCriticalPp > v.marginWarningPp, { path: ["marginCriticalPp"], message: "Debe ser mayor que el de atención" });
@@ -33,7 +33,7 @@ const FIELDS: Array<{ key: keyof AlertSettings; label: string; hint: string }> =
   { key: "marginCriticalPp", label: "Crítico por margen (pp)", hint: "Caída mayor a estos puntos = crítico." },
   { key: "daysWithoutRecords", label: "Días sin registros", hint: "En Producción, avisar si no se registran consumos ni costos." },
   { key: "dueSoonDays", label: "Días antes de la entrega", hint: "Avisar si faltan estos días o menos…" },
-  { key: "dueSoonProgressPct", label: "…y el avance es menor a (%)", hint: "Avance manual informado." },
+  { key: "deadlineNoProductionPct", label: "Plazo transcurrido sin producción (%)", hint: "Avisar si pasó este % del plazo y el proyecto todavía no llegó a Producción." },
 ];
 
 export function SettingsPage() {

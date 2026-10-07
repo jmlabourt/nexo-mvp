@@ -1,48 +1,84 @@
 "use client";
 import Link from "next/link";
-import { ChevronRight, QrCode } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 import { APP_NAME } from "@/lib/constants";
+import { projectsForOperator } from "@/lib/operators";
 import { useAppStore } from "@/store/use-app-store";
+import { useIdentity } from "@/store/selectors";
 import { StatusBadge } from "@/components/shared/badges";
 import { ModeSwitch } from "@/components/layout/mode-switch";
+import { Select } from "@/components/ui/input";
 
-/** Vista de modo Taller: sin datos económicos, solo elegir proyecto para registrar. */
+/** Inicio de Taller: sólo los proyectos activos, en etapa de ejecución, asignados al operario. Sin plata. */
 export function WorkshopHome() {
-  const projects = useAppStore((s) => s.projects).filter((p) => ["purchasing", "production", "installation"].includes(p.status));
-  const userName = useAppStore((s) => s.userName);
+  const projects = useAppStore((s) => s.projects);
+  const operators = useAppStore((s) => s.operators);
+  const setActingOperator = useAppStore((s) => s.setActingOperator);
+  const { operator, realRole } = useIdentity();
+  const isRealOperator = realRole === "operator";
+  const mine = operator ? projectsForOperator(projects, operator.id) : [];
+
   return (
     <div className="mx-auto min-h-screen max-w-md bg-white px-4 pb-10">
       <header className="flex items-center justify-between py-4">
         <div>
           <div className="text-lg font-semibold tracking-tight">{APP_NAME}</div>
-          <div className="text-xs text-slate-500">Modo taller · {userName}</div>
+          <div className="text-xs text-slate-500">Taller{operator ? ` · ${operator.name}` : ""}</div>
         </div>
+        {isRealOperator && (
+          <form action="/auth/signout" method="post">
+            <button type="submit" className="text-sm text-blue-700">Cerrar sesión</button>
+          </form>
+        )}
       </header>
-      <div className="mb-4 flex items-start gap-3 rounded-lg bg-blue-50 p-3 text-sm text-blue-900">
-        <QrCode className="mt-0.5 size-5 shrink-0" aria-hidden />
-        Escaneá el QR de la orden de producción o elegí el proyecto.
-      </div>
-      <h1 className="mb-3 text-xl font-semibold">¿En qué proyecto trabajás?</h1>
-      <ul className="space-y-2">
-        {projects.map((p) => (
-          <li key={p.id}>
-            <Link
-              href={`/registro/${p.id}`}
-              className="flex min-h-16 items-center gap-3 rounded-lg border border-slate-200 p-4 hover:bg-slate-50"
-            >
-              <div className="min-w-0 flex-1">
-                <div className="text-xs font-medium text-slate-500">{p.code}</div>
-                <div className="truncate font-medium text-slate-900">{p.name}</div>
-              </div>
-              <StatusBadge status={p.status} />
-              <ChevronRight className="size-5 text-slate-400" aria-hidden />
-            </Link>
-          </li>
-        ))}
-      </ul>
-      <div className="mt-8 border-t border-slate-200 pt-4">
-        <ModeSwitch />
-      </div>
+
+      {!isRealOperator && (
+        <div className="mb-4 rounded-lg border border-slate-200 bg-slate-50 p-3">
+          <label htmlFor="acting-op" className="mb-1.5 block text-xs font-medium text-slate-600">Ver Taller como operario</label>
+          <Select id="acting-op" value={operator?.id ?? ""} onChange={(e) => setActingOperator(e.target.value || null)}>
+            <option value="">Elegí un operario…</option>
+            {operators.filter((o) => o.active).map((o) => (
+              <option key={o.id} value={o.id}>{o.name} · {o.role}</option>
+            ))}
+          </Select>
+        </div>
+      )}
+
+      {!operator ? (
+        <p className="rounded-md bg-amber-50 p-4 text-sm text-amber-900">
+          {isRealOperator
+            ? "Tu usuario todavía no está vinculado a un operario. Pedile a Gestión que cargue tu email en la sección Operarios."
+            : "Elegí un operario para ver lo que vería en Taller."}
+        </p>
+      ) : (
+        <>
+          <h1 className="mb-3 text-xl font-semibold">¿En qué proyecto trabajás?</h1>
+          {mine.length === 0 ? (
+            <p className="rounded-md bg-slate-100 p-4 text-sm text-slate-700">No tenés proyectos activos asignados por ahora.</p>
+          ) : (
+            <ul className="space-y-2">
+              {mine.map((p) => (
+                <li key={p.id}>
+                  <Link href={`/taller/${p.id}`} className="flex min-h-16 items-center gap-3 rounded-lg border border-slate-200 p-4 hover:bg-slate-50">
+                    <div className="min-w-0 flex-1">
+                      <div className="text-xs font-medium text-slate-500">{p.code}</div>
+                      <div className="truncate font-medium text-slate-900">{p.name}</div>
+                    </div>
+                    <StatusBadge status={p.status} />
+                    <ChevronRight className="size-5 text-slate-400" aria-hidden />
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </>
+      )}
+
+      {!isRealOperator && (
+        <div className="mt-8 border-t border-slate-200 pt-4">
+          <ModeSwitch />
+        </div>
+      )}
     </div>
   );
 }
