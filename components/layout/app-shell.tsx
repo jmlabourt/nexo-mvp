@@ -15,8 +15,8 @@ import { GlobalSearch } from "./global-search";
 const NAV = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/projects", label: "Proyectos", icon: FolderKanban },
-  { href: "/quotes", label: "Cotizador", icon: Calculator },
   { href: "/alerts", label: "Alertas", icon: TriangleAlert },
+  { href: "/quotes", label: "Cotizador", icon: Calculator },
   { href: "/history", label: "Historial", icon: History },
   { href: "/stock", label: "Stock", icon: Boxes },
   { href: "/operators", label: "Operarios", icon: HardHat },
