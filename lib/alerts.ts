@@ -193,7 +193,7 @@ export function hasExecutionData(project: Pick<Project, "materialUsages" | "actu
 }
 
 /**
- * Salud del proyecto según sus alertas ABIERTAS (ver HEALTH_RULES). Los finalizados no llevan chip: null.
+ * Salud del proyecto según sus alertas ABIERTAS (la regla se explica en Configuración). Los finalizados no llevan chip: null.
  * `openAlerts` puede incluir alertas de otros proyectos; se filtran por id.
  */
 export function projectHealth(project: Project, openAlerts: readonly Alert[]): EconomicHealth | null {

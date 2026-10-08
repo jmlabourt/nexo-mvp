@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { ChevronRight } from "lucide-react";
 import { APP_NAME } from "@/lib/constants";
-import { projectsForOperator } from "@/lib/operators";
+import { activeOperators, operatorAccessForUser, projectsForOperator } from "@/lib/operators";
 import { useAppStore } from "@/store/use-app-store";
 import { useIdentity } from "@/store/selectors";
 import { StatusBadge } from "@/components/shared/badges";
@@ -14,9 +14,12 @@ export function WorkshopHome() {
   const projects = useAppStore((s) => s.projects);
   const operators = useAppStore((s) => s.operators);
   const setActingOperator = useAppStore((s) => s.setActingOperator);
+  const userId = useAppStore((s) => s.userId);
+  const userEmail = useAppStore((s) => s.userEmail);
   const { operator, realRole } = useIdentity();
   const isRealOperator = realRole === "operator";
-  const mine = operator ? projectsForOperator(projects, operator.id) : [];
+  const mine = operator ? projectsForOperator(projects, operator.id, operators) : [];
+  const access = isRealOperator ? operatorAccessForUser(operators, userId, userEmail) : null;
 
   return (
     <div className="mx-auto min-h-screen max-w-md bg-white px-4 pb-10">
@@ -37,7 +40,7 @@ export function WorkshopHome() {
           <label htmlFor="acting-op" className="mb-1.5 block text-xs font-medium text-slate-600">Ver Taller como operario</label>
           <Select id="acting-op" value={operator?.id ?? ""} onChange={(e) => setActingOperator(e.target.value || null)}>
             <option value="">Elegí un operario…</option>
-            {operators.filter((o) => o.active).map((o) => (
+            {activeOperators(operators).map((o) => (
               <option key={o.id} value={o.id}>{o.name} · {o.role}</option>
             ))}
           </Select>
@@ -46,7 +49,9 @@ export function WorkshopHome() {
 
       {!operator ? (
         <p className="rounded-md bg-amber-50 p-4 text-sm text-amber-900">
-          {isRealOperator
+          {access === "deactivated"
+            ? "Tu usuario está dado de baja como operario, así que no ves proyectos. Si es un error, pedile a Gestión que te reactive."
+            : isRealOperator
             ? "Tu usuario todavía no está vinculado a un operario. Pedile a Gestión que cargue tu email en la sección Operarios."
             : "Elegí un operario para ver lo que vería en Taller."}
         </p>

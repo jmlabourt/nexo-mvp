@@ -171,14 +171,6 @@ export const HEALTH_LABELS: Record<EconomicHealth, string> = {
   risk: "En riesgo",
 };
 
-/** Regla de la salud del proyecto, en palabras (se muestra en Configuración). */
-export const HEALTH_RULES: Array<{ health: EconomicHealth; rule: string }> = [
-  { health: "risk", rule: "Hay al menos una alerta Crítica abierta." },
-  { health: "attention", rule: "Hay alertas de Atención abiertas y ninguna Crítica." },
-  { health: "healthy", rule: "Hay consumos o costos registrados y no hay alertas abiertas." },
-  { health: "no_data", rule: "Todavía no hay consumos ni costos registrados." },
-];
-
 export const ALERT_LEVEL_LABELS: Record<AlertLevel, string> = {
   info: "Info",
   warning: "Atención",

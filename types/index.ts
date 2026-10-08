@@ -243,7 +243,10 @@ export interface Operator {
   name: string;
   role: string;
   hourlyCost: number;
+  /** false = dado de baja (baja lógica). Sus horas y costos se conservan. */
   active: boolean;
+  /** Fecha de la baja. Vacío si está activo. */
+  deactivatedAt?: string;
   /** Usuario (auth) vinculado, si el operario entra al sistema. */
   userId?: string;
   email?: string;

@@ -11,6 +11,8 @@ import { Button } from "@/components/ui/button";
 import { ModeSwitch } from "./mode-switch";
 import { WorkshopHome } from "@/components/workshop/workshop-home";
 import { GlobalSearch } from "./global-search";
+import { useTrackNavigation } from "./back-button";
+import { breadcrumbTrail, type Crumb } from "@/lib/navigation";
 
 const NAV = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -27,18 +29,10 @@ function isActive(pathname: string, href: string) {
   return pathname.startsWith(href);
 }
 
-function useBreadcrumb(): string[] {
+function useBreadcrumb(): Crumb[] {
   const pathname = usePathname();
   const projects = useAppStore((s) => s.projects);
-  const parts = pathname.split("/").filter(Boolean);
-  const crumbs: string[] = [];
-  const root = NAV.find((n) => n.href === `/${parts[0]}`);
-  crumbs.push(root?.label ?? parts[0]);
-  if (parts[0] === "projects" && parts[1]) {
-    if (parts[1] === "new") crumbs.push("Nuevo proyecto");
-    else crumbs.push(projects.find((p) => p.id === parts[1])?.code ?? "Proyecto");
-  }
-  return crumbs;
+  return breadcrumbTrail(pathname, (id) => projects.find((p) => p.id === id)?.code);
 }
 
 function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
@@ -122,8 +116,14 @@ function Header({ onMenu }: { onMenu: () => void }) {
       <nav aria-label="Breadcrumb" className="hidden min-w-0 text-sm text-slate-500 sm:block">
         {crumbs.map((c, i) => (
           <span key={i}>
-            {i > 0 && <span className="mx-1.5 text-slate-300">/</span>}
-            <span className={i === crumbs.length - 1 ? "font-medium text-slate-900" : undefined}>{c}</span>
+            {i > 0 && <span className="mx-1.5 text-slate-300" aria-hidden>/</span>}
+            {c.href ? (
+              <Link href={c.href} className="hover:text-blue-700 hover:underline">
+                {c.label}
+              </Link>
+            ) : (
+              <span className="font-medium text-slate-900" aria-current="page">{c.label}</span>
+            )}
           </span>
         ))}
       </nav>
@@ -149,6 +149,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const mode = useAppStore((s) => s.currentMode);
   const role = useAppStore((s) => s.role);
   const [menuOpen, setMenuOpen] = useState(false);
+  useTrackNavigation();
 
   if (role === "operator" || mode === "workshop") return <WorkshopHome />;
 

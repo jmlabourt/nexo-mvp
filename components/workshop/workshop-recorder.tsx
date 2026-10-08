@@ -22,7 +22,8 @@ export function WorkshopRecorder({ projectId }: { projectId: string }) {
   const [view, setView] = useState<View>("menu");
   const [lastSummary, setLastSummary] = useState("");
 
-  const allowed = project && operator ? projectsForOperator(projects, operator.id).some((p) => p.id === project.id) : false;
+  const operators = useAppStore((s) => s.operators);
+  const allowed = project && operator ? projectsForOperator(projects, operator.id, operators).some((p) => p.id === project.id) : false;
 
   if (!project || !allowed) {
     return (

@@ -1,5 +1,5 @@
 "use client";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useState } from "react";
@@ -113,7 +113,7 @@ export function SettingsPage() {
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
   const [confirmText, setConfirmText] = useState("");
-  const { register, handleSubmit, reset, watch, formState } = useForm<AlertSettings>({
+  const { register, handleSubmit, reset, control, formState } = useForm<AlertSettings>({
     resolver: zodResolver(schema),
     defaultValues: settings,
   });
@@ -122,7 +122,7 @@ export function SettingsPage() {
   const canClear = confirmText.trim().toLowerCase() === confirmWord.toLowerCase();
 
   // Valores en vivo para que los ejemplos se actualicen mientras se escribe.
-  const raw = watch();
+  const raw = useWatch({ control });
   const live: AlertSettings = {
     categoryWarningPct: numOr(raw.categoryWarningPct, settings.categoryWarningPct),
     categoryCriticalPct: numOr(raw.categoryCriticalPct, settings.categoryCriticalPct),

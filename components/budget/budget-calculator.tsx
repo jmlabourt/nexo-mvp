@@ -19,7 +19,6 @@ interface Props {
   priceError?: string;
   onSalesPrice: (n: number) => void;
   onDueDate: (iso: string) => void;
-  onEditManually: () => void;
 }
 
 const NumField = ({ id, label, value, onChange, suffix, placeholder }: { id: string; label: string; value: string; onChange: (v: string) => void; suffix?: string; placeholder?: string }) => (
@@ -60,7 +59,7 @@ const RemoveButton = ({ label, onClick }: { label: string; onClick: () => void }
   </Button>
 );
 
-export function BudgetCalculator({ state, onState, result, projectType, salesPrice, priceError, onSalesPrice, onDueDate, onEditManually }: Props) {
+export function BudgetCalculator({ state, onState, result, projectType, salesPrice, priceError, onSalesPrice, onDueDate }: Props) {
   const set = (patch: Partial<CalcState>) => onState({ ...state, ...patch });
   const { input, total } = result;
 
@@ -284,7 +283,6 @@ export function BudgetCalculator({ state, onState, result, projectType, salesPri
         )}
 
         <div className="mt-4 flex flex-wrap items-center gap-3">
-          <Button variant="outline" size="sm" onClick={onEditManually} disabled={!result.hasContent}>Pasar a carga manual para editar línea por línea</Button>
           <p className="text-xs text-slate-500">Al continuar, este cálculo se guarda como el costo presupuestado del proyecto.</p>
         </div>
       </section>

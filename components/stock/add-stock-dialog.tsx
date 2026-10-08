@@ -9,9 +9,16 @@ import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Input, Select } from "@/components/ui/input";
 
-/** Alta de stock libre en el depósito (material que ya existe y no está asignado a un proyecto). */
+type Kind = "purchase" | "opening";
+
+/**
+ * Registrar compra para el depósito: el material queda LIBRE (Disponible), no asignado a un proyecto.
+ * Opción secundaria: inventario inicial (material que ya tenías). En ningún caso es costo de un proyecto
+ * hasta que se asigne y se consuma: compra ≠ costo.
+ */
 export function AddStockDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
   const addStockLot = useAppStore((s) => s.addStockLot);
+  const [kind, setKind] = useState<Kind>("purchase");
   const [materialId, setMaterialId] = useState("");
   const [name, setName] = useState("");
   const [unit, setUnit] = useState("");
@@ -22,7 +29,7 @@ export function AddStockDialog({ open, onOpenChange }: { open: boolean; onOpenCh
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const reset = () => {
-    setMaterialId(""); setName(""); setUnit(""); setQty(""); setCost(""); setSupplier(""); setLocation(""); setErrors({});
+    setKind("purchase"); setMaterialId(""); setName(""); setUnit(""); setQty(""); setCost(""); setSupplier(""); setLocation(""); setErrors({});
   };
 
   const pick = (id: string) => {
@@ -57,6 +64,7 @@ export function AddStockDialog({ open, onOpenChange }: { open: boolean; onOpenCh
       ...(supplier.trim() ? { supplier: supplier.trim() } : {}),
       ...(location.trim() ? { location: location.trim() } : {}),
       date: todayISO(),
+      kind,
     });
     if (!res.ok) {
       setErrors({ form: res.error });
@@ -70,8 +78,12 @@ export function AddStockDialog({ open, onOpenChange }: { open: boolean; onOpenCh
     <Dialog open={open} onOpenChange={(o) => { onOpenChange(o); if (!o) reset(); }}>
       <DialogContent side="right">
         <DialogHeader>
-          <DialogTitle>Cargar stock</DialogTitle>
-          <DialogDescription>Material que ya tenés en el depósito, libre para asignar a cualquier proyecto. Conserva el costo con el que lo cargues.</DialogDescription>
+          <DialogTitle>{kind === "purchase" ? "Registrar compra" : "Cargar inventario inicial"}</DialogTitle>
+          <DialogDescription>
+            {kind === "purchase"
+              ? "Compra para el depósito: el material queda disponible para asignar a cualquier proyecto. Todavía no es costo de ningún proyecto: lo es recién cuando se consume."
+              : "Material que ya tenías en el depósito antes de usar la app. Queda disponible con el costo que le pongas; no es una compra ni costo de ningún proyecto."}
+          </DialogDescription>
         </DialogHeader>
         <form onSubmit={submit} className="space-y-4" noValidate>
           <Field label="Material" htmlFor="as-material" error={errors.material}>
@@ -99,16 +111,26 @@ export function AddStockDialog({ open, onOpenChange }: { open: boolean; onOpenCh
           <Field label="Costo unitario ($)" htmlFor="as-cost" error={errors.cost}>
             <Input id="as-cost" inputMode="decimal" value={cost} onChange={(e) => setCost(e.target.value)} />
           </Field>
-          <Field label="Proveedor (opcional)" htmlFor="as-supplier">
+          <Field label={kind === "purchase" ? "Proveedor" : "Proveedor (opcional)"} htmlFor="as-supplier">
             <Input id="as-supplier" value={supplier} onChange={(e) => setSupplier(e.target.value)} />
           </Field>
           <Field label="Ubicación (opcional)" htmlFor="as-location">
             <Input id="as-location" value={location} onChange={(e) => setLocation(e.target.value)} placeholder="Ej.: Depósito, estante B" />
           </Field>
           {errors.form && <p role="alert" className="text-sm text-red-600">{errors.form}</p>}
+          <p className="text-sm text-slate-500">
+            {kind === "purchase" ? (
+              <>
+                ¿No es una compra, sino material que ya tenías?{" "}
+                <button type="button" className="font-medium text-blue-700 underline" onClick={() => setKind("opening")}>Cargarlo como inventario inicial</button>
+              </>
+            ) : (
+              <button type="button" className="font-medium text-blue-700 underline" onClick={() => setKind("purchase")}>Volver a registrar una compra</button>
+            )}
+          </p>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-            <Button type="submit">Cargar stock</Button>
+            <Button type="submit">{kind === "purchase" ? "Registrar compra" : "Cargar inventario inicial"}</Button>
           </DialogFooter>
         </form>
       </DialogContent>

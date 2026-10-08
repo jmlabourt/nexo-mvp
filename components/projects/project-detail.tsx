@@ -29,6 +29,7 @@ import { ActualCostsTab } from "@/components/actual-costs/actual-costs-tab";
 import { RecordDialog } from "@/components/actual-costs/record-dialog";
 import { PurchaseForm } from "@/components/materials/purchase-form";
 import { AlertItem } from "@/components/alerts/alert-item";
+import { BackButton } from "@/components/layout/back-button";
 
 type DialogName = "record" | "purchase" | "status" | "close" | null;
 
@@ -65,6 +66,7 @@ export function ProjectDetail({ id, tab: initialTab, purchase }: { id: string; t
   return (
     <div className="min-w-0 space-y-6">
       <header className="space-y-4">
+        <BackButton fallback="/projects" />
         <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2 text-sm text-slate-500">

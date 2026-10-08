@@ -47,11 +47,11 @@ export function QuotePage() {
   const estimated = estimatedDelivery(calc.input, startDate);
   const dueDate = chosenDueDate ?? estimated;
 
-  const toProject = (mode: "calculator" | "manual") => {
+  const toProject = () => {
     if (!calc.hasContent) return setError("Cargá al menos un material, horas de trabajo o un costo para armar la cotización.");
     if (!(salesPrice > 0)) return setError("Definí el precio de venta (podés usar el sugerido) para crear el proyecto.");
     setError("");
-    setQuoteDraft({ state, projectType, startDate, dueDate: dueDate ?? in30days(), salesPrice, mode });
+    setQuoteDraft({ state, projectType, startDate, dueDate: dueDate ?? in30days(), salesPrice });
     router.push("/projects/new");
   };
 
@@ -65,6 +65,7 @@ export function QuotePage() {
   return (
     <div>
       <PageHeader
+        back
         title="Cotizador"
         subtitle="Calculá el costo, el precio de venta y el margen antes de crear el proyecto. Si el cliente acepta, lo convertís en proyecto con un clic."
         actions={
@@ -97,7 +98,6 @@ export function QuotePage() {
             salesPrice={salesPrice}
             onSalesPrice={setSalesPrice}
             onDueDate={setChosenDueDate}
-            onEditManually={() => toProject("manual")}
           />
           {error && (
             <p role="alert" className="text-sm text-red-600">
@@ -121,7 +121,7 @@ export function QuotePage() {
               <p className="text-xs text-slate-500">
                 {dueDate ? `Entrega estimada: ${formatDate(dueDate)}` : "Entrega estimada: cargá horas de trabajo para calcularla."}
               </p>
-              <Button className="w-full" onClick={() => toProject("calculator")} disabled={!calc.hasContent || !(salesPrice > 0)}>
+              <Button className="w-full" onClick={toProject} disabled={!calc.hasContent || !(salesPrice > 0)}>
                 Crear proyecto con esta cotización
               </Button>
               <p className="text-xs text-slate-500">Es una estimación hecha con lo que cargaste. Recién al crear el proyecto se convierte en su costo presupuestado; al aprobarlo, en el presupuesto base.</p>

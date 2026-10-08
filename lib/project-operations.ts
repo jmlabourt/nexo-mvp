@@ -483,7 +483,7 @@ export function logHours(
   const operatorId = isOperator ? ctx.operatorId : input.operatorId;
   const op = operators.find((o) => o.id === operatorId);
   if (!op) throw new DomainError(isOperator ? "Tu usuario no está vinculado a un operario." : "Elegí el operario.");
-  if (!op.active) throw new DomainError(`${op.name} está inactivo.`);
+  if (!op.active) throw new DomainError(`${op.name} está dado de baja: reactivalo en Operarios para cargarle horas.`);
   if (isOperator && input.operatorId && input.operatorId !== op.id) {
     throw new RuleError("Solo podés cargar tus propias horas.");
   }
@@ -545,7 +545,8 @@ export function closeProject(project: Project, stock: StockState, ctx: Ctx): Pro
 export function assignOperators(project: Project, operatorIds: string[], operators: Operator[], ctx: Ctx): Project {
   assertManager(ctx, "Asignar operarios");
   assertOpen(project);
-  const valid = operatorIds.filter((id) => operators.some((o) => o.id === id));
+  // Solo operarios activos: al guardar el equipo, los dados de baja dejan de estar asignados.
+  const valid = operatorIds.filter((id) => operators.some((o) => o.id === id && o.active));
   const names = valid.map((id) => operators.find((o) => o.id === id)?.name).filter(Boolean);
   return touch({ ...project, assignedOperatorIds: valid }, ctx.now, [
     activity("stage", ctx.actor, names.length ? `Operarios asignados: ${names.join(", ")}.` : "Se quitaron los operarios asignados.", ctx.now),

@@ -99,11 +99,18 @@ interface AppState {
     supplier?: string;
     location?: string;
     date: string;
+    /** "purchase" = compra para el depósito (por defecto) · "opening" = inventario inicial (material que ya tenía). */
+    kind?: "purchase" | "opening";
   }) => Result<StockLot>;
   updateLotLocation: (lotId: string, location: string) => Result;
 
   createOperator: (input: people.OperatorInput) => Result<string>;
   updateOperator: (id: string, input: people.OperatorInput) => Result;
+  /** Baja lógica: el operario deja de aparecer en equipos y Taller. Sus horas se conservan. */
+  deactivateOperator: (id: string) => Result;
+  reactivateOperator: (id: string) => Result;
+  /** Solo si no tiene horas registradas. */
+  deleteOperator: (id: string) => Result;
   createMaterialRequest: (input: {
     projectId: string;
     materialId: string;
@@ -387,7 +394,7 @@ export const useAppStore = create<AppState>()(
 
         addStockLot: (input) =>
           run(() => {
-            requireManager("Cargar stock");
+            requireManager("Registrar compras de stock");
             const c = ctx();
             const received = receiveStock(
               {
@@ -400,7 +407,7 @@ export const useAppStore = create<AppState>()(
                 location: input.location,
                 date: input.date,
                 destination: "warehouse",
-                kind: "opening",
+                kind: input.kind ?? "purchase",
               },
               c,
             );
@@ -437,6 +444,30 @@ export const useAppStore = create<AppState>()(
           run(() => {
             requireManager("Editar operarios");
             commit({ operators: people.updateOperator(get().operators, id, input) });
+            return undefined;
+          }),
+
+        deactivateOperator: (id) =>
+          run(() => {
+            requireManager("Dar de baja operarios");
+            commit({ operators: people.deactivateOperator(get().operators, id, new Date().toISOString()) });
+            if (get().actingOperatorId === id) set({ actingOperatorId: null });
+            return undefined;
+          }),
+
+        reactivateOperator: (id) =>
+          run(() => {
+            requireManager("Reactivar operarios");
+            commit({ operators: people.reactivateOperator(get().operators, id) });
+            return undefined;
+          }),
+
+        deleteOperator: (id) =>
+          run(() => {
+            requireManager("Eliminar operarios");
+            const next = people.deleteOperator(get().operators, get().projects, id);
+            commit(next);
+            if (get().actingOperatorId === id) set({ actingOperatorId: null });
             return undefined;
           }),
 

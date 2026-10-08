@@ -151,3 +151,7 @@ Las siete categorías de costo, iguales en todas las pantallas: **Materiales, Ma
 - **D5.** El proyecto referencia un id de cliente.
 
 D1, D2 y D5 se implementan en lotes posteriores.
+
+## Pendientes anotados
+
+- **Lote 2:** el campo "Rol o especialidad" de Operarios hoy es texto libre. Va a pasar a un selector con un catálogo cerrado: Carpintería · Armado · Oficina técnica · Terminaciones · Instalación · Otro.
