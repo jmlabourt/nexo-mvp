@@ -5,8 +5,8 @@
 // alcanza con comparar referencias).
 // ─────────────────────────────────────────────────────────────
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { AlertSettings, AppRole, MaterialRequest, Operator, Project } from "@/types";
-import { DEFAULT_SETTINGS } from "@/lib/constants";
+import type { AlertSettings, AppRole, CostSettings, MaterialRequest, Operator, Project } from "@/types";
+import { DEFAULT_OVERTIME_MULTIPLIER, DEFAULT_SETTINGS } from "@/lib/constants";
 import type { StockState } from "@/lib/stock";
 import type { TallerCall } from "./taller";
 import { deriveLedgerFromLegacy } from "@/lib/stock-legacy";
@@ -43,6 +43,8 @@ export interface Workspace extends WorkspaceData {
   userName: string;
   userEmail: string;
   role: AppRole;
+  /** Solo Gestión: Taller recibe siempre el valor por defecto (nunca lee cost_settings). */
+  costSettings: CostSettings;
   demoSeeded: boolean;
   /**
    * true si la empresa tenía datos del modelo anterior (compras, usos, sobrantes) y todavía no tenía
@@ -101,6 +103,7 @@ export async function loadWorkspace(db: SupabaseClient): Promise<Workspace> {
     movements,
     requests,
     resolved,
+    costSettings,
   ] = await Promise.all([
     check(await db.from("projects").select("*").eq("organization_id", org).order("created_at", { ascending: false })) as Record<
       string,
@@ -120,6 +123,7 @@ export async function loadWorkspace(db: SupabaseClient): Promise<Workspace> {
     selectAll(db, "stock_movements", org),
     selectAll(db, "material_requests", org),
     check(await db.from("resolved_alerts").select("alert_id").eq("organization_id", org)) as { alert_id: string }[],
+    loadCostSettings(db, org),
   ]);
 
   const domainProjects = projectsFromRows({ projects, budgetLines, purchaseEntries, materialUsages, actualEntries, activity, items, stageLogs, attachments });
@@ -140,6 +144,7 @@ export async function loadWorkspace(db: SupabaseClient): Promise<Workspace> {
     userEmail: user.email ?? "",
     role: membership.role,
     demoSeeded: membership.organizations.demo_seeded,
+    costSettings,
     projects: domainProjects,
     operators: operators.map(operatorFromRow),
     stock,
@@ -148,6 +153,17 @@ export async function loadWorkspace(db: SupabaseClient): Promise<Workspace> {
     settings: { ...DEFAULT_SETTINGS, ...(membership.organizations.alert_settings ?? {}) },
     resolvedAlertIds: resolved.map((r) => r.alert_id),
   };
+}
+
+export const DEFAULT_COST_SETTINGS: CostSettings = { overtimeMultiplier: DEFAULT_OVERTIME_MULTIPLIER };
+
+/** Multiplicador de horas extra de la empresa (tabla de Gestión). Sin fila → valor por defecto. */
+async function loadCostSettings(db: SupabaseClient, org: string): Promise<CostSettings> {
+  const { data, error } = await db.from("cost_settings").select("overtime_multiplier").eq("organization_id", org).maybeSingle();
+  // Si la tabla todavía no existe en la base, se usa el valor por defecto en lugar de romper la carga.
+  if (error || !data) return { ...DEFAULT_COST_SETTINGS };
+  const m = Number((data as { overtime_multiplier: unknown }).overtime_multiplier);
+  return { overtimeMultiplier: Number.isFinite(m) && m >= 1 ? m : DEFAULT_OVERTIME_MULTIPLIER };
 }
 
 /** Mensaje para un operario dado de baja que inicia sesión. */
@@ -183,6 +199,7 @@ async function loadTallerWorkspace(db: SupabaseClient, user: { id: string; email
     userName: operator.name || displayName || user.email?.split("@")[0] || "Operario",
     userEmail: user.email ?? "",
     role: "operator",
+    costSettings: { ...DEFAULT_COST_SETTINGS },
     demoSeeded: true,
     stockMigrated: false,
     projects: projectsFromRows({
@@ -277,6 +294,14 @@ export async function syncRequests(db: SupabaseClient, org: string, prev: Materi
 
 export async function saveSettings(db: SupabaseClient, org: string, settings: AlertSettings) {
   check(await db.from("organizations").update({ alert_settings: settings }).eq("id", org));
+}
+
+export async function saveCostSettings(db: SupabaseClient, org: string, settings: CostSettings) {
+  check(
+    await db
+      .from("cost_settings")
+      .upsert({ organization_id: org, overtime_multiplier: settings.overtimeMultiplier, updated_at: new Date().toISOString() }, { onConflict: "organization_id" }),
+  );
 }
 
 export async function setAlertResolved(db: SupabaseClient, org: string, alertId: string, resolved: boolean) {

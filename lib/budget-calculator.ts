@@ -23,12 +23,20 @@ export interface CalcMaterial {
   wastePct: number;
 }
 
+/** Un operario dentro de un rol: sus horas normales y extra ya calculadas (ver lib/capacity.ts). */
+export interface CalcLaborAssignment {
+  operatorId: string;
+  operatorName: string;
+  hourlyCost: number;
+  normalHours: number;
+  overtimeHours: number;
+}
+
 export interface CalcLabor {
   role: string;
-  workers: number;
   /** Horas totales de trabajo de ese rol (sumando a todos los operarios). */
   hours: number;
-  hourlyCost: number;
+  assignments: CalcLaborAssignment[];
 }
 
 export interface CalcMachine {
@@ -54,6 +62,8 @@ export interface CalculatorInput {
   installationDays: number;
   targetMarginPct: number;
   startDate: string;
+  /** Horas extra = costo por hora × multiplicador. */
+  overtimeMultiplier: number;
 }
 
 /** Ajuste por historial: % extra sobre una categoría, con su fundamento (muestra). */
@@ -76,12 +86,19 @@ export function materialCost(m: CalcMaterial): number {
   return round2(materialBudgetQuantity(m) * finite(m.unitCost));
 }
 
-export const laborCost = (l: CalcLabor): number => round2(finite(l.hours) * finite(l.hourlyCost));
+/** horas normales × costo + horas extra × costo × multiplicador, de todos los operarios del rol. */
+export const laborCost = (l: CalcLabor, overtimeMultiplier: number): number =>
+  round2(
+    l.assignments.reduce(
+      (s, a) => s + finite(a.normalHours) * finite(a.hourlyCost) + finite(a.overtimeHours) * round2(finite(a.hourlyCost) * overtimeMultiplier),
+      0,
+    ),
+  );
 export const machineCost = (m: CalcMachine): number => round2(finite(m.hours) * finite(m.hourlyCost));
 
 /** Costo por día laboral de tener a todo el equipo asignado (base de la sensibilidad al atraso). */
 export function dailyCrewCost(labor: CalcLabor[], hoursPerDay: number): number {
-  return round2(labor.reduce((s, l) => s + finite(l.workers) * finite(hoursPerDay) * finite(l.hourlyCost), 0));
+  return round2(labor.reduce((s, l) => s + l.assignments.reduce((a, x) => a + finite(hoursPerDay) * finite(x.hourlyCost), 0), 0));
 }
 
 // ── Líneas de presupuesto ─────────────────────────────────────
@@ -105,15 +122,40 @@ export function buildBudgetLines(input: CalculatorInput, adjustments: CalcAdjust
       notes: m.wastePct > 0 ? `Incluye ${m.wastePct}% de desperdicio esperado sobre ${m.quantity} ${m.unit}.` : undefined,
     });
   }
+  // Mano de obra: una línea por operario con sus horas normales y, si hacen falta, otra con sus horas extra.
   for (const l of input.labor) {
-    if (!l.role.trim() || !(l.hours > 0)) continue;
-    lines.push({
-      category: "labor",
-      description: `${l.role.trim()} (${l.workers} ${l.workers === 1 ? "operario" : "operarios"})`,
-      quantity: finite(l.hours),
-      unit: "h",
-      unitCost: finite(l.hourlyCost),
-    });
+    const role = l.role.trim();
+    if (!role) continue;
+    for (const a of l.assignments) {
+      const rate = finite(a.hourlyCost);
+      if (a.normalHours > 0) {
+        lines.push({
+          category: "labor",
+          description: `${role}: ${a.operatorName} · horas normales`,
+          quantity: round2(a.normalHours),
+          unit: "h",
+          unitCost: rate,
+          operatorId: a.operatorId,
+          laborRole: role,
+          hourType: "normal",
+        });
+      }
+      if (a.overtimeHours > 0) {
+        const multiplier = Math.max(1, finite(input.overtimeMultiplier));
+        lines.push({
+          category: "labor",
+          description: `${role}: ${a.operatorName} · horas extra (×${String(multiplier).replace(".", ",")})`,
+          quantity: round2(a.overtimeHours),
+          unit: "h",
+          unitCost: round2(rate * multiplier),
+          operatorId: a.operatorId,
+          laborRole: role,
+          hourType: "overtime",
+          overtimeMultiplier: multiplier,
+          notes: `Costo por hora ${rate} × ${multiplier}.`,
+        });
+      }
+    }
   }
   for (const m of input.machines) {
     if (!m.name.trim() || !(m.hours > 0)) continue;
@@ -189,8 +231,8 @@ export function marginAt(salesPrice: number, cost: number): number | null {
 export function productionDays(labor: CalcLabor[], hoursPerDay: number): number {
   if (!(hoursPerDay > 0)) return 0;
   const days = labor
-    .filter((l) => l.workers > 0 && l.hours > 0)
-    .map((l) => l.hours / (l.workers * hoursPerDay));
+    .filter((l) => l.assignments.length > 0 && l.hours > 0)
+    .map((l) => l.hours / (l.assignments.length * hoursPerDay));
   return days.length ? Math.ceil(Math.max(...days)) : 0;
 }
 
@@ -227,7 +269,7 @@ export interface DelayPoint {
 export interface DelayAnalysis {
   dailyCost: number;
   points: DelayPoint[];
-  /** Días de atraso que se pueden absorber sin bajar del margen objetivo (0 = cualquier atraso ya baja el margen). null si no hay datos. */
+  /** Días de atraso que se pueden absorber sin bajar de la rentabilidad objetivo (0 = cualquier atraso ya baja el margen). null si no hay datos. */
   extraDaysBeforeTarget: number | null;
   /** Días de atraso hasta margen 0 (ganancia nula). null si no se pierde plata con atraso o faltan datos. */
   extraDaysToBreakEven: number | null;

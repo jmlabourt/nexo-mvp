@@ -66,6 +66,20 @@ export interface BudgetLine {
   unitCost: number;
   total: number;
   notes?: string;
+  /** Mano de obra del Cotizador: operario asignado (su costo por hora es unitCost). */
+  operatorId?: string;
+  /** Rol de la mano de obra (Carpintero, Lustrador…). */
+  laborRole?: string;
+  /** "overtime" = horas extra: unitCost ya es costo por hora × multiplicador. */
+  hourType?: "normal" | "overtime";
+  /** Multiplicador usado en las horas extra (trazabilidad del importe). */
+  overtimeMultiplier?: number;
+}
+
+/** Costos de la empresa que solo ve Gestión (Taller nunca los recibe). */
+export interface CostSettings {
+  /** Horas extra = costo por hora × este multiplicador. */
+  overtimeMultiplier: number;
 }
 
 export interface PurchaseEntry {

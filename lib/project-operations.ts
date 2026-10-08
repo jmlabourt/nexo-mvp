@@ -92,6 +92,10 @@ export interface BudgetLineInput {
   unit: string;
   unitCost: number;
   notes?: string;
+  operatorId?: string;
+  laborRole?: string;
+  hourType?: BudgetLine["hourType"];
+  overtimeMultiplier?: number;
 }
 
 export function makeBudgetLine(input: BudgetLineInput): BudgetLine {
@@ -536,7 +540,7 @@ export function closeProject(project: Project, stock: StockState, ctx: Ctx): Pro
     );
   }
   return touch({ ...project, status: "completed", isClosed: true, closedAt: ctx.now }, ctx.now, [
-    activity("closed", ctx.actor, "Proyecto cerrado. Margen real calculado.", ctx.now),
+    activity("closed", ctx.actor, "Proyecto cerrado. Rentabilidad real calculada.", ctx.now),
   ]);
 }
 

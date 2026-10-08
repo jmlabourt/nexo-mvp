@@ -16,7 +16,16 @@ import { line, project, usage } from "./helpers";
 
 const base: CalculatorInput = {
   materials: [{ materialId: "mel-blanca-18", name: "Melamina blanca 18 mm", unit: "placa", quantity: 10, unitCost: 50_000, wastePct: 10 }],
-  labor: [{ role: "Carpintero", workers: 2, hours: 80, hourlyCost: 10_000 }],
+  labor: [
+    {
+      role: "Carpintero",
+      hours: 80,
+      assignments: [
+        { operatorId: "op-a", operatorName: "Ana", hourlyCost: 10_000, normalHours: 40, overtimeHours: 0 },
+        { operatorId: "op-b", operatorName: "Beto", hourlyCost: 10_000, normalHours: 40, overtimeHours: 0 },
+      ],
+    },
+  ],
   machines: [{ name: "Seccionadora", hours: 5, hourlyCost: 20_000 }],
   direct: { ...EMPTY_DIRECT, logistics: 100_000 },
   contingencyPct: 5,
@@ -24,6 +33,7 @@ const base: CalculatorInput = {
   installationDays: 2,
   targetMarginPct: 30,
   startDate: "2026-10-05", // lunes
+  overtimeMultiplier: 2,
 };
 
 describe("calculadora de presupuesto", () => {
@@ -38,6 +48,25 @@ describe("calculadora de presupuesto", () => {
     expect(lines.find((l) => l.category === "contingency")?.unitCost).toBeCloseTo(77_500, 2);
     const more = buildBudgetLines({ ...base, materials: [{ ...base.materials[0], quantity: 20 }] });
     expect(totalOfLines(more)).toBeGreaterThan(totalOfLines(lines));
+  });
+
+  it("mano de obra: una línea por operario, con su id, rol y horas normales; las extra van aparte con el costo recargado", () => {
+    const lines = buildBudgetLines({
+      ...base,
+      labor: [
+        {
+          role: "Carpintero",
+          hours: 50,
+          assignments: [{ operatorId: "op-a", operatorName: "Ana", hourlyCost: 10_000, normalHours: 40, overtimeHours: 10 }],
+        },
+      ],
+      overtimeMultiplier: 1.5,
+    }).filter((l) => l.category === "labor");
+    expect(lines).toHaveLength(2);
+    expect(lines[0]).toMatchObject({ operatorId: "op-a", laborRole: "Carpintero", hourType: "normal", quantity: 40, unitCost: 10_000 });
+    expect(lines[1]).toMatchObject({ operatorId: "op-a", hourType: "overtime", quantity: 10, unitCost: 15_000, overtimeMultiplier: 1.5 });
+    expect(lines[1].description).toBe("Carpintero: Ana · horas extra (×1,5)");
+    expect(totalOfLines(lines)).toBe(550_000);
   });
 
   it("conserva materialId para poder reconciliar compras y consumos", () => {
@@ -65,7 +94,7 @@ describe("calculadora de presupuesto", () => {
 
   it("duración: el rol más largo marca el plazo y se suman los días de instalación", () => {
     expect(productionDays(base.labor, 8)).toBe(5); // 80 h / (2×8)
-    expect(productionDays([...base.labor, { role: "Pintor", workers: 1, hours: 80, hourlyCost: 1 }], 8)).toBe(10);
+    expect(productionDays([...base.labor, { role: "Pintor", hours: 80, assignments: [{ operatorId: "op-c", operatorName: "Ceci", hourlyCost: 1, normalHours: 80, overtimeHours: 0 }] }], 8)).toBe(10);
     expect(productionDays([], 8)).toBe(0);
   });
 

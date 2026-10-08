@@ -2,7 +2,7 @@ import { ArrowDown, ArrowRight, ArrowUp } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatMarginPoints, formatPercent } from "@/lib/formatting";
 
-/** Diferencia de margen en puntos de margen, con color semántico. */
+/** Diferencia de margen en puntos de rentabilidad, con color semántico. */
 export function DeltaPoints({ value, className }: { value: number | null; className?: string }) {
   if (value === null) return <span className={cn("text-slate-400", className)}>—</span>;
   const r = Number(value.toFixed(1));
@@ -18,13 +18,13 @@ export function DeltaPoints({ value, className }: { value: number | null; classN
 
 /**
  * 40,0% → 30,8%  ↓ −9,2 puntos
- * Sin `to` (undefined) muestra solo el margen esperado: es el caso de un proyecto sin datos todavía.
+ * Sin `to` (undefined) muestra solo la rentabilidad esperada: es el caso de un proyecto sin datos todavía.
  */
 export function MarginShift({
   from,
   to,
   size = "md",
-  toLabel = "Proyectado",
+  toLabel = "Proyectada",
 }: {
   from: number | null;
   to?: number | null;
@@ -34,7 +34,7 @@ export function MarginShift({
   const big = size === "xl";
   const expected = (
     <div>
-      <div className="text-xs font-medium text-slate-500">Esperado</div>
+      <div className="text-xs font-medium text-slate-500">Esperada</div>
       <div className={cn("font-semibold tabular text-slate-900", big ? "text-4xl" : "text-xl")}>{formatPercent(from)}</div>
     </div>
   );

@@ -73,7 +73,7 @@ export function projectAlerts(project: Project, settings: AlertSettings, today: 
     });
   }
 
-  // 2. Caída de margen proyectado
+  // 2. Caída de rentabilidad proyectado
   if (econ.marginDeltaPp !== null && econ.marginDeltaPp < -0.05) {
     const drop = -econ.marginDeltaPp;
     const level = marginAlertLevel(drop, settings);
@@ -82,8 +82,8 @@ export function projectAlerts(project: Project, settings: AlertSettings, today: 
       id: `${project.id}:margin:${level}`,
       kind: "margin",
       level,
-      title: `El margen proyectado cayó ${formatMarginPoints(drop)}`,
-      message: `Con los costos registrados hasta hoy, el margen pasó de ${formatPercent(econ.expectedMargin)} a ${formatPercent(econ.projectedMargin)}.`,
+      title: `La rentabilidad proyectada cayó ${formatMarginPoints(drop)}`,
+      message: `Con los costos registrados hasta hoy, la rentabilidad pasó de ${formatPercent(econ.expectedMargin)} a ${formatPercent(econ.projectedMargin)}.`,
       impactAmount: econ.costOverrun,
       expectedMargin: econ.expectedMargin ?? undefined,
       projectedMargin: econ.projectedMargin ?? undefined,

@@ -2,7 +2,7 @@
 
 MVP de investigación (tesis ITBA, Gestión de Negocios y Tecnología) para PyMEs que fabrican por proyecto: muebles a medida, mobiliario comercial y corporativo, exhibidores, stands.
 
-Núcleo: `presupuesto → ejecución → captura → costo → desvío → margen`. Son decisiones de diseño todavía no validadas con fabricantes. **No afirmamos Product-Market Fit.** Un modelo de predicción es un objetivo futuro: hoy no existe; todos los cálculos son reglas explícitas.
+Núcleo: `presupuesto → ejecución → captura → costo → desvío → rentabilidad`. Son decisiones de diseño todavía no validadas con fabricantes. **No afirmamos Product-Market Fit.** Un modelo de predicción es un objetivo futuro: hoy no existe; todos los cálculos son reglas explícitas.
 
 El nombre de la app sale de una sola constante: `APP_NAME` en `lib/constants.ts`.
 
@@ -78,7 +78,7 @@ lib/
   landing-content.ts      textos del landing (sin testimonios, logos ni precios inventados)
   constants.ts            nombre de la app, labels, catálogo, umbrales, semántica de color
   supabase/               clientes (browser/server), proxy de sesión, mappers y lectura/escritura del workspace
-  formatting.ts           es-AR, ARS, dd/mm/yyyy, puntos de margen, días
+  formatting.ts           es-AR, ARS, dd/mm/yyyy, puntos de rentabilidad, días
 store/
   use-app-store.ts        Zustand: estado en memoria + cola de escrituras a Supabase
   selectors.ts            hooks derivados memoizados
@@ -121,16 +121,16 @@ Los datos se guardan en Supabase, por empresa. Solo el modo Gestión/Taller eleg
 |---|---|
 | Total línea | `quantity × unitCost` (o monto directo si no aplica cantidad) |
 | Costo presupuestado | `Σ budgetLines.total` (al aprobar se congela una copia: el **presupuesto base**) |
-| Ganancia / margen esperado | `salesPrice − costo presupuestado` · `/ salesPrice × 100` (sin precio de venta → “—”, nunca un negativo) |
+| Ganancia / rentabilidad esperada | `salesPrice − costo presupuestado` · `/ salesPrice × 100` (sin precio de venta → “—”, nunca un negativo) |
 | Costo material real | `Σ (consumido + desperdicio) × unitCost` de **MaterialUsageEntry** |
 | Costo no material | `Σ actualEntries.amount` (horas = `hours × hourlyCost`) |
 | Costo real hasta hoy | material + no material |
 | Desvío por categoría | `real − presupuestado`; `% = / presupuestado` (presupuestado 0 → sin %). Siempre las siete categorías: Materiales, Mano de obra, Máquinas, Tercerizaciones, Logística, Instalación, Imprevistos |
 | **Costo final proyectado** | `Σ_categoría max(presupuestado, real)` |
 | Diferencia y “¿Por qué?” | `Σ_categoría (proyectado − presupuestado)`: el “¿Por qué?” lista cada categoría con desvío ≠ 0 y su total es exactamente la Diferencia |
-| **Margen proyectado** | `(venta − costo final proyectado) / venta` |
-| **Margen real final** | solo en `completed`: `(venta − costo real) / venta` |
-| Delta de margen | `proyectado − esperado`, en **puntos de margen** |
+| **Rentabilidad proyectada** | `(venta − costo final proyectado) / venta` |
+| **Rentabilidad real final** | solo en `completed`: `(venta − costo real) / venta` |
+| Delta de rentabilidad | `proyectada − esperada`, en **puntos de rentabilidad** |
 | Márgenes agregados | ponderados por venta: `(Σventa − Σcosto) / Σventa` (no es un promedio simple) |
 
 ## Materiales: compra ≠ consumo ≠ desperdicio ≠ sobrante
@@ -143,16 +143,16 @@ Los datos se guardan en Supabase, por empresa. Solo el modo Gestión/Taller eleg
 
 Ejemplo (spec §10, reproducido en P-1042): compradas 12 placas × $ 50.000 = $ 600.000, consumidas 9, desperdicio 1, sobrante 2. El **costo imputable es $ 500.000**.
 
-## Margen proyectado (por qué no “margen real” a mitad de proyecto)
+## Rentabilidad proyectada (por qué no “rentabilidad real” a mitad de proyecto)
 
-Si a mitad de camino se calcula `venta − costo registrado`, el margen sale artificialmente alto, porque falta ejecutar parte del presupuesto. Por eso, en cada categoría se asume que lo que queda del costo presupuestado se va a gastar, y cuando el real ya lo superó se toma el real (cálculo por reglas, no una predicción). El “margen real” solo existe cuando el proyecto está **finalizado**.
+Si a mitad de camino se calcula `venta − costo registrado`, la rentabilidad sale artificialmente alta, porque falta ejecutar parte del presupuesto. Por eso, en cada categoría se asume que lo que queda del costo presupuestado se va a gastar, y cuando el real ya lo superó se toma el real (cálculo por reglas, no una predicción). El “margen real” solo existe cuando el proyecto está **finalizado**.
 
 ## Alertas (umbrales configurables en /settings)
 
 | Alerta | Condición |
 |---|---|
 | Categoría | real > presupuestado: ≤10% info · 10–20% atención · >20% crítica |
-| Margen | caída <5 puntos de margen info · 5–10 atención · >10 crítica |
+| Rentabilidad | caída <5 puntos de rentabilidad info · 5–10 atención · >10 crítica |
 | Sin registros | en Producción, 7 días sin consumos ni costos |
 | Entrega | vencida (crítica) · ≤5 días para la entrega y todavía antes de Producción · mucho plazo transcurrido sin llegar a Producción |
 | Reconciliación | lo comprado no coincide con lo explicado (info en Producción, atención en Instalación) |

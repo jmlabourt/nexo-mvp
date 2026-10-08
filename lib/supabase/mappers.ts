@@ -94,6 +94,10 @@ const childToRow: { [K in ChildKey]: (org: string, projectId: string, item: Proj
     unit_cost: l.unitCost,
     total: l.total,
     notes: l.notes ?? null,
+    operator_id: l.operatorId ?? null,
+    labor_role: l.laborRole ?? null,
+    hour_type: l.hourType ?? null,
+    overtime_multiplier: l.overtimeMultiplier ?? null,
   }),
   purchaseEntries: (org, projectId, e: PurchaseEntry, position) => ({
     organization_id: org,
@@ -219,6 +223,10 @@ function budgetLineFromRow(r: Row): BudgetLine {
     unitCost: num(r.unit_cost),
     total: num(r.total),
     notes: opt(r.notes as string | null),
+    operatorId: opt(r.operator_id as string | null | undefined),
+    laborRole: opt(r.labor_role as string | null | undefined),
+    hourType: r.hour_type === "normal" || r.hour_type === "overtime" ? r.hour_type : undefined,
+    overtimeMultiplier: r.overtime_multiplier === null || r.overtime_multiplier === undefined ? undefined : num(r.overtime_multiplier),
   };
 }
 
