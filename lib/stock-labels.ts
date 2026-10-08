@@ -4,7 +4,7 @@ import { formatQty } from "./formatting";
 
 export const MOVEMENT_LABELS: Record<MovementKind, string> = {
   purchase_in: "Compra",
-  opening: "Stock cargado",
+  opening: "Inventario inicial",
   assign: "Asignado desde stock",
   release: "Devuelto al stock",
   transfer: "Transferencia",
@@ -35,7 +35,7 @@ export function movementSentence(
         ? `Comprado para ${pid(m.to)}: ${q}${lot?.supplier ? ` a ${lot.supplier}` : ""}.`
         : `Ingresó al stock por compra: ${q}${lot?.supplier ? ` a ${lot.supplier}` : ""}.`;
     case "opening":
-      return `Stock cargado: ${q}.`;
+      return `Inventario inicial: ${q}.`;
     case "assign":
       return `${q} asignados del stock a ${pid(m.to)}.`;
     case "release":

@@ -59,7 +59,7 @@ function LotTrailDialog({ lotId, onClose }: { lotId: string | null; onClose: () 
 
 function lotLabel(l: StockLot) {
   const d = formatDims(l.dims);
-  return `${l.kind === "leftover" ? "Sobrante" : l.kind === "opening" ? "Stock cargado" : "Compra"}${d ? ` · ${d}` : ""}`;
+  return `${l.kind === "leftover" ? "Sobrante" : l.kind === "opening" ? "Inventario inicial" : "Compra"}${d ? ` · ${d}` : ""}`;
 }
 
 export function StockPage({ material, lot, tab }: { material?: string; lot?: string; tab?: string }) {
@@ -97,9 +97,10 @@ export function StockPage({ material, lot, tab }: { material?: string; lot?: str
   return (
     <div>
       <PageHeader
+        back={material || lot || tab ? "/stock" : undefined}
         title="Stock"
         subtitle="Todo el material físico: libre en el depósito y asignado a proyectos. Cada lote conserva su costo original."
-        actions={isManager ? <Button onClick={() => setAdd(true)}><Plus /> Cargar stock</Button> : undefined}
+        actions={isManager ? <Button onClick={() => setAdd(true)}><Plus /> Registrar compra</Button> : undefined}
       />
       <div className="mb-5 grid grid-cols-2 gap-3 md:grid-cols-4">
         <Card><CardContent className="p-4"><div className="text-xs text-slate-500">Valor total en stock</div><div className="text-lg font-semibold tabular">{formatCurrency(total)}</div></CardContent></Card>
@@ -121,7 +122,7 @@ export function StockPage({ material, lot, tab }: { material?: string; lot?: str
             <Input id="stock-q" placeholder="Buscar material…" value={query} onChange={(e) => setQuery(e.target.value)} />
           </div>
           {filtered.length === 0 ? (
-            <EmptyState icon={Boxes} title="No hay stock para mostrar" description="Cargá material o comprá para un proyecto." />
+            <EmptyState icon={Boxes} title="No hay stock para mostrar" description="Registrá una compra para el depósito o desde la etapa Compras de un proyecto." />
           ) : (
             <Card>
               <Table>
@@ -130,7 +131,7 @@ export function StockPage({ material, lot, tab }: { material?: string; lot?: str
                     <TH>Material</TH>
                     <TH className="text-right">Físico</TH>
                     <TH className="text-right">Disponible</TH>
-                    <TH className="text-right">Asignado</TH>
+                    <TH className="text-right">Asignado a proyectos</TH>
                     <TH className="text-right">Costo unit.</TH>
                     <TH className="text-right">Valor</TH>
                     <TH className="text-right">Sobrantes</TH>

@@ -1,10 +1,11 @@
 "use client";
 import { useMemo, useState } from "react";
-import { HardHat, Plus } from "lucide-react";
+import { HardHat, Plus, Trash2, UserCheck, UserMinus } from "lucide-react";
 import type { Operator } from "@/types";
 import { parseDecimal } from "@/lib/schemas";
-import { formatCurrency, formatNumber } from "@/lib/formatting";
-import { useAppStore } from "@/store/use-app-store";
+import { formatCurrency, formatDate, formatNumber } from "@/lib/formatting";
+import { activeOperators, operatorHasRecords, visibleOperators } from "@/lib/operators";
+import { useAppStore, type Result } from "@/store/use-app-store";
 import { useIdentity } from "@/store/selectors";
 import { PageHeader } from "@/components/shared/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
@@ -16,20 +17,32 @@ import { Input } from "@/components/ui/input";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
-function OperatorDialog({ operator, open, onOpenChange }: { operator: Operator | null; open: boolean; onOpenChange: (o: boolean) => void }) {
+type Confirm = "deactivate" | "delete" | null;
+
+function OperatorDialog({ operator, hasRecords, open, onOpenChange }: { operator: Operator | null; hasRecords: boolean; open: boolean; onOpenChange: (o: boolean) => void }) {
   const createOperator = useAppStore((s) => s.createOperator);
   const updateOperator = useAppStore((s) => s.updateOperator);
+  const deactivateOperator = useAppStore((s) => s.deactivateOperator);
+  const reactivateOperator = useAppStore((s) => s.reactivateOperator);
+  const deleteOperator = useAppStore((s) => s.deleteOperator);
   const [name, setName] = useState(operator?.name ?? "");
   const [role, setRole] = useState(operator?.role ?? "");
   const [rate, setRate] = useState(operator ? String(operator.hourlyCost) : "");
   const [email, setEmail] = useState(operator?.email ?? "");
-  const [active, setActive] = useState(operator?.active ?? true);
+  const [confirm, setConfirm] = useState<Confirm>(null);
   const [error, setError] = useState("");
 
   const save = (e: React.FormEvent) => {
     e.preventDefault();
-    const input = { name, role, hourlyCost: parseDecimal(rate), active, email: email.trim() || undefined, userId: operator?.userId };
+    const input = { name, role, hourlyCost: parseDecimal(rate), email: email.trim() || undefined, userId: operator?.userId };
     const r = operator ? updateOperator(operator.id, input) : createOperator(input);
+    if (!r.ok) return setError(r.error);
+    onOpenChange(false);
+  };
+
+  const act = (fn: (id: string) => Result) => {
+    if (!operator) return;
+    const r = fn(operator.id);
     if (!r.ok) return setError(r.error);
     onOpenChange(false);
   };
@@ -50,9 +63,62 @@ function OperatorDialog({ operator, open, onOpenChange }: { operator: Operator |
           <Field label="Email de acceso (opcional)" htmlFor="op-email" hint="Si el operario entra con este email, ve sólo Taller y sus proyectos asignados.">
             <Input id="op-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
           </Field>
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" className="size-4" checked={active} onChange={(e) => setActive(e.target.checked)} /> Activo
-          </label>
+          {operator && (
+            <section aria-label="Alta y baja" className="space-y-3 rounded-lg border border-slate-200 p-3">
+              {operator.active ? (
+                confirm === "deactivate" ? (
+                  <div className="space-y-2 text-sm">
+                    <p className="text-slate-800">
+                      ¿Dar de baja a <strong>{operator.name}</strong>? Deja de aparecer en los equipos de los proyectos y en Taller. Sus horas y costos
+                      registrados se conservan. Podés reactivarlo cuando quieras.
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      <Button type="button" variant="outline" size="sm" onClick={() => setConfirm(null)}>No, volver</Button>
+                      <Button type="button" variant="destructive" size="sm" onClick={() => act(deactivateOperator)}>Sí, dar de baja</Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                    <span className="text-slate-600">Si ya no trabaja con ustedes, dalo de baja. No se borra nada.</span>
+                    <Button type="button" variant="outline" size="sm" onClick={() => setConfirm("deactivate")}>
+                      <UserMinus /> Dar de baja
+                    </Button>
+                  </div>
+                )
+              ) : (
+                <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                  <span className="text-slate-600">
+                    Dado de baja{operator.deactivatedAt ? ` el ${formatDate(operator.deactivatedAt)}` : ""}.
+                  </span>
+                  <Button type="button" variant="outline" size="sm" onClick={() => act(reactivateOperator)}>
+                    <UserCheck /> Reactivar
+                  </Button>
+                </div>
+              )}
+              <div className="border-t border-slate-100 pt-3 text-sm">
+                {hasRecords ? (
+                  <p className="text-slate-500">Tiene horas registradas: no se puede eliminar definitivamente, solo dar de baja.</p>
+                ) : confirm === "delete" ? (
+                  <div className="space-y-2">
+                    <p className="text-slate-800">
+                      ¿Eliminar definitivamente a <strong>{operator.name}</strong>? No tiene horas registradas. Esto no se puede deshacer.
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      <Button type="button" variant="outline" size="sm" onClick={() => setConfirm(null)}>No, volver</Button>
+                      <Button type="button" variant="destructive" size="sm" onClick={() => act(deleteOperator)}>Sí, eliminar</Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-slate-500">No tiene horas registradas.</span>
+                    <Button type="button" variant="ghost" size="sm" className="text-red-700" onClick={() => setConfirm("delete")}>
+                      <Trash2 /> Eliminar definitivamente
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </section>
+          )}
           {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
@@ -67,8 +133,12 @@ function OperatorDialog({ operator, open, onOpenChange }: { operator: Operator |
 export function OperatorsPage({ op }: { op?: string }) {
   const operators = useAppStore((s) => s.operators);
   const projects = useAppStore((s) => s.projects);
+  const reactivateOperator = useAppStore((s) => s.reactivateOperator);
   const { isManager } = useIdentity();
   const [editing, setEditing] = useState<Operator | null | "new">(op ? (operators.find((o) => o.id === op) ?? null) : null);
+  const [showDeactivated, setShowDeactivated] = useState(false);
+  const shown = visibleOperators(operators, showDeactivated);
+  const deactivatedCount = operators.length - activeOperators(operators).length;
 
   const stats = useMemo(() => {
     const m = new Map<string, { hours: number; cost: number; projects: number }>();
@@ -85,12 +155,21 @@ export function OperatorsPage({ op }: { op?: string }) {
   return (
     <div>
       <PageHeader
+        back
         title="Operarios"
         subtitle="Quién trabaja, a qué costo por hora y en qué proyectos. Las horas se cargan siempre a nombre de un operario."
         actions={isManager ? <Button onClick={() => setEditing("new")}><Plus /> Nuevo operario</Button> : undefined}
       />
+      {operators.length > 0 && (
+        <label className="mb-3 flex items-center gap-2 text-sm text-slate-700">
+          <input type="checkbox" className="size-4" checked={showDeactivated} onChange={(e) => setShowDeactivated(e.target.checked)} />
+          Mostrar dados de baja <span className="text-slate-400 tabular">({deactivatedCount})</span>
+        </label>
+      )}
       {operators.length === 0 ? (
         <EmptyState icon={HardHat} title="Todavía no hay operarios" description="Cargá a las personas que registran horas en el taller." />
+      ) : shown.length === 0 ? (
+        <EmptyState icon={HardHat} title="No hay operarios activos" description="Marcá “Mostrar dados de baja” para ver a los que están de baja y reactivarlos." />
       ) : (
         <Card>
           <Table>
@@ -102,12 +181,12 @@ export function OperatorsPage({ op }: { op?: string }) {
                 <TH className="text-right">Proyectos activos</TH>
                 <TH className="text-right">Horas cargadas</TH>
                 <TH>Acceso</TH>
-                <TH>Estado</TH>
+                <TH>Situación</TH>
                 <TH><span className="sr-only">Acciones</span></TH>
               </TR>
             </THead>
             <TBody>
-              {operators.map((o) => {
+              {shown.map((o) => {
                 const s = stats.get(o.id);
                 return (
                   <TR key={o.id} className={o.id === op ? "bg-amber-50" : undefined}>
@@ -117,8 +196,23 @@ export function OperatorsPage({ op }: { op?: string }) {
                     <TD className="text-right tabular">{s?.projects ?? 0}</TD>
                     <TD className="text-right tabular">{formatNumber(s?.hours ?? 0)} h · {formatCurrency(s?.cost ?? 0)}</TD>
                     <TD className="text-xs text-slate-600">{o.userId ? "Vinculado" : o.email ? `Invitado: ${o.email}` : "Sin acceso"}</TD>
-                    <TD><Badge tone={o.active ? "green" : "gray"}>{o.active ? "Activo" : "Inactivo"}</Badge></TD>
-                    <TD>{isManager && <Button size="sm" variant="outline" onClick={() => setEditing(o)}>Editar</Button>}</TD>
+                    <TD>
+                      <Badge tone={o.active ? "green" : "gray"}>
+                        {o.active ? "Activo" : `Dado de baja${o.deactivatedAt ? ` el ${formatDate(o.deactivatedAt)}` : ""}`}
+                      </Badge>
+                    </TD>
+                    <TD>
+                      {isManager && (
+                        <div className="flex justify-end gap-2">
+                          {!o.active && (
+                            <Button size="sm" variant="outline" onClick={() => reactivateOperator(o.id)}>
+                              <UserCheck /> Reactivar
+                            </Button>
+                          )}
+                          <Button size="sm" variant="outline" onClick={() => setEditing(o)}>Editar</Button>
+                        </div>
+                      )}
+                    </TD>
                   </TR>
                 );
               })}
@@ -130,6 +224,7 @@ export function OperatorsPage({ op }: { op?: string }) {
         <OperatorDialog
           key={editing === "new" ? "new" : editing.id}
           operator={editing === "new" ? null : editing}
+          hasRecords={editing !== "new" && operatorHasRecords(projects, editing.id)}
           open
           onOpenChange={(o) => { if (!o) setEditing(null); }}
         />

@@ -2,6 +2,7 @@
 import { useState } from "react";
 import type { Project } from "@/types";
 import { formatCurrency } from "@/lib/formatting";
+import { activeOperators } from "@/lib/operators";
 import { useAppStore } from "@/store/use-app-store";
 import { useIdentity } from "@/store/selectors";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -51,7 +52,7 @@ export function TeamCard({ project }: { project: Project }) {
               const h = hours.get(o.id);
               return (
                 <li key={o.id} className="flex items-center justify-between gap-3 py-2 text-sm">
-                  <span><span className="font-medium text-slate-900">{o.name}</span> <span className="text-slate-500">· {o.role}{o.active ? "" : " (inactivo)"}</span></span>
+                  <span><span className="font-medium text-slate-900">{o.name}</span> <span className="text-slate-500">· {o.role}{o.active ? "" : " (dado de baja)"}</span></span>
                   <span className="tabular text-slate-600">{h ? `${h.hours} h · ${formatCurrency(h.cost)}` : "Sin horas"}</span>
                 </li>
               );
@@ -63,10 +64,10 @@ export function TeamCard({ project }: { project: Project }) {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Equipo de {project.code}</DialogTitle>
-            <DialogDescription>Elegí quiénes trabajan en este proyecto.</DialogDescription>
+            <DialogDescription>Elegí quiénes trabajan en este proyecto. Los operarios dados de baja no aparecen y, al guardar, dejan de estar asignados.</DialogDescription>
           </DialogHeader>
           <ul className="space-y-1">
-            {operators.filter((o) => o.active || sel.includes(o.id)).map((o) => (
+            {activeOperators(operators).map((o) => (
               <li key={o.id}>
                 <label className="flex cursor-pointer items-center gap-3 rounded-md px-2 py-2 text-sm hover:bg-slate-50">
                   <input
@@ -80,7 +81,7 @@ export function TeamCard({ project }: { project: Project }) {
                 </label>
               </li>
             ))}
-            {operators.length === 0 && <li className="text-sm text-slate-500">Primero cargá operarios en la sección Operarios.</li>}
+            {activeOperators(operators).length === 0 && <li className="text-sm text-slate-500">Primero cargá operarios activos en la sección Operarios.</li>}
           </ul>
           {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
           <DialogFooter>

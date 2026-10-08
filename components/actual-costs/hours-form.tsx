@@ -32,7 +32,7 @@ export function HoursForm({ project, onDone, variant }: { project: Project; onDo
         .sort((a, b) => Number(project.assignedOperatorIds.includes(b.id)) - Number(project.assignedOperatorIds.includes(a.id)) || a.name.localeCompare(b.name, "es")),
     [operators, project.assignedOperatorIds],
   );
-  const [pickedOperator, setPickedOperator] = useState(project.assignedOperatorIds[0] ?? "");
+  const [pickedOperator, setPickedOperator] = useState(choices.find((o) => project.assignedOperatorIds.includes(o.id))?.id ?? "");
   const [date, setDate] = useState(todayISO());
   const [hours, setHours] = useState("");
   const [workType, setWorkType] = useState("");

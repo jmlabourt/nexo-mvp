@@ -1,6 +1,6 @@
 "use client";
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { formatPercent, formatPp } from "@/lib/formatting";
+import { formatPercent, formatMarginPoints } from "@/lib/formatting";
 
 export interface MarginDatum {
   code: string;
@@ -31,7 +31,7 @@ function ChartTooltip({ active, payload }: { active?: boolean; payload?: Array<{
       </div>
       <div className="mt-1 flex justify-between gap-4 border-t border-slate-100 pt-1 font-medium text-slate-800">
         <span>Diferencia</span>
-        <span className="tabular">{formatPp(d.projected - d.expected)}</span>
+        <span className="tabular">{formatMarginPoints(d.projected - d.expected, { signed: true })}</span>
       </div>
     </div>
   );

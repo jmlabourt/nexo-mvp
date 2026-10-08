@@ -21,7 +21,7 @@ export interface DraftLine {
 }
 
 let k = 0;
-export function newDraftLine(category: BudgetCategory = "materials"): DraftLine {
+function newDraftLine(category: BudgetCategory = "materials"): DraftLine {
   k += 1;
   return { key: `d${Date.now()}${k}`, category, description: "", quantity: "", unit: category === "materials" ? "placa" : category === "labor" ? "h" : "global", unitCost: "" };
 }
@@ -29,19 +29,6 @@ export function newDraftLine(category: BudgetCategory = "materials"): DraftLine 
 export function draftFromLine(l: BudgetLine): DraftLine {
   return {
     key: l.id,
-    category: l.category,
-    description: l.description,
-    quantity: l.quantity === null ? "" : String(l.quantity),
-    unit: l.unit,
-    unitCost: String(l.unitCost),
-  };
-}
-
-/** Convierte una línea ya calculada (p. ej. de la calculadora) en fila editable. */
-export function draftFromInput(l: BudgetLineInput): DraftLine {
-  k += 1;
-  return {
-    key: `d${Date.now()}${k}`,
     category: l.category,
     description: l.description,
     quantity: l.quantity === null ? "" : String(l.quantity),
@@ -67,7 +54,7 @@ export function draftToInput(d: DraftLine): { input?: BudgetLineInput; error?: s
   return { input: { ...candidate, category: d.category } };
 }
 
-export function draftTotal(d: DraftLine): number {
+function draftTotal(d: DraftLine): number {
   const unitCost = num(d.unitCost);
   if (unitCost === null || Number.isNaN(unitCost)) return 0;
   const q = num(d.quantity);

@@ -2,7 +2,7 @@
 import type { Project } from "@/types";
 import { STATUS_LABELS } from "@/lib/constants";
 import { projectSchedule } from "@/lib/project-rules";
-import { formatDate, todayISO } from "@/lib/formatting";
+import { formatDate, formatDays, todayISO } from "@/lib/formatting";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ProgressBar } from "@/components/ui/progress";
 
@@ -14,10 +14,10 @@ export function ScheduleCard({ project }: { project: Project }) {
     : s.notStarted
       ? `Empieza el ${formatDate(project.startDate)}`
       : s.overdue
-        ? `Vencido hace ${-s.remainingDays} días`
+        ? `Vencido hace ${formatDays(-s.remainingDays)}`
         : s.remainingDays === 0
           ? "Se entrega hoy"
-          : `Faltan ${s.remainingDays} días`;
+          : `Faltan ${formatDays(s.remainingDays)}`;
   return (
     <Card>
       <CardHeader>

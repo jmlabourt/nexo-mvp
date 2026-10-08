@@ -7,11 +7,11 @@ import type { Operator, Project } from "@/types";
 import { DomainError } from "./project-operations";
 import { createId } from "./activity";
 
+/** Datos que se editan del operario. El alta/baja NO va acá: se hace con deactivateOperator / reactivateOperator. */
 export interface OperatorInput {
   name: string;
   role: string;
   hourlyCost: number;
-  active?: boolean;
   email?: string;
   userId?: string;
 }
@@ -29,7 +29,7 @@ export function createOperator(input: OperatorInput, now: string): Operator {
     name: input.name.trim(),
     role: input.role.trim(),
     hourlyCost: input.hourlyCost,
-    active: input.active ?? true,
+    active: true,
     email: input.email?.trim().toLowerCase() || undefined,
     userId: input.userId,
     createdAt: now,
@@ -46,12 +46,77 @@ export function updateOperator(operators: Operator[], id: string, input: Operato
           name: input.name.trim(),
           role: input.role.trim(),
           hourlyCost: input.hourlyCost,
-          active: input.active ?? o.active,
           email: input.email?.trim().toLowerCase() || undefined,
           userId: input.userId ?? o.userId,
         }
       : o,
   );
+}
+
+// ── Alta y baja ───────────────────────────────────────────────
+
+/** Operarios en actividad: los únicos que aparecen en selectores, equipo y Taller. */
+export function activeOperators(operators: Operator[]): Operator[] {
+  return operators.filter((o) => o.active);
+}
+
+/** Lo que muestra la lista de Operarios: por defecto solo activos; con el filtro, también los dados de baja. */
+export function visibleOperators(operators: Operator[], showDeactivated: boolean): Operator[] {
+  return showDeactivated ? operators : activeOperators(operators);
+}
+
+/** Dar de baja (baja lógica): active = false + fecha de baja. El historial de horas y costos no se toca. */
+export function deactivateOperator(operators: Operator[], id: string, now: string): Operator[] {
+  const op = operators.find((o) => o.id === id);
+  if (!op) throw new DomainError("Operario no encontrado.");
+  if (!op.active) throw new DomainError(`${op.name} ya está dado de baja.`);
+  return operators.map((o) => (o.id === id ? { ...o, active: false, deactivatedAt: now } : o));
+}
+
+export function reactivateOperator(operators: Operator[], id: string): Operator[] {
+  const op = operators.find((o) => o.id === id);
+  if (!op) throw new DomainError("Operario no encontrado.");
+  if (op.active) throw new DomainError(`${op.name} ya está activo.`);
+  return operators.map((o) => (o.id === id ? { ...o, active: true, deactivatedAt: undefined } : o));
+}
+
+/** ¿Tiene horas registradas en algún proyecto? Si tiene, no se puede eliminar: solo dar de baja. */
+export function operatorHasRecords(projects: Pick<Project, "actualEntries">[], id: string): boolean {
+  return projects.some((p) => p.actualEntries.some((e) => e.operatorId === id));
+}
+
+/**
+ * Eliminar definitivamente. Solo si no tiene ningún registro de horas.
+ * Devuelve los operarios sin él y los proyectos sin esa asignación.
+ */
+export function deleteOperator<P extends Pick<Project, "actualEntries" | "assignedOperatorIds">>(
+  operators: Operator[],
+  projects: P[],
+  id: string,
+): { operators: Operator[]; projects: P[] } {
+  const op = operators.find((o) => o.id === id);
+  if (!op) throw new DomainError("Operario no encontrado.");
+  if (operatorHasRecords(projects, id)) {
+    throw new DomainError(`${op.name} tiene horas registradas: no se puede eliminar, solo dar de baja.`);
+  }
+  return {
+    operators: operators.filter((o) => o.id !== id),
+    projects: projects.map((p) =>
+      p.assignedOperatorIds.includes(id) ? { ...p, assignedOperatorIds: p.assignedOperatorIds.filter((x) => x !== id) } : p,
+    ),
+  };
+}
+
+/** Cómo entra a Taller un usuario operario: vinculado y activo, dado de baja o sin vincular. */
+export function operatorAccessForUser(
+  operators: Operator[],
+  userId: string | null,
+  email: string,
+): "active" | "deactivated" | "unlinked" {
+  const mail = email.trim().toLowerCase();
+  const matches = operators.filter((o) => (userId && o.userId === userId) || (mail && o.email === mail));
+  if (matches.some((o) => o.active)) return "active";
+  return matches.length > 0 ? "deactivated" : "unlinked";
 }
 
 /** Operario vinculado a la sesión: por usuario o, si todavía no entró, por email. */
@@ -61,7 +126,9 @@ export function operatorForUser(operators: Operator[], userId: string | null, em
 }
 
 /** Proyectos que un operario puede ver en Taller: asignados y en una etapa donde se trabaja. */
-export function projectsForOperator(projects: Project[], operatorId: string): Project[] {
+export function projectsForOperator(projects: Project[], operatorId: string, operators?: Operator[]): Project[] {
+  // Un operario dado de baja no ve proyectos.
+  if (operators && !operators.some((o) => o.id === operatorId && o.active)) return [];
   return projects.filter(
     (p) =>
       !p.isClosed &&

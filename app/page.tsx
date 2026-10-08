@@ -1,3 +1,4 @@
+import { APP_NAME } from "@/lib/constants";
 import type { Metadata } from "next";
 import { Navbar } from "@/components/landing/navbar";
 import { Hero } from "@/components/landing/hero";
@@ -13,9 +14,9 @@ import { FinalCta } from "@/components/landing/final-cta";
 import { Footer } from "@/components/landing/footer";
 
 export const metadata: Metadata = {
-  title: "NEXO · Sabé si cada proyecto sigue siendo rentable",
+  title: `${APP_NAME} · Sabé si cada proyecto sigue siendo rentable`,
   description:
-    "NEXO conecta lo que presupuestaste con lo que realmente ocurre en el taller, para que PyMEs que fabrican por proyecto vean el margen mientras se fabrica.",
+    `${APP_NAME} conecta lo que presupuestaste con lo que realmente ocurre en el taller, para que PyMEs que fabrican por proyecto vean el margen mientras se fabrica.`,
 };
 
 export default function LandingPage() {

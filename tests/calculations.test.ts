@@ -71,7 +71,7 @@ describe("margen proyectado", () => {
     expect(mainDeviation(projectEconomics(p).categories)?.category).toBe("materials");
   });
   it("costo no presupuestado entra al proyectado", () => {
-    const p = project({ budgetLines: lines, actualEntries: [{ id: "a", projectId: "p", date: "2026-01-02", type: "other", category: "other", description: "x", amount: 100, createdBy: "t", createdAt: "x" }] });
+    const p = project({ budgetLines: lines, actualEntries: [{ id: "a", projectId: "p", date: "2026-01-02", type: "other", category: "machines", description: "x", amount: 100, createdBy: "t", createdAt: "x" }] });
     expect(projectedFinalCost(p)).toBe(800);
   });
 });

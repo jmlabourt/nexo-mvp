@@ -17,6 +17,23 @@ export function activity(kind: ActivityKind, actor: string, message: string, at:
   return { id: id ?? createId("act"), kind, actor, message, at };
 }
 
+/**
+ * Línea de tiempo de la actividad: de la más reciente a la más vieja, comparando el momento real
+ * (no el texto) y sin fechas posteriores a `nowISO` (un evento futuro se muestra como ocurrido ahora).
+ * Ante empates conserva el orden en que se registraron (el último cargado, primero).
+ */
+export function activityTimeline(events: readonly ActivityEvent[], nowISO: string): ActivityEvent[] {
+  const now = new Date(nowISO).getTime();
+  return events
+    .map((e, i) => {
+      const t = new Date(e.at).getTime();
+      const safe = Number.isFinite(t) ? Math.min(t, now) : now;
+      return { e: safe === t ? e : { ...e, at: new Date(safe).toISOString() }, t: safe, i };
+    })
+    .sort((a, b) => b.t - a.t || b.i - a.i)
+    .map((x) => x.e);
+}
+
 export function usageMessage(u: MaterialUsageEntry): string {
   const parts = [`${u.createdBy} registró ${formatQty(u.quantityConsumed, u.unit)} de ${u.materialName}`];
   if (u.wasteQuantity > 0) parts.push(`${formatNumber(u.wasteQuantity)} de desperdicio`);

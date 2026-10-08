@@ -8,10 +8,9 @@ import { useProjectViews } from "@/store/selectors";
 import { PageHeader } from "@/components/shared/page-header";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
-import { DeltaPp } from "@/components/shared/margin-shift";
+import { DeltaPoints } from "@/components/shared/margin-shift";
 import { InsightList } from "@/components/shared/insight-list";
 import { EmptyState } from "@/components/shared/empty-state";
-import { HealthBadge } from "@/components/shared/badges";
 
 export function HistoryPage() {
   const views = useProjectViews();
@@ -48,16 +47,16 @@ export function HistoryPage() {
                   <TH>Proyecto</TH>
                   <TH>Tipo</TH>
                   <TH>Cierre</TH>
-                  <TH className="text-right">Venta</TH>
+                  <TH className="text-right">Precio de venta</TH>
+                  <TH className="text-right">Costo real final</TH>
                   <TH className="text-right">Margen esperado</TH>
-                  <TH className="text-right">Margen real</TH>
-                  <TH className="text-right">Desvío</TH>
+                  <TH className="text-right">Margen real final</TH>
+                  <TH className="text-right">Desvío (puntos de margen)</TH>
                   <TH>Principal causa</TH>
-                  <TH>Resultado</TH>
                 </TR>
               </THead>
               <TBody>
-                {completed.map(({ project: p, econ, health }) => (
+                {completed.map(({ project: p, econ }) => (
                   <TR key={p.id} className="hover:bg-slate-50">
                     <TD className="min-w-56">
                       <Link href={`/projects/${p.id}`} className="font-medium text-slate-900 hover:text-blue-700">{p.name}</Link>
@@ -65,12 +64,12 @@ export function HistoryPage() {
                     </TD>
                     <TD className="whitespace-nowrap">{p.projectType}</TD>
                     <TD className="tabular">{formatDate(p.closedAt)}</TD>
-                    <TD className="text-right tabular whitespace-nowrap">{formatCurrency(p.salesPrice)}</TD>
+                    <TD className="text-right tabular whitespace-nowrap">{econ.hasSalesPrice ? formatCurrency(p.salesPrice) : "—"}</TD>
+                    <TD className="text-right tabular whitespace-nowrap">{formatCurrency(econ.finalActualCost ?? 0)}</TD>
                     <TD className="text-right tabular">{formatPercent(econ.expectedMargin)}</TD>
                     <TD className="text-right font-medium tabular">{formatPercent(econ.finalMargin)}</TD>
-                    <TD className="text-right whitespace-nowrap"><DeltaPp value={econ.marginDeltaPp} /></TD>
+                    <TD className="text-right whitespace-nowrap"><DeltaPoints value={econ.marginDeltaPp} /></TD>
                     <TD>{mainCauseLabel(p)}</TD>
-                    <TD><HealthBadge health={health} /></TD>
                   </TR>
                 ))}
               </TBody>

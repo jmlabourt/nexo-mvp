@@ -84,8 +84,8 @@ export function GlobalSearch() {
                     {SEARCH_KIND_LABELS[r.kind]}
                   </span>
                   <span className="min-w-0">
-                    <span className="block truncate text-sm font-medium text-slate-900">{r.title}</span>
-                    <span className="block truncate text-xs text-slate-500">{r.subtitle}</span>
+                    <span className="block break-words text-sm font-medium text-slate-900">{r.title}</span>
+                    <span className="block break-words text-xs text-slate-500">{r.subtitle}</span>
                   </span>
                 </button>
               </li>

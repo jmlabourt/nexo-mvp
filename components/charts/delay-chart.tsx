@@ -1,14 +1,14 @@
 "use client";
 import { CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import type { DelayPoint } from "@/lib/budget-calculator";
-import { formatPercent } from "@/lib/formatting";
+import { formatPercent, formatWorkingDays } from "@/lib/formatting";
 
 function Tip({ active, payload }: { active?: boolean; payload?: Array<{ payload: DelayPoint }> }) {
   if (!active || !payload?.length) return null;
   const d = payload[0].payload;
   return (
     <div className="rounded-md border border-slate-200 bg-white px-3 py-2 text-xs shadow-md">
-      <div className="font-medium text-slate-900">{d.extraDays === 0 ? "En fecha" : `+${d.extraDays} días laborales`}</div>
+      <div className="font-medium text-slate-900">{d.extraDays === 0 ? "En fecha" : `+${formatWorkingDays(d.extraDays)}`}</div>
       <div className="text-slate-600">Margen: <span className="tabular">{formatPercent(d.margin)}</span></div>
     </div>
   );

@@ -1,14 +1,13 @@
 "use client";
 import { useMemo, useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Check } from "lucide-react";
 import { CATEGORY_LABELS, CATEGORY_ORDER, PROJECT_TYPES } from "@/lib/constants";
 import { projectInfoSchema, type ProjectInfoValues } from "@/lib/schemas";
-import { formatCurrency, formatDate, formatPercent, todayISO, toISODate } from "@/lib/formatting";
-import { marginPercent } from "@/lib/calculations";
+import { formatCurrency, formatCurrencyOrDash, formatDate, formatPercent, todayISO, toISODate } from "@/lib/formatting";
+import { marginPercent, profitOrNull } from "@/lib/calculations";
 import { nextProjectCode, type BudgetLineInput } from "@/lib/project-operations";
 import { useAppStore } from "@/store/use-app-store";
 import { PageHeader } from "@/components/shared/page-header";
@@ -16,14 +15,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field } from "@/components/ui/field";
 import { Input, Select, Textarea } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { BudgetEditor, draftFromInput, draftToInput, draftTotal, newDraftLine, type DraftLine } from "@/components/budget/budget-editor";
 import { BudgetCalculator } from "@/components/budget/budget-calculator";
 import { computeCalculator, initialCalcState, type CalcState } from "@/components/budget/calculator-state";
 import { totalOfLines } from "@/lib/budget-calculator";
 import { clearQuoteDraft, peekQuoteDraft } from "@/components/budget/quote-draft";
 import { cn } from "@/lib/utils";
 
-const STEPS = ["Datos del proyecto", "Presupuesto", "Revisar y crear"];
+const STEPS = ["Datos del proyecto", "Costo presupuestado", "Revisar y crear"];
 
 function in30days() {
   const d = new Date();
@@ -38,15 +36,8 @@ export function NewProjectWizard() {
   const code = useMemo(() => nextProjectCode(projects), [projects]);
   const [draft] = useState(peekQuoteDraft);
   const [step, setStep] = useState(0);
-  const [lines, setLines] = useState<DraftLine[]>(() =>
-    draft?.mode === "manual"
-      ? computeCalculator(draft.state, draft.startDate, draft.projectType, projects).lines.map(draftFromInput)
-      : [newDraftLine("materials"), newDraftLine("labor"), newDraftLine("installation")],
-  );
-  const [mode, setMode] = useState<"calculator" | "manual">(draft ? draft.mode : "manual");
   const [calcState, setCalcState] = useState<CalcState>(() => draft?.state ?? initialCalcState());
   const [priceError, setPriceError] = useState("");
-  const [lineErrors, setLineErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState("");
 
   const form = useForm<ProjectInfoValues>({
@@ -68,37 +59,18 @@ export function NewProjectWizard() {
   const startDate = useWatch({ control, name: "startDate" });
   const projectType = useWatch({ control, name: "projectType" });
   const calc = useMemo(() => computeCalculator(calcState, startDate, projectType, projects), [calcState, startDate, projectType, projects]);
-  const manualTotal = lines.reduce((s, l) => s + draftTotal(l), 0);
-  const budget = mode === "calculator" ? calc.total : manualTotal;
-  const profit = salesPrice - budget;
-  const margin = marginPercent(profit, salesPrice);
+  const budget = calc.total;
+  const profit = profitOrNull(salesPrice, budget);
+  const margin = marginPercent(salesPrice - budget, salesPrice);
 
+  /** El costo presupuestado sale siempre de la calculadora guiada. */
   const validateLines = (): BudgetLineInput[] | null => {
-    if (mode === "calculator") {
-      setLineErrors({});
-      if (calc.lines.length === 0) {
-        setFormError("Cargá al menos un material, horas de trabajo o un costo para armar el presupuesto.");
-        return null;
-      }
-      setFormError("");
-      return calc.lines;
-    }
-    const errs: Record<string, string> = {};
-    const inputs: BudgetLineInput[] = [];
-    const nonEmpty = lines.filter((l) => l.description.trim() || l.unitCost.trim());
-    for (const l of nonEmpty) {
-      const r = draftToInput(l);
-      if (r.error) errs[l.key] = r.error;
-      else if (r.input) inputs.push(r.input);
-    }
-    setLineErrors(errs);
-    if (Object.keys(errs).length) return null;
-    if (inputs.length === 0) {
-      setFormError("Agregá al menos un concepto al presupuesto.");
+    if (calc.lines.length === 0) {
+      setFormError("Cargá al menos un material, horas de trabajo o un costo para armar el costo presupuestado.");
       return null;
     }
     setFormError("");
-    return inputs;
+    return calc.lines;
   };
 
   const next = async () => {
@@ -127,16 +99,12 @@ export function NewProjectWizard() {
 
   const byCat = CATEGORY_ORDER.map((c) => ({
     c,
-    total: mode === "calculator" ? totalOfLines(calc.lines.filter((l) => l.category === c)) : lines.filter((l) => l.category === c).reduce((s, l) => s + draftTotal(l), 0),
+    total: totalOfLines(calc.lines.filter((l) => l.category === c)),
   })).filter((x) => x.total > 0);
-  const editManually = () => {
-    setLines(calc.lines.map(draftFromInput));
-    setMode("manual");
-  };
 
   return (
     <div>
-      <PageHeader title="Nuevo proyecto" subtitle={`Código asignado: ${code}. El presupuesto que cargues será la línea base contra la que se medirán los desvíos.`} />
+      <PageHeader back="/projects" title="Nuevo proyecto" subtitle={`Código asignado: ${code}. El costo presupuestado que cargues, una vez aprobado, será el presupuesto base contra el que se miden los desvíos.`} />
       <ol className="mb-6 flex flex-wrap gap-2" aria-label="Pasos">
         {STEPS.map((s, i) => (
           <li
@@ -188,38 +156,18 @@ export function NewProjectWizard() {
           )}
           {step === 1 && (
             <div className="space-y-4">
-              {draft ? (
+              {draft && (
                 <p className="rounded-md bg-blue-50 p-3 text-sm text-blue-900">Partís de la cotización que armaste en el Cotizador. Podés ajustarla antes de crear el proyecto.</p>
-              ) : (
-                <p className="rounded-md bg-slate-50 p-3 text-sm text-slate-700">
-                  ¿Todavía no sabés el precio? Calculalo primero en el <Link href="/quotes" className="font-medium text-blue-700 underline">Cotizador</Link> y después convertilo en proyecto.
-                </p>
               )}
               <Card>
                 <CardHeader>
-                  <CardTitle>Presupuesto</CardTitle>
+                  <CardTitle>Costo presupuestado</CardTitle>
                   <p className="text-sm text-slate-500">
-                    Armalo con la calculadora (materiales, operarios, máquinas y costos) o cargalo a mano si ya tenés los números. Es la línea base contra la que se medirán los desvíos.
+                    Armalo con la calculadora guiada: materiales, operarios, máquinas y otros costos. Te sugiere un precio de venta y, una vez aprobado, es el presupuesto base contra el que se miden los desvíos.
                   </p>
                 </CardHeader>
-                <CardContent>
-                  <div role="group" aria-label="Cómo cargar el presupuesto" className="inline-flex rounded-md border border-slate-300 p-0.5 text-sm">
-                    {([["calculator", "Calculadora guiada"], ["manual", "Carga manual"]] as const).map(([m, label]) => (
-                      <button
-                        key={m}
-                        type="button"
-                        aria-pressed={mode === m}
-                        onClick={() => (m === "manual" ? editManually() : setMode("calculator"))}
-                        className={cn("rounded px-3 py-1.5 font-medium", mode === m ? "bg-blue-700 text-white" : "text-slate-600 hover:bg-slate-100")}
-                      >
-                        {label}
-                      </button>
-                    ))}
-                  </div>
-                </CardContent>
               </Card>
-              {mode === "calculator" ? (
-                <BudgetCalculator
+              <BudgetCalculator
                   state={calcState}
                   onState={setCalcState}
                   result={calc}
@@ -231,20 +179,7 @@ export function NewProjectWizard() {
                     if (n > 0) setPriceError("");
                   }}
                   onDueDate={(iso) => setValue("dueDate", iso, { shouldValidate: true })}
-                  onEditManually={editManually}
                 />
-              ) : (
-                <Card>
-                  <CardContent className="pt-5">
-                    <BudgetEditor lines={lines} onChange={setLines} errors={lineErrors} />
-                    <div className="mt-4 flex max-w-xs flex-col gap-1.5">
-                      <label htmlFor="manual-price" className="text-sm font-medium text-slate-700">Precio de venta (ARS)</label>
-                      <Input id="manual-price" type="number" min={0} step="any" inputMode="numeric" aria-invalid={!!priceError} value={salesPrice > 0 ? salesPrice : ""} onChange={(e) => { setValue("salesPrice", Number(e.target.value) || 0, { shouldValidate: true }); if (Number(e.target.value) > 0) setPriceError(""); }} />
-                      {priceError && <p role="alert" className="text-xs text-red-600">{priceError}</p>}
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
               {formError && <p role="alert" className="text-sm text-red-600">{formError}</p>}
             </div>
           )}
@@ -266,7 +201,7 @@ export function NewProjectWizard() {
                   ))}
                 </dl>
                 <p className="mt-4 rounded-md bg-blue-50 p-3 text-sm text-blue-900">
-                  El proyecto se crea en estado <strong>Cotización</strong>. Podés editar el presupuesto hasta que pase a Compras/Producción.
+                  El proyecto se crea en la etapa <strong>Cotización</strong>. Podés editar el costo presupuestado hasta que pase a Compras.
                 </p>
                 {formError && <p role="alert" className="mt-3 text-sm text-red-600">{formError}</p>}
               </CardContent>
@@ -283,9 +218,9 @@ export function NewProjectWizard() {
         {step > 0 && <aside className="lg:sticky lg:top-20 lg:self-start" aria-label="Resumen económico">
           <Card>
             <CardContent className="space-y-3 pt-5 text-sm">
-              <Row label="Precio de venta" value={formatCurrency(salesPrice)} />
+              <Row label="Precio de venta" value={salesPrice > 0 ? formatCurrency(salesPrice) : "Sin definir"} />
               <Row label="Costo presupuestado" value={formatCurrency(budget)} />
-              <Row label="Ganancia esperada" value={formatCurrency(profit)} strong />
+              <Row label="Ganancia esperada" value={formatCurrencyOrDash(profit)} strong />
               <div className="border-t border-slate-100 pt-3">
                 <div className="text-xs text-slate-500">Margen esperado</div>
                 <div className={cn("text-3xl font-semibold tabular", margin !== null && margin < 15 ? "text-amber-700" : "text-slate-900")} aria-live="polite">

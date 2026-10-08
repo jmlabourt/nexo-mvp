@@ -22,7 +22,7 @@ import type {
 import { ACTUAL_TYPE_LABELS, ACTUAL_TYPE_TO_CATEGORY, DEMO_USERS, MATERIAL_CATALOG, STATUS_LABELS, STATUS_ORDER } from "./constants";
 import { budgetLineTotal } from "./calculations";
 import { toISODate } from "./formatting";
-import { actualMessage, leftoverMessage, purchaseMessage, usageMessage } from "./activity";
+import { activityTimeline, actualMessage, leftoverMessage, purchaseMessage, usageMessage } from "./activity";
 import { applyUsageToPool, poolAvailableFor } from "./reusable-pool";
 import { deriveLedgerFromLegacy } from "./stock-legacy";
 import type { StockState } from "./stock";
@@ -71,12 +71,11 @@ interface ProjectSpec {
 }
 
 const DIRECT_LABELS: Record<Exclude<BudgetCategory, "materials" | "labor">, string> = {
+  machines: "Uso de máquinas",
   outsourcing: "Tercerizaciones (pintura, laqueado, vidrio)",
-  finishing: "Terminaciones",
   logistics: "Flete y logística",
   installation: "Instalación en obra",
   contingency: "Imprevistos",
-  other: "Otros",
 };
 
 function material(id: string) {
@@ -110,11 +109,12 @@ class SeedBuilder {
     d.setDate(d.getDate() + offset);
     return toISODate(d);
   }
+  /** Momento de un evento. Nunca posterior a "ahora": un registro no puede ocurrir en el futuro. */
   at(offset: number, hour = 10): string {
     const d = new Date(this.now);
     d.setDate(d.getDate() + offset);
     d.setHours(hour, (this.seq * 7) % 60, 0, 0);
-    return d.toISOString();
+    return (d.getTime() > this.now.getTime() ? this.now : d).toISOString();
   }
 
   budgetLines(spec: BudgetSpec): BudgetLine[] {
@@ -195,9 +195,9 @@ class SeedBuilder {
     for (let i = 1; i <= idx; i++) {
       const s = STATUS_ORDER[i];
       const off = i === 1 ? spec.start - 3 : spec.start + Math.round(((i - 2) / 4) * span);
-      if (s === "approved") ev(off, "status", MGMT, "Presupuesto aprobado. Proyecto pasó a Aprobado.", 11);
+      if (s === "approved") ev(off, "status", MGMT, "Proyecto aprobado: el costo presupuestado queda congelado como presupuesto base.", 11);
       else if (s === "completed") continue;
-      else ev(off, "status", MGMT, `Proyecto pasó a ${STATUS_LABELS[s]}.`, 11);
+      else ev(off, "status", MGMT, `Proyecto pasó a la etapa ${STATUS_LABELS[s]}.`, 11);
     }
 
     for (const [off, mid, qty, cost, supplier] of spec.purchases ?? []) {
@@ -292,7 +292,7 @@ class SeedBuilder {
     if (spec.status === "completed" && spec.closedAt !== undefined) {
       ev(spec.closedAt, "closed", MGMT, "Proyecto cerrado. Margen real calculado.", 17);
     }
-    p.activity = events.sort((a, b) => b.at.localeCompare(a.at));
+    p.activity = activityTimeline(events, this.now.toISOString());
     // Línea base: el presupuesto con el que se aprobó el proyecto.
     if (spec.status !== "quotation") {
       p.baseline = {
@@ -448,7 +448,7 @@ export function buildSeed(now: Date = new Date()): SeedState {
           ["perfil-alu", 24, 14_000],
         ],
         labor: [60, 13_000],
-        direct: { finishing: 250_000, logistics: 120_000, contingency: 94_000 },
+        direct: { outsourcing: 250_000, logistics: 120_000, contingency: 94_000 },
       },
       purchases: [
         [-105, "mdf-18", 14, 78_000, "Placas del Plata"],
@@ -460,7 +460,7 @@ export function buildSeed(now: Date = new Date()): SeedState {
       ],
       labor: [[-95, "Carpintería", "Juan Pérez", 66, 13_000]],
       costs: [
-        [-85, "finishing", "Pintura poliuretánica", 270_000],
+        [-85, "outsourcing", "Pintura poliuretánica", 270_000],
         [-78, "logistics", "Envío a sucursales", 150_000],
       ],
     }),
@@ -638,7 +638,7 @@ export function buildSeed(now: Date = new Date()): SeedState {
           ["tapacanto", 300, 1_000],
         ],
         labor: [70, 14_000],
-        direct: { finishing: 380_000, logistics: 400_000, contingency: 140_000 },
+        direct: { outsourcing: 380_000, logistics: 400_000, contingency: 140_000 },
       },
       purchases: [
         [-25, "mdf-18", 22, 82_000, "Maderera Oeste"],
@@ -654,7 +654,7 @@ export function buildSeed(now: Date = new Date()): SeedState {
         [-18, "Carpintería", "Juan Pérez", 45, 14_000],
         [-6, "Armado", "Diego Sosa", 36, 14_000],
       ],
-      costs: [[-5, "finishing", "Pintura epoxi — primera tanda", 300_000]],
+      costs: [[-5, "outsourcing", "Pintura epoxi — primera tanda", 300_000]],
     }),
   );
 
@@ -678,7 +678,7 @@ export function buildSeed(now: Date = new Date()): SeedState {
           ["perfil-alu", 30, 15_000],
         ],
         labor: [110, 14_000],
-        direct: { finishing: 900_000, logistics: 250_000, installation: 600_000, contingency: 310_000 },
+        direct: { outsourcing: 900_000, logistics: 250_000, installation: 600_000, contingency: 310_000 },
       },
       purchases: [
         [-40, "mdf-18", 18, 80_000, "Maderera Oeste"],
@@ -695,7 +695,7 @@ export function buildSeed(now: Date = new Date()): SeedState {
         [-20, "Armado", "Diego Sosa", 48, 14_000],
       ],
       costs: [
-        [-15, "finishing", "Laqueado y enchapado", 960_000, "Taller Colores"],
+        [-15, "outsourcing", "Laqueado y enchapado", 960_000, "Taller Colores"],
         [-4, "logistics", "Flete a Puerto Madero", 230_000],
         [-2, "installation", "Instalación — día 1 y 2", 380_000],
       ],

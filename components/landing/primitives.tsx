@@ -1,3 +1,4 @@
+import { APP_NAME } from "@/lib/constants";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 
@@ -89,10 +90,10 @@ export function Logo({ className }: { className?: string }) {
         aria-hidden
       >
         <svg viewBox="0 0 16 16" className="size-3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-          <path d="M3 13V3l10 10V3" />
+          <path d="M4 2v12h5a3 3 0 0 0 0-6H4h4a3 3 0 0 0 0-6H4" />
         </svg>
       </span>
-      NEXO
+      {APP_NAME}
     </span>
   );
 }

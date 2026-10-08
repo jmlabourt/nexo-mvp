@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { APP_SUBTITLE } from "@/lib/constants";
+import { APP_NAME, APP_SUBTITLE } from "@/lib/constants";
 import { DEMO_HREF, NAV_LINKS } from "@/lib/landing-content";
 import { Container, Logo } from "./primitives";
 
@@ -51,7 +51,7 @@ export function Footer() {
           </div>
         </div>
         <div className="mt-12 flex flex-col gap-2 border-t border-line pt-6 text-xs text-ink-faint sm:flex-row sm:justify-between">
-          <span>© {new Date().getFullYear()} NEXO · Proyecto de tesis ITBA</span>
+          <span>© {new Date().getFullYear()} {APP_NAME} · Proyecto de tesis ITBA</span>
           <span>No afirmamos Product-Market Fit. Los números de la demo son ficticios.</span>
         </div>
       </Container>

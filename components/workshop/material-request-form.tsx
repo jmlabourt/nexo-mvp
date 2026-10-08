@@ -54,7 +54,7 @@ export function MaterialRequestForm({ project, onDone }: { project: Project; onD
         <Select id="mr-material" className="h-12 text-base" value={materialId} onChange={(e) => setMaterialId(e.target.value)}>
           <option value="">Elegí un material…</option>
           {options.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
-          <option value={OTHER_MATERIAL_ID}>Otro material…</option>
+          <option value={OTHER_MATERIAL_ID}>Otro material</option>
         </Select>
         {errors.material && <p role="alert" className="mt-1 text-sm text-red-600">{errors.material}</p>}
       </div>

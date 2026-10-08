@@ -8,8 +8,6 @@ export interface QuoteDraft {
   startDate: string;
   dueDate: string;
   salesPrice: number;
-  /** Cómo se abre el presupuesto en el asistente: calculadora o carga manual (editar línea por línea). */
-  mode: "calculator" | "manual";
 }
 
 let draft: QuoteDraft | null = null;

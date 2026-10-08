@@ -13,6 +13,11 @@ export function formatCurrency(value: number): string {
   return currencyFmt.format(Math.round(value)).replace(/ /g, " ");
 }
 
+/** Monto o "—" cuando no se puede calcular (por ejemplo, ganancia sin precio de venta). */
+export function formatCurrencyOrDash(value: number | null): string {
+  return value === null || !Number.isFinite(value) ? "—" : formatCurrency(value);
+}
+
 /** +$ 800.000 / −$ 50.000 */
 export function formatSignedCurrency(value: number): string {
   if (Math.round(value) === 0) return formatCurrency(0);
@@ -60,16 +65,37 @@ export function formatSignedPercent(value: number | null, decimals = 1): string 
   return `${r > 0 ? "+" : "−"}${formatPercent(Math.abs(r), decimals)}`;
 }
 
-/** Puntos porcentuales: −9,2 pp. Nunca "%" para diferencias de margen. */
-export function formatPp(value: number | null, decimals = 1): string {
+/**
+ * Diferencia de margen en "puntos de margen" (nunca "%" ni "pp").
+ *   formatMarginPoints(9.2)                 → "9,2 puntos de margen"
+ *   formatMarginPoints(-9.2, { signed: true }) → "−9,2 puntos de margen"
+ *   formatMarginPoints(-9.2, { signed: true, short: true }) → "−9,2 puntos"
+ */
+export function formatMarginPoints(
+  value: number | null,
+  { signed = false, short = false, decimals = 1 }: { signed?: boolean; short?: boolean; decimals?: number } = {},
+): string {
   if (value === null || !Number.isFinite(value)) return "—";
   const r = Number(value.toFixed(decimals));
   const n = new Intl.NumberFormat(LOCALE, {
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals,
   }).format(Math.abs(r));
-  if (r === 0) return `0 pp`;
-  return `${r > 0 ? "+" : "−"}${n} pp`;
+  const word = Math.abs(r) === 1 ? "punto" : "puntos";
+  const unit = short ? word : `${word} de margen`;
+  if (r === 0) return `0 ${unit}`;
+  const sign = signed ? (r > 0 ? "+" : "−") : r < 0 ? "−" : "";
+  return `${sign}${n} ${unit}`;
+}
+
+/** "1 día" / "3 días". */
+export function formatDays(days: number): string {
+  return `${days} ${Math.abs(days) === 1 ? "día" : "días"}`;
+}
+
+/** "1 día laboral" / "12 días laborales". */
+export function formatWorkingDays(days: number): string {
+  return `${days} ${Math.abs(days) === 1 ? "día laboral" : "días laborales"}`;
 }
 
 /** dd/mm/yyyy — acepta "yyyy-mm-dd" o ISO datetime. */

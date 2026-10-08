@@ -1,13 +1,14 @@
-import { ArrowRight, BellRing, History, PackageCheck, QrCode, Recycle, TrendingDown } from "lucide-react";
+import { APP_NAME } from "@/lib/constants";
+import { ArrowRight, BellRing, History, PackageCheck, Smartphone, Recycle, TrendingDown } from "lucide-react";
 import { FEATURES } from "@/lib/landing-content";
 import { cn } from "@/lib/utils";
 import { Container, SectionHeading } from "./primitives";
 
 type FeatureKey = (typeof FEATURES)[number]["key"];
 
-const META: Record<FeatureKey, { icon: typeof QrCode; span: string }> = {
+const META: Record<FeatureKey, { icon: typeof Smartphone; span: string }> = {
   margin: { icon: TrendingDown, span: "md:col-span-4" },
-  workshop: { icon: QrCode, span: "md:col-span-2" },
+  workshop: { icon: Smartphone, span: "md:col-span-2" },
   purchase: { icon: PackageCheck, span: "md:col-span-2" },
   alerts: { icon: BellRing, span: "md:col-span-2" },
   leftovers: { icon: Recycle, span: "md:col-span-2" },
@@ -43,26 +44,23 @@ function MarginVisual() {
           <span className="text-sm text-ink-faint line-through">40,0%</span>
           <span className="text-3xl font-semibold tracking-tight text-ink">30,8%</span>
         </div>
-        <div className="mt-1 text-[11px] font-medium text-bad">−9,2 pp · Materiales +$ 850.000</div>
+        <div className="mt-1 text-[11px] font-medium text-bad">−9,2 puntos · Materiales +$ 850.000</div>
       </div>
     </div>
   );
 }
 
-function QrVisual() {
-  // Patrón fijo que evoca un QR; es decorativo.
-  const cells = "1110111010110101011101001101110100010111011101001010111010110".split("");
+function WorkshopVisual() {
+  // Ilustración decorativa del registro de taller en el celular (sin precios).
   return (
-    <div className="mt-6 flex items-center gap-4" aria-hidden>
-      <div className="grid size-24 grid-cols-8 gap-0.5 rounded-xl bg-white p-2 ring-1 ring-line">
-        {cells.concat(cells.slice(0, 3)).map((c, i) => (
-          <span key={i} className={cn("rounded-[1px]", c === "1" ? "bg-ink" : "bg-transparent")} />
-        ))}
+    <div className="mt-6 space-y-2 text-xs" aria-hidden>
+      <div className="flex items-center justify-between rounded-xl bg-canvas px-3 py-2 ring-1 ring-line">
+        <span className="font-semibold text-ink">P-1042 · Local Palermo</span>
+        <span className="rounded-full bg-good/10 px-2 py-0.5 font-medium text-good">&lt; 30 s</span>
       </div>
-      <div className="text-xs text-ink-soft">
-        <div className="font-semibold text-ink">P-1042</div>
-        Local Palermo
-        <div className="mt-2 inline-flex rounded-full bg-good/10 px-2 py-0.5 font-medium text-good">&lt; 30 s</div>
+      <div className="flex items-center justify-between rounded-xl bg-canvas px-3 py-2 text-ink-soft ring-1 ring-line">
+        <span>Usé · Desperdicio · Sobrante</span>
+        <span className="font-medium text-ink tabular">2 · 0,2 · 0,3</span>
       </div>
     </div>
   );
@@ -86,7 +84,7 @@ function PurchaseVisual() {
 function AlertsVisual() {
   const items = [
     { t: "Materiales +22%", c: "bg-bad" },
-    { t: "Margen −9,2 pp", c: "bg-bad" },
+    { t: "Margen −9,2 puntos", c: "bg-bad" },
     { t: "7 días sin registros", c: "bg-warn" },
   ];
   return (
@@ -114,7 +112,7 @@ function LeftoversVisual() {
 
 const VISUALS: Partial<Record<FeatureKey, () => React.ReactNode>> = {
   margin: MarginVisual,
-  workshop: QrVisual,
+  workshop: WorkshopVisual,
   purchase: PurchaseVisual,
   alerts: AlertsVisual,
   leftovers: LeftoversVisual,
@@ -127,7 +125,7 @@ export function Features() {
         <SectionHeading
           eyebrow="Producto"
           title="Del mundo físico al margen, sin planillas en el medio"
-          subtitle="El dashboard es fácil. Lo difícil es capturar lo que pasó en la fábrica. NEXO está diseñado alrededor de eso."
+          subtitle={`El dashboard es fácil. Lo difícil es capturar lo que pasó en la fábrica. ${APP_NAME} está diseñado alrededor de eso.`}
         />
         <div className="mt-14 grid gap-4 md:grid-cols-6">
           {FEATURES.map((f) => {

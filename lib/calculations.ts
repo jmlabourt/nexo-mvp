@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────────
-// Cálculos económicos de NEXO — funciones puras, sin UI ni estado.
+// Cálculos económicos de Blerp — funciones puras, sin UI ni estado.
 //
 // Principio central:
 //   COMPRA ≠ CONSUMO ≠ DESPERDICIO ≠ SOBRANTE REUTILIZABLE
@@ -38,6 +38,16 @@ export function budgetByCategory(lines: BudgetLine[]): CategoryAmounts {
 }
 
 // ── Márgenes (helpers) ────────────────────────────────────────
+
+/** ¿Hay precio de venta cargado? Sin precio no hay ganancia ni margen que mostrar. */
+export function hasSalesPrice(salesPrice: number): boolean {
+  return Number.isFinite(salesPrice) && salesPrice > 0;
+}
+
+/** Ganancia = precio de venta − costo. null sin precio de venta (nunca un negativo engañoso). */
+export function profitOrNull(salesPrice: number, cost: number): number | null {
+  return hasSalesPrice(salesPrice) ? round2(salesPrice - cost) : null;
+}
 
 /** Devuelve null cuando no hay precio de venta (evita divisiones por cero y márgenes engañosos). */
 export function marginPercent(profit: number, salesPrice: number): number | null {
@@ -144,11 +154,12 @@ export interface CategoryRow {
   projectedVariance: Variance;
 }
 
+/** Siempre las siete categorías, en el mismo orden (aunque estén en cero). */
 export function categoryBreakdown(project: Project): CategoryRow[] {
   const b = budgetByCategory(project.budgetLines);
   const a = actualByCategory(project);
   const completed = project.status === "completed";
-  return CATEGORY_ORDER.filter((c) => b[c] !== 0 || a[c] !== 0).map((category) => {
+  return CATEGORY_ORDER.map((category) => {
     const projected = completed ? a[category] : projectedCategoryCost(b[category], a[category]);
     return {
       category,
@@ -192,8 +203,12 @@ export function marginDeltaPoints(expected: number | null, projected: number | n
 
 export interface ProjectEconomics {
   salesPrice: number;
+  /** false = sin precio de venta: ganancias y márgenes son null y se muestran como "—". */
+  hasSalesPrice: boolean;
+  /** true = todavía no hay consumos ni costos registrados. */
+  hasExecutionData: boolean;
   budgetTotal: number;
-  expectedProfit: number;
+  expectedProfit: number | null;
   expectedMargin: number | null;
   actualCostToDate: number;
   materialActualCost: number;
@@ -201,7 +216,7 @@ export interface ProjectEconomics {
   purchasesTotal: number;
   /** Para proyectos finalizados coincide con el costo real final. */
   projectedFinalCost: number;
-  projectedProfit: number;
+  projectedProfit: number | null;
   projectedMargin: number | null;
   finalActualCost: number | null;
   finalProfit: number | null;
@@ -209,6 +224,7 @@ export interface ProjectEconomics {
   /** Margen “vigente”: real si está cerrado, proyectado si no. */
   currentMargin: number | null;
   marginDeltaPp: number | null;
+  /** "Diferencia": costo final proyectado (o real final) − costo presupuestado. */
   costOverrun: number;
   costOverrunPercent: number | null;
   categories: CategoryRow[];
@@ -217,30 +233,31 @@ export interface ProjectEconomics {
 
 export function projectEconomics(project: Project): ProjectEconomics {
   const bt = budgetTotal(project.budgetLines);
-  const ep = project.salesPrice - bt;
-  const em = marginPercent(ep, project.salesPrice);
+  const em = marginPercent(project.salesPrice - bt, project.salesPrice);
   const actual = actualCostToDate(project);
   const completed = project.status === "completed";
   const projected = completed ? actual : projectedFinalCost(project);
-  const pp = project.salesPrice - projected;
-  const pm = marginPercent(pp, project.salesPrice);
+  const pm = marginPercent(project.salesPrice - projected, project.salesPrice);
   const categories = categoryBreakdown(project);
   const fm = completed ? marginPercent(project.salesPrice - actual, project.salesPrice) : null;
-  const overrun = round2(projected - bt);
+  // La Diferencia es la suma de los desvíos por categoría: así el "¿Por qué?" siempre cierra exacto.
+  const overrun = round2(categories.reduce((s, c) => s + c.projectedVariance.amount, 0));
   return {
     salesPrice: project.salesPrice,
+    hasSalesPrice: hasSalesPrice(project.salesPrice),
+    hasExecutionData: project.materialUsages.length > 0 || project.actualEntries.length > 0,
     budgetTotal: bt,
-    expectedProfit: ep,
+    expectedProfit: profitOrNull(project.salesPrice, bt),
     expectedMargin: em,
     actualCostToDate: actual,
     materialActualCost: materialActualCost(project.materialUsages),
     nonMaterialActualCost: nonMaterialActualCost(project),
     purchasesTotal: purchasesTotal(project),
     projectedFinalCost: projected,
-    projectedProfit: pp,
+    projectedProfit: profitOrNull(project.salesPrice, projected),
     projectedMargin: pm,
     finalActualCost: completed ? actual : null,
-    finalProfit: completed ? project.salesPrice - actual : null,
+    finalProfit: completed ? profitOrNull(project.salesPrice, actual) : null,
     finalMargin: fm,
     currentMargin: completed ? fm : pm,
     marginDeltaPp: marginDeltaPoints(em, completed ? fm : pm),
@@ -249,6 +266,30 @@ export function projectEconomics(project: Project): ProjectEconomics {
     categories,
     mainDeviation: mainDeviation(categories),
   };
+}
+
+export interface DeviationReason {
+  category: BudgetCategory;
+  /** Desvío de la categoría (proyectado − presupuestado): positivo = cuesta más, negativo = cuesta menos. */
+  amount: number;
+}
+
+export interface DeviationReasons {
+  rows: DeviationReason[];
+  /** Igual a la "Diferencia" (ProjectEconomics.costOverrun). */
+  total: number;
+}
+
+/**
+ * "¿Por qué?": todas las categorías con desvío distinto de cero (positivas y negativas),
+ * de mayor a menor, y una línea Total que suma exactamente la Diferencia.
+ */
+export function deviationReasons(econ: Pick<ProjectEconomics, "categories" | "costOverrun">): DeviationReasons {
+  const rows = econ.categories
+    .map((c) => ({ category: c.category, amount: c.projectedVariance.amount }))
+    .filter((r) => r.amount !== 0)
+    .sort((a, b) => b.amount - a.amount);
+  return { rows, total: econ.costOverrun };
 }
 
 /** Categoría con mayor sobrecosto (proyectado − presupuesto). null si ninguna está por encima. */

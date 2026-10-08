@@ -92,7 +92,7 @@ export function StockActionDialog({
   const submit = () => {
     const quantity = parseDecimal(qty || "0");
     if (!Number.isFinite(quantity) || quantity <= 0) return setError("Indicá cuánto material.");
-    if (quantity - target.max > 1e-6) return setError(`Solo hay ${formatQty(target.max, target.unit)} disponibles.`);
+    if (quantity - target.max > 1e-6) return setError(`Como máximo podés mover ${formatQty(target.max, target.unit)}.`);
     if (needsProject && !toProject) return setError("Elegí el proyecto de destino.");
     const base = {
       materialId: target.materialId,
@@ -130,7 +130,7 @@ export function StockActionDialog({
           <DialogTitle>{copy.title}</DialogTitle>
           <DialogDescription>
             {target.materialName}
-            {target.lotLabel ? ` · ${target.lotLabel}` : ""} · disponible {formatQty(target.max, target.unit)}
+            {target.lotLabel ? ` · ${target.lotLabel}` : ""} · podés mover hasta {formatQty(target.max, target.unit)}
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">

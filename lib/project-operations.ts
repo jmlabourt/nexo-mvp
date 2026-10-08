@@ -159,7 +159,7 @@ export function addBudgetLine(project: Project, input: BudgetLineInput, ctx: Ctx
   assertBudgetEditable(project);
   const line = makeBudgetLine(input);
   return touch({ ...project, budgetLines: [...project.budgetLines, line] }, ctx.now, [
-    activity("budget", ctx.actor, `Se agregó al presupuesto: ${line.description}.`, ctx.now),
+    activity("budget", ctx.actor, `Se agregó al costo presupuestado: ${line.description}.`, ctx.now),
   ]);
 }
 
@@ -173,7 +173,7 @@ export function updateBudgetLine(project: Project, lineId: string, input: Budget
       ),
     },
     ctx.now,
-    [activity("budget", ctx.actor, `Se modificó el presupuesto: ${input.description}.`, ctx.now)],
+    [activity("budget", ctx.actor, `Se modificó el costo presupuestado: ${input.description}.`, ctx.now)],
   );
 }
 
@@ -181,7 +181,7 @@ export function removeBudgetLine(project: Project, lineId: string, ctx: Ctx): Pr
   assertBudgetEditable(project);
   const line = project.budgetLines.find((l) => l.id === lineId);
   return touch({ ...project, budgetLines: project.budgetLines.filter((l) => l.id !== lineId) }, ctx.now, [
-    activity("budget", ctx.actor, `Se quitó del presupuesto: ${line?.description ?? "concepto"}.`, ctx.now),
+    activity("budget", ctx.actor, `Se quitó del costo presupuestado: ${line?.description ?? "concepto"}.`, ctx.now),
   ]);
 }
 
@@ -214,7 +214,7 @@ export function changeStatus(
     kind === "backward"
       ? `Corrección: el proyecto volvió a ${STATUS_LABELS[status]}.`
       : status === "approved"
-        ? "Presupuesto aprobado. Proyecto pasó a Aprobado."
+        ? "Proyecto aprobado: el costo presupuestado queda congelado como presupuesto base."
         : `Proyecto pasó a ${STATUS_LABELS[status]}.`;
   const baseline = status === "approved" && !project.baseline ? captureBaseline(project, ctx) : project.baseline;
   return touch({ ...project, status, baseline }, ctx.now, [activity("status", ctx.actor, msg, ctx.now)]);
@@ -300,7 +300,7 @@ function deviationEvents(before: Project, after: Project, settings: AlertSetting
         activity(
           "deviation",
           "Sistema",
-          `${CATEGORY_LABELS[cat]} ${CATEGORY_IS_PLURAL[cat] ? "superaron" : "superó"} el presupuesto en ${formatPercent(p1, 0)}.`,
+          `${CATEGORY_LABELS[cat]} ${CATEGORY_IS_PLURAL[cat] ? "superaron" : "superó"} su costo presupuestado en ${formatPercent(p1, 0)}.`,
           ctx.now,
         ),
       );
@@ -483,7 +483,7 @@ export function logHours(
   const operatorId = isOperator ? ctx.operatorId : input.operatorId;
   const op = operators.find((o) => o.id === operatorId);
   if (!op) throw new DomainError(isOperator ? "Tu usuario no está vinculado a un operario." : "Elegí el operario.");
-  if (!op.active) throw new DomainError(`${op.name} está inactivo.`);
+  if (!op.active) throw new DomainError(`${op.name} está dado de baja: reactivalo en Operarios para cargarle horas.`);
   if (isOperator && input.operatorId && input.operatorId !== op.id) {
     throw new RuleError("Solo podés cargar tus propias horas.");
   }
@@ -545,7 +545,8 @@ export function closeProject(project: Project, stock: StockState, ctx: Ctx): Pro
 export function assignOperators(project: Project, operatorIds: string[], operators: Operator[], ctx: Ctx): Project {
   assertManager(ctx, "Asignar operarios");
   assertOpen(project);
-  const valid = operatorIds.filter((id) => operators.some((o) => o.id === id));
+  // Solo operarios activos: al guardar el equipo, los dados de baja dejan de estar asignados.
+  const valid = operatorIds.filter((id) => operators.some((o) => o.id === id && o.active));
   const names = valid.map((id) => operators.find((o) => o.id === id)?.name).filter(Boolean);
   return touch({ ...project, assignedOperatorIds: valid }, ctx.now, [
     activity("stage", ctx.actor, names.length ? `Operarios asignados: ${names.join(", ")}.` : "Se quitaron los operarios asignados.", ctx.now),

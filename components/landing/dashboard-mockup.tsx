@@ -1,3 +1,4 @@
+import { APP_NAME } from "@/lib/constants";
 import { Bell, FolderKanban, History, LayoutDashboard, Layers, Search, TriangleAlert } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -38,7 +39,7 @@ export function DashboardMockup({ className }: { className?: string }) {
         className,
       )}
       role="img"
-      aria-label="Vista del Modo Gestión de NEXO: margen esperado 40%, margen proyectado 30,8% y alerta de materiales en el proyecto Local Palermo."
+      aria-label={`Vista del Modo Gestión de ${APP_NAME}: margen esperado 40%, margen proyectado 30,8% y alerta de materiales en el proyecto Local Palermo.`}
     >
       <div className="overflow-hidden rounded-2xl border border-line bg-canvas sm:rounded-[20px]" aria-hidden>
         {/* barra superior */}
@@ -57,7 +58,7 @@ export function DashboardMockup({ className }: { className?: string }) {
         <div className="flex">
           <aside className="hidden w-40 shrink-0 border-r border-line bg-white p-3 md:block">
             <div className="px-2 pb-3 text-xs font-semibold text-ink">
-              NEXO
+              {APP_NAME}
               <div className="text-[9px] font-normal text-ink-faint">Madera Sur S.R.L.</div>
             </div>
             {SIDE.map((s) => (
@@ -85,7 +86,7 @@ export function DashboardMockup({ className }: { className?: string }) {
 
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
               <Kpi label="Margen esperado" value="40,0%" hint="P-1042 al cotizar" />
-              <Kpi label="Margen proyectado" value="30,8%" hint="−9,2 pp" tone="bad" />
+              <Kpi label="Margen proyectado" value="30,8%" hint="−9,2 puntos" tone="bad" />
               <Kpi label="Desvío materiales" value="+$ 850k" hint="sobre presupuesto" tone="bad" />
               <Kpi label="Costo imputable" value="$ 500k" hint="no $ 600k comprados" tone="good" />
             </div>
@@ -137,7 +138,7 @@ export function DashboardMockup({ className }: { className?: string }) {
                   <div className="mt-1.5 text-[9px] text-ink-soft">Causa: Materiales +$ 850.000</div>
                 </div>
                 <div className="mt-2 space-y-1.5">
-                  {["Producción sin registros hace 7 días", "Entrega en 5 días, avance 70%"].map((t) => (
+                  {["Producción sin registros hace 7 días", "Entrega en 5 días, todavía en Compras"].map((t) => (
                     <div key={t} className="flex items-center gap-1.5 text-[9px] text-ink-soft">
                       <span className="size-1.5 shrink-0 rounded-full bg-warn" /> {t}
                     </div>

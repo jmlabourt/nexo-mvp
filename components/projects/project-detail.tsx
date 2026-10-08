@@ -2,8 +2,8 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { ArrowRightLeft, ClipboardPen, FolderX, Lock, ShoppingCart } from "lucide-react";
-import { formatDate, daysBetween, todayISO } from "@/lib/formatting";
-import { projectInsights } from "@/lib/insights";
+import { formatDate, formatDays, daysBetween, todayISO } from "@/lib/formatting";
+import { insightsTitle, projectInsights } from "@/lib/insights";
 import { useAppStore } from "@/store/use-app-store";
 import { useProjectAlerts, useProjectView } from "@/store/selectors";
 import { Button } from "@/components/ui/button";
@@ -29,6 +29,7 @@ import { ActualCostsTab } from "@/components/actual-costs/actual-costs-tab";
 import { RecordDialog } from "@/components/actual-costs/record-dialog";
 import { PurchaseForm } from "@/components/materials/purchase-form";
 import { AlertItem } from "@/components/alerts/alert-item";
+import { BackButton } from "@/components/layout/back-button";
 
 type DialogName = "record" | "purchase" | "status" | "close" | null;
 
@@ -65,12 +66,13 @@ export function ProjectDetail({ id, tab: initialTab, purchase }: { id: string; t
   return (
     <div className="min-w-0 space-y-6">
       <header className="space-y-4">
+        <BackButton fallback="/projects" />
         <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2 text-sm text-slate-500">
               <span className="font-medium">{p.code}</span>
               <StatusBadge status={p.status} />
-              <HealthBadge health={health} />
+              {health && <HealthBadge health={health} />}
             </div>
             <h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-900">{p.name}</h1>
             <p className="mt-1 text-sm text-slate-500">
@@ -79,7 +81,7 @@ export function ProjectDetail({ id, tab: initialTab, purchase }: { id: string; t
             <div className="mt-3 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-slate-600">
               <span>
                 Entrega: <strong className="tabular text-slate-900">{formatDate(p.dueDate)}</strong>
-                {!closed && <span className={daysLeft < 0 ? "text-red-700" : "text-slate-500"}> ({daysLeft < 0 ? `vencida hace ${-daysLeft} días` : `en ${daysLeft} días`})</span>}
+                {!closed && <span className={daysLeft < 0 ? "text-red-700" : "text-slate-500"}> ({daysLeft < 0 ? `vencida hace ${formatDays(-daysLeft)}` : daysLeft === 0 ? "hoy" : `en ${formatDays(daysLeft)}`})</span>}
               </span>
               {closed && p.closedAt && <span>Cerrado el {formatDate(p.closedAt)}</span>}
             </div>
@@ -93,7 +95,7 @@ export function ProjectDetail({ id, tab: initialTab, purchase }: { id: string; t
                 <ShoppingCart /> Registrar compra
               </Button>
               <Button variant="outline" onClick={openDialog("status")} size="lg">
-                <ArrowRightLeft /> Cambiar estado
+                <ArrowRightLeft /> Cambiar etapa
               </Button>
               <Button variant="outline" onClick={openDialog("close")} size="lg" className="text-slate-700">
                 <Lock /> Cerrar proyecto
@@ -109,7 +111,7 @@ export function ProjectDetail({ id, tab: initialTab, purchase }: { id: string; t
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList>
           <TabsTrigger value="summary">Resumen</TabsTrigger>
-          <TabsTrigger value="budget">Presupuesto</TabsTrigger>
+          <TabsTrigger value="budget">Costo presupuestado</TabsTrigger>
           <TabsTrigger value="materials">Materiales</TabsTrigger>
           <TabsTrigger value="costs">Costos reales</TabsTrigger>
           <TabsTrigger value="stages">Etapas</TabsTrigger>
@@ -126,7 +128,7 @@ export function ProjectDetail({ id, tab: initialTab, purchase }: { id: string; t
           <div className="grid gap-4 lg:grid-cols-2">
             <Card>
               <CardHeader>
-                <CardTitle>Lectura rápida</CardTitle>
+                <CardTitle>{insightsTitle(p)}</CardTitle>
               </CardHeader>
               <CardContent>
                 <InsightList insights={insights} />
@@ -138,7 +140,7 @@ export function ProjectDetail({ id, tab: initialTab, purchase }: { id: string; t
               </CardHeader>
               <CardContent className="space-y-2">
                 {alerts.length === 0 ? (
-                  <p className="text-sm text-slate-500">{closed ? "Los proyectos cerrados no generan alertas." : "Sin alertas abiertas."}</p>
+                  <p className="text-sm text-slate-500">{p.status === "completed" ? "Los proyectos finalizados no generan alertas." : p.status === "quotation" ? "Los proyectos en Cotización no generan alertas." : "Sin alertas abiertas."}</p>
                 ) : (
                   alerts.slice(0, 5).map((a) => <AlertItem key={a.id} alert={a} showProject={false} compact />)
                 )}
@@ -150,7 +152,7 @@ export function ProjectDetail({ id, tab: initialTab, purchase }: { id: string; t
               </CardContent>
             </Card>
           </div>
-          <DeviationSection econ={econ} settings={settings} />
+          <DeviationSection econ={econ} settings={settings} completed={p.status === "completed"} />
         </TabsContent>
         <TabsContent value="budget">
           <BudgetTab project={p} />

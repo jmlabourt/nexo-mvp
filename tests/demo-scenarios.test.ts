@@ -2,7 +2,7 @@
 import { describe, expect, it } from "vitest";
 import { buildSeed, MAIN_DEMO_PROJECT_ID } from "@/lib/seed-data";
 import { actualByCategory, projectEconomics } from "@/lib/calculations";
-import { economicHealth, projectAlerts } from "@/lib/alerts";
+import { projectAlerts, projectHealth } from "@/lib/alerts";
 import { materialRows } from "@/lib/material-reconciliation";
 import { DEFAULT_SETTINGS as S } from "@/lib/constants";
 import * as ops from "@/lib/project-operations";
@@ -34,7 +34,7 @@ describe("P-1042 — escenarios 1 a 3", () => {
     expect(e.mainDeviation?.category).toBe("materials");
     expect(e.materialActualCost).toBeGreaterThan(4_700_000);
     expect(e.materialActualCost).toBeLessThan(4_900_000);
-    expect(economicHealth(p, S, today)).toBe("risk");
+    expect(projectHealth(p, projectAlerts(p, S, today))).toBe("risk");
   });
   it("melamina blanca: 10 presup., 12 compradas, 9 consumidas, 1 desperdicio, 2 sobrante", () => {
     const { p } = seed();
@@ -172,7 +172,7 @@ describe("estados y ejecución", () => {
     const quotation = projects.find((x) => x.id === "p-1056")!;
     const approved = ops.changeStatus(quotation, "approved", ctx);
     expect(approved.baseline?.budgetTotal).toBe(projectEconomics(quotation).budgetTotal);
-    const edited = ops.addBudgetLine(approved, { category: "other", description: "extra", quantity: null, unit: "global", unitCost: 500_000 }, ctx);
+    const edited = ops.addBudgetLine(approved, { category: "contingency", description: "extra", quantity: null, unit: "global", unitCost: 500_000 }, ctx);
     expect(edited.baseline).toEqual(approved.baseline);
     expect(projectEconomics(edited).budgetTotal).toBe(approved.baseline!.budgetTotal + 500_000);
     const back = ops.changeStatus(ops.changeStatus(edited, "purchasing", ctx), "approved", ctx, { confirmBack: true });
@@ -208,6 +208,6 @@ describe("escenario 9 y 10 — cierre e historial", () => {
   });
   it("presupuesto bloqueado en producción", () => {
     const { p } = seed();
-    expect(() => ops.addBudgetLine(p, { category: "other", description: "x", quantity: null, unit: "global", unitCost: 1 }, ctx)).toThrow(/bloqueado/);
+    expect(() => ops.addBudgetLine(p, { category: "contingency", description: "x", quantity: null, unit: "global", unitCost: 1 }, ctx)).toThrow(/bloqueado/);
   });
 });

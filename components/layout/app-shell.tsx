@@ -11,6 +11,8 @@ import { Button } from "@/components/ui/button";
 import { ModeSwitch } from "./mode-switch";
 import { WorkshopHome } from "@/components/workshop/workshop-home";
 import { GlobalSearch } from "./global-search";
+import { useTrackNavigation } from "./back-button";
+import { breadcrumbTrail, type Crumb } from "@/lib/navigation";
 
 const NAV = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -27,25 +29,16 @@ function isActive(pathname: string, href: string) {
   return pathname.startsWith(href);
 }
 
-function useBreadcrumb(): string[] {
+function useBreadcrumb(): Crumb[] {
   const pathname = usePathname();
   const projects = useAppStore((s) => s.projects);
-  const parts = pathname.split("/").filter(Boolean);
-  const crumbs: string[] = [];
-  const root = NAV.find((n) => n.href === `/${parts[0]}`);
-  crumbs.push(root?.label ?? parts[0]);
-  if (parts[0] === "projects" && parts[1]) {
-    if (parts[1] === "new") crumbs.push("Nuevo proyecto");
-    else crumbs.push(projects.find((p) => p.id === parts[1])?.code ?? "Proyecto");
-  }
-  return crumbs;
+  return breadcrumbTrail(pathname, (id) => projects.find((p) => p.id === id)?.code);
 }
 
 function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
   const resetDemo = useAppStore((s) => s.resetDemo);
-  const { open } = useAlerts();
-  const critical = open.filter((a) => a.level !== "info").length;
+  const { count } = useAlerts();
   const userName = useAppStore((s) => s.userName);
   const userEmail = useAppStore((s) => s.userEmail);
   const organizationName = useAppStore((s) => s.organizationName);
@@ -72,8 +65,8 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
             >
               <item.icon className="size-4" aria-hidden />
               {item.label}
-              {item.href === "/alerts" && critical > 0 && (
-                <span className="ml-auto rounded-full bg-red-100 px-1.5 text-xs font-semibold text-red-700 tabular">{critical}</span>
+              {item.href === "/alerts" && count > 0 && (
+                <span className="ml-auto rounded-full bg-red-100 px-1.5 text-xs font-semibold text-red-700 tabular">{count}</span>
               )}
             </Link>
           );
@@ -86,8 +79,8 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
             {userName.split(" ").filter(Boolean).slice(0, 2).map((w) => w[0]?.toUpperCase()).join("")}
           </div>
           <div className="min-w-0">
-            <div className="truncate text-sm font-medium text-slate-900">{userName}</div>
-            <div className="truncate text-xs text-slate-500" title={userEmail}>
+            <div className="break-words text-sm font-medium text-slate-900">{userName}</div>
+            <div className="break-words text-xs text-slate-500" title={userEmail}>
               {organizationName}
             </div>
           </div>
@@ -114,8 +107,7 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
 
 function Header({ onMenu }: { onMenu: () => void }) {
   const crumbs = useBreadcrumb();
-  const { open } = useAlerts();
-  const count = open.filter((a) => a.level !== "info").length;
+  const { count } = useAlerts();
   return (
     <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-slate-200 bg-white/95 px-4 backdrop-blur lg:px-8">
       <Button variant="ghost" size="icon" className="lg:hidden" onClick={onMenu} aria-label="Abrir menú">
@@ -124,8 +116,14 @@ function Header({ onMenu }: { onMenu: () => void }) {
       <nav aria-label="Breadcrumb" className="hidden min-w-0 text-sm text-slate-500 sm:block">
         {crumbs.map((c, i) => (
           <span key={i}>
-            {i > 0 && <span className="mx-1.5 text-slate-300">/</span>}
-            <span className={i === crumbs.length - 1 ? "font-medium text-slate-900" : undefined}>{c}</span>
+            {i > 0 && <span className="mx-1.5 text-slate-300" aria-hidden>/</span>}
+            {c.href ? (
+              <Link href={c.href} className="hover:text-blue-700 hover:underline">
+                {c.label}
+              </Link>
+            ) : (
+              <span className="font-medium text-slate-900" aria-current="page">{c.label}</span>
+            )}
           </span>
         ))}
       </nav>
@@ -151,6 +149,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const mode = useAppStore((s) => s.currentMode);
   const role = useAppStore((s) => s.role);
   const [menuOpen, setMenuOpen] = useState(false);
+  useTrackNavigation();
 
   if (role === "operator" || mode === "workshop") return <WorkshopHome />;
 

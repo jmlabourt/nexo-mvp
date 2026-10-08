@@ -39,11 +39,11 @@ export function AlertItem({ alert, resolved = false, showProject = true, compact
           )}
           <div className="flex gap-2">
             {resolved ? (
-              <Button variant="ghost" size="sm" onClick={() => reopenAlert(alert.id)}>
+              <Button variant="ghost" size="sm" onClick={() => reopenAlert(alert.resolutionKey)}>
                 <RotateCcw /> Reabrir
               </Button>
             ) : (
-              <Button variant="ghost" size="sm" onClick={() => resolveAlert(alert.id)}>
+              <Button variant="ghost" size="sm" onClick={() => resolveAlert(alert.resolutionKey)}>
                 <Check /> Marcar resuelta
               </Button>
             )}

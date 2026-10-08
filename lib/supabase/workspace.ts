@@ -195,6 +195,12 @@ export async function syncOperators(db: SupabaseClient, org: string, prev: Opera
   if (changed.length) {
     check(await db.from("operators").upsert(changed.map(({ o, i }) => operatorToRow(org, o, i)), { onConflict: "organization_id,id" }));
   }
+  // Eliminación definitiva (solo operarios sin horas registradas: lo valida lib/operators).
+  const kept = new Set(next.map((o) => o.id));
+  const removed = prev.filter((o) => !kept.has(o.id)).map((o) => o.id);
+  if (removed.length) {
+    check(await db.from("operators").delete().eq("organization_id", org).in("id", removed));
+  }
 }
 
 export async function syncRequests(db: SupabaseClient, org: string, prev: MaterialRequest[], next: MaterialRequest[]) {
