@@ -39,7 +39,7 @@ export function DashboardMockup({ className }: { className?: string }) {
         className,
       )}
       role="img"
-      aria-label={`Vista del Modo Gestión de ${APP_NAME}: margen esperado 40%, margen proyectado 30,8% y alerta de materiales en el proyecto Local Palermo.`}
+      aria-label={`Vista del Modo Gestión de ${APP_NAME}: rentabilidad esperada 40%, rentabilidad proyectada 30,8% y alerta de materiales en el proyecto Local Palermo.`}
     >
       <div className="overflow-hidden rounded-2xl border border-line bg-canvas sm:rounded-[20px]" aria-hidden>
         {/* barra superior */}
@@ -85,8 +85,8 @@ export function DashboardMockup({ className }: { className?: string }) {
             </div>
 
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-              <Kpi label="Margen esperado" value="40,0%" hint="P-1042 al cotizar" />
-              <Kpi label="Margen proyectado" value="30,8%" hint="−9,2 puntos" tone="bad" />
+              <Kpi label="Rentabilidad esperada" value="40,0%" hint="P-1042 al cotizar" />
+              <Kpi label="Rentabilidad proyectada" value="30,8%" hint="−9,2 puntos" tone="bad" />
               <Kpi label="Desvío materiales" value="+$ 850k" hint="sobre presupuesto" tone="bad" />
               <Kpi label="Costo imputable" value="$ 500k" hint="no $ 600k comprados" tone="good" />
             </div>

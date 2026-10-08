@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
-import { Bell, Boxes, Calculator, FolderKanban, History, HardHat, LayoutDashboard, LogOut, Menu, Plus, RotateCcw, Settings, TriangleAlert, X } from "lucide-react";
+import { Boxes, Calculator, FolderKanban, History, HardHat, LayoutDashboard, LogOut, Menu, Plus, RotateCcw, Settings, TriangleAlert, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { APP_NAME, APP_SUBTITLE } from "@/lib/constants";
 import { useAppStore } from "@/store/use-app-store";
@@ -45,11 +45,11 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
 
   return (
     <div className="flex h-full flex-col">
-      <Link href="/" className="block px-5 py-5" title="Ir al sitio">
+      <Link href="/" className="block shrink-0 px-5 py-5" title="Ir al sitio">
         <div className="text-lg font-semibold tracking-tight text-slate-900">{APP_NAME}</div>
         <div className="text-xs text-slate-500">{APP_SUBTITLE}</div>
       </Link>
-      <nav aria-label="Principal" className="flex-1 space-y-0.5 px-3">
+      <nav aria-label="Principal" className="min-h-0 flex-1 space-y-0.5 overflow-y-auto px-3">
         {NAV.map((item) => {
           const active = isActive(pathname, item.href);
           return (
@@ -72,7 +72,7 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
           );
         })}
       </nav>
-      <div className="space-y-3 border-t border-slate-200 p-4">
+      <div className="shrink-0 space-y-3 border-t border-slate-200 p-4">
         <ModeSwitch />
         <div className="flex items-center gap-3">
           <div className="flex size-8 items-center justify-center rounded-full bg-slate-200 text-xs font-semibold text-slate-700" aria-hidden>
@@ -107,7 +107,6 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
 
 function Header({ onMenu }: { onMenu: () => void }) {
   const crumbs = useBreadcrumb();
-  const { count } = useAlerts();
   return (
     <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-slate-200 bg-white/95 px-4 backdrop-blur lg:px-8">
       <Button variant="ghost" size="icon" className="lg:hidden" onClick={onMenu} aria-label="Abrir menú">
@@ -128,14 +127,6 @@ function Header({ onMenu }: { onMenu: () => void }) {
         ))}
       </nav>
       <GlobalSearch />
-      <Link href="/alerts" className="relative rounded-md p-2 text-slate-600 hover:bg-slate-100" aria-label={`Alertas (${count} abiertas)`}>
-        <Bell className="size-5" />
-        {count > 0 && (
-          <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-semibold text-white tabular">
-            {count}
-          </span>
-        )}
-      </Link>
       <Button asChild className="hidden sm:inline-flex">
         <Link href="/projects/new">
           <Plus /> Nuevo proyecto

@@ -93,9 +93,9 @@ export function Dashboard() {
       <section aria-label="Indicadores" className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
         <Stat label="Proyectos activos" value={agg.count} hint="Aprobados a instalación" />
         <Stat label="Precio de venta total (activos)" value={formatCompactCurrency(agg.totalSales)} />
-        <Stat label="Margen esperado agregado" value={formatPercent(agg.expectedAggregateMargin)} hint="Ponderado por venta" />
+        <Stat label="Rentabilidad esperada agregada" value={formatPercent(agg.expectedAggregateMargin)} hint="Ponderado por venta" />
         <Stat
-          label="Margen proyectado agregado"
+          label="Rentabilidad proyectada agregada"
           value={formatPercent(agg.projectedAggregateMargin)}
           tooltip={MARGIN_TOOLTIP}
           tone={aggDelta !== null && aggDelta < -2 ? "yellow" : "default"}
@@ -122,7 +122,7 @@ export function Dashboard() {
       <div className="mt-8 grid gap-6 xl:grid-cols-3">
         <Card className="xl:col-span-3">
           <CardHeader>
-            <CardTitle>Margen esperado vs. margen proyectado</CardTitle>
+            <CardTitle>Rentabilidad esperada vs. rentabilidad proyectada</CardTitle>
             <CardDescription>Por proyecto activo. La diferencia entre barras es la rentabilidad que se está perdiendo (o ganando).</CardDescription>
           </CardHeader>
           <CardContent>
@@ -148,7 +148,7 @@ export function Dashboard() {
         </div>
       </Card>
       <p className="mt-3 text-xs text-slate-500">
-        Desvío = margen proyectado − margen esperado, en puntos de margen.
+        Desvío = rentabilidad proyectada − rentabilidad esperada, en puntos de rentabilidad.
       </p>
     </div>
   );

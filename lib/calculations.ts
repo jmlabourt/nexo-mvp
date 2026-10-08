@@ -39,7 +39,7 @@ export function budgetByCategory(lines: BudgetLine[]): CategoryAmounts {
 
 // ── Márgenes (helpers) ────────────────────────────────────────
 
-/** ¿Hay precio de venta cargado? Sin precio no hay ganancia ni margen que mostrar. */
+/** ¿Hay precio de venta cargado? Sin precio no hay ganancia ni rentabilidad que mostrar. */
 export function hasSalesPrice(salesPrice: number): boolean {
   return Number.isFinite(salesPrice) && salesPrice > 0;
 }
@@ -172,7 +172,7 @@ export function categoryBreakdown(project: Project): CategoryRow[] {
   });
 }
 
-// ── Margen proyectado y final ─────────────────────────────────
+// ── Rentabilidad proyectada y final ─────────────────────────────────
 
 export function projectedFinalCost(project: Pick<Project, "budgetLines" | "actualEntries" | "materialUsages">): number {
   const b = budgetByCategory(project.budgetLines);
@@ -188,7 +188,7 @@ export function projectedMargin(project: Project): number | null {
   return marginPercent(projectedProfit(project), project.salesPrice);
 }
 
-/** Margen real final: solo existe cuando el proyecto está finalizado. */
+/** Rentabilidad real final: solo existe cuando el proyecto está finalizado. */
 export function finalMargin(project: Project): number | null {
   if (project.status !== "completed") return null;
   return marginPercent(project.salesPrice - actualCostToDate(project), project.salesPrice);
@@ -240,7 +240,7 @@ export function projectEconomics(project: Project): ProjectEconomics {
   const pm = marginPercent(project.salesPrice - projected, project.salesPrice);
   const categories = categoryBreakdown(project);
   const fm = completed ? marginPercent(project.salesPrice - actual, project.salesPrice) : null;
-  // La Diferencia es la suma de los desvíos por categoría: así el "¿Por qué?" siempre cierra exacto.
+  // La Diferencia es la suma de los desvíos por categoría: el total de la tabla de desvío siempre cierra exacto.
   const overrun = round2(categories.reduce((s, c) => s + c.projectedVariance.amount, 0));
   return {
     salesPrice: project.salesPrice,
@@ -266,30 +266,6 @@ export function projectEconomics(project: Project): ProjectEconomics {
     categories,
     mainDeviation: mainDeviation(categories),
   };
-}
-
-export interface DeviationReason {
-  category: BudgetCategory;
-  /** Desvío de la categoría (proyectado − presupuestado): positivo = cuesta más, negativo = cuesta menos. */
-  amount: number;
-}
-
-export interface DeviationReasons {
-  rows: DeviationReason[];
-  /** Igual a la "Diferencia" (ProjectEconomics.costOverrun). */
-  total: number;
-}
-
-/**
- * "¿Por qué?": todas las categorías con desvío distinto de cero (positivas y negativas),
- * de mayor a menor, y una línea Total que suma exactamente la Diferencia.
- */
-export function deviationReasons(econ: Pick<ProjectEconomics, "categories" | "costOverrun">): DeviationReasons {
-  const rows = econ.categories
-    .map((c) => ({ category: c.category, amount: c.projectedVariance.amount }))
-    .filter((r) => r.amount !== 0)
-    .sort((a, b) => b.amount - a.amount);
-  return { rows, total: econ.costOverrun };
 }
 
 /** Categoría con mayor sobrecosto (proyectado − presupuesto). null si ninguna está por encima. */

@@ -48,23 +48,23 @@ export const PROBLEM_POINTS = [
 export const FEATURES = [
   {
     key: "margin",
-    title: "Margen proyectado, no solo el final",
-    body: "En cada categoría asumimos que lo que queda del costo presupuestado se va a gastar. Así ves cómo viene el margen a mitad de obra, sin números inflados.",
+    title: "Rentabilidad proyectada, no solo el final",
+    body: "En cada categoría asumimos que lo que queda del costo presupuestado se va a gastar. Así ves cómo viene la rentabilidad a mitad de obra, sin números inflados.",
   },
   {
     key: "workshop",
     title: "Registro de taller en menos de 30 segundos",
-    body: "Desde el celular, el operario elige el proyecto, el material y las cantidades. Sin precios ni márgenes en pantalla.",
+    body: "Desde el celular, el operario elige el proyecto, el material y las cantidades. Sin precios ni costos en pantalla.",
   },
   {
     key: "purchase",
     title: "Compra ≠ consumo",
-    body: "Comprar 12 placas no cambia el margen. Consumirlas, desperdiciarlas o dejarlas como sobrante, sí.",
+    body: "Comprar 12 placas no cambia la rentabilidad. Consumirlas, desperdiciarlas o dejarlas como sobrante, sí.",
   },
   {
     key: "alerts",
     title: "Alertas que dirigen la atención",
-    body: "Desvíos por categoría, caída de margen, proyectos sin registros y entregas en riesgo. Umbrales configurables.",
+    body: "Desvíos por categoría, caída de rentabilidad, proyectos sin registros y entregas en riesgo. Umbrales configurables.",
   },
   {
     key: "leftovers",
@@ -81,7 +81,7 @@ export const FEATURES = [
 export const STEPS = [
   {
     title: "Cargás el costo presupuestado",
-    body: `Materiales, mano de obra, máquinas, tercerizaciones, logística, instalación e imprevistos. Con el precio de venta, ${APP_NAME} calcula el margen esperado.`,
+    body: `Materiales, mano de obra, máquinas, tercerizaciones, logística, instalación e imprevistos. Con el precio de venta, ${APP_NAME} calcula la rentabilidad esperada.`,
   },
   {
     title: "El taller registra lo que pasó",
@@ -92,8 +92,8 @@ export const STEPS = [
     body: "Valoriza con reglas explícitas (el costo del lote del que sale el material) y guarda de dónde salió el precio.",
   },
   {
-    title: "Gestión ve el margen y decide",
-    body: "Costo real hasta hoy, margen proyectado, desvíos, alertas y actividad: quién, qué y cuándo.",
+    title: "Gestión ve la rentabilidad y decide",
+    body: "Costo real hasta hoy, rentabilidad proyectada, desvíos, alertas y actividad: quién, qué y cuándo.",
   },
 ];
 
@@ -101,7 +101,7 @@ export const WORKSHOP_POINTS = [
   "Pensado para el celular del taller",
   "Elegís material, origen y cantidades",
   "Consumo, desperdicio y sobrante por separado",
-  "No muestra precios ni márgenes",
+  "No muestra precios ni costos",
 ];
 
 export const MANAGEMENT_POINTS = [
@@ -149,12 +149,12 @@ export const FAQS = [
     a: "No. Contabilidad, facturación, payroll, CRM, órdenes de compra complejas, múltiples depósitos o planificación de producción quedan afuera a propósito. El stock aparece solo porque ayuda a explicar el costo real y la rentabilidad.",
   },
   {
-    q: "¿Qué es el margen proyectado?",
-    a: "Si a mitad de proyecto calculás venta menos costo registrado, el margen sale artificialmente alto. Por eso, en cada categoría asumimos que lo que queda del costo presupuestado se va a gastar y, cuando lo real ya lo superó, tomamos lo real. El margen real final existe recién cuando el proyecto termina.",
+    q: "¿Qué es la rentabilidad proyectada?",
+    a: "Si a mitad de proyecto calculás venta menos costo registrado, la rentabilidad sale artificialmente alta. Por eso, en cada categoría asumimos que lo que queda del costo presupuestado se va a gastar y, cuando lo real ya lo superó, tomamos lo real. La rentabilidad real final existe recién cuando el proyecto termina.",
   },
   {
     q: "¿Quién registra en el taller?",
-    a: "Es una de las preguntas que queremos responder con el piloto. El registro está pensado para que cualquier operario lo haga en menos de 30 segundos desde el celular, sin ver precios ni márgenes.",
+    a: "Es una de las preguntas que queremos responder con el piloto. El registro está pensado para que cualquier operario lo haga en menos de 30 segundos desde el celular, sin ver precios ni costos.",
   },
   {
     q: "¿Tengo que dejar mi Excel?",

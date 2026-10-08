@@ -33,19 +33,24 @@ function estimatedDelivery(input: Parameters<typeof totalWorkingDays>[0], startD
 export function QuotePage() {
   const router = useRouter();
   const projects = useAppStore((s) => s.projects);
+  const operators = useAppStore((s) => s.operators);
+  const overtimeMultiplier = useAppStore((s) => s.costSettings.overtimeMultiplier);
   const [state, setState] = useState<CalcState>(initialCalcState);
   const [projectType, setProjectType] = useState<string>(PROJECT_TYPES[0]);
   const [startDate, setStartDate] = useState(todayISO());
-  /** Fecha elegida con “Usar esta fecha”; si no, se usa la estimada. */
-  const [chosenDueDate, setChosenDueDate] = useState<string | null>(null);
+  /** Plazo de entrega (opcional): se tipea o se elige con “Usar esta fecha”. Sin plazo, se usa la entrega estimada. */
+  const [deadline, setDeadline] = useState("");
   const [salesPrice, setSalesPrice] = useState(0);
   const [error, setError] = useState("");
 
-  const calc = useMemo(() => computeCalculator(state, startDate, projectType, projects), [state, startDate, projectType, projects]);
+  const calc = useMemo(
+    () => computeCalculator(state, startDate, projectType, { operators, projects, deadline, overtimeMultiplier, today: todayISO() }),
+    [state, startDate, projectType, operators, projects, deadline, overtimeMultiplier],
+  );
   const profit = profitOrNull(salesPrice, calc.total);
   const margin = marginPercent(salesPrice - calc.total, salesPrice);
   const estimated = estimatedDelivery(calc.input, startDate);
-  const dueDate = chosenDueDate ?? estimated;
+  const dueDate = deadline || estimated;
 
   const toProject = () => {
     if (!calc.hasContent) return setError("Cargá al menos un material, horas de trabajo o un costo para armar la cotización.");
@@ -58,7 +63,7 @@ export function QuotePage() {
   const reset = () => {
     setState(initialCalcState());
     setSalesPrice(0);
-    setChosenDueDate(null);
+    setDeadline("");
     setError("");
   };
 
@@ -67,7 +72,7 @@ export function QuotePage() {
       <PageHeader
         back
         title="Cotizador"
-        subtitle="Calculá el costo, el precio de venta y el margen antes de crear el proyecto. Si el cliente acepta, lo convertís en proyecto con un clic."
+        subtitle="Calculá el costo, el precio de venta y la rentabilidad antes de crear el proyecto. Si el cliente acepta, lo convertís en proyecto con un clic."
         actions={
           <Button variant="outline" onClick={reset}>
             <RotateCcw /> Empezar de nuevo
@@ -77,7 +82,7 @@ export function QuotePage() {
       <div className="grid gap-6 lg:grid-cols-[1fr_300px]">
         <div className="space-y-4">
           <Card>
-            <CardContent className="grid gap-4 pt-5 sm:grid-cols-2">
+            <CardContent className="grid gap-4 pt-5 sm:grid-cols-3">
               <Field label="Tipo de proyecto" htmlFor="q-type" hint="Se usa para comparar con tus proyectos anteriores del mismo tipo.">
                 <Select id="q-type" value={projectType} onChange={(e) => setProjectType(e.target.value)}>
                   {PROJECT_TYPES.map((t) => (
@@ -88,6 +93,9 @@ export function QuotePage() {
               <Field label="Fecha de inicio estimada" htmlFor="q-start">
                 <Input id="q-start" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value || todayISO())} />
               </Field>
+              <Field label="Plazo de entrega (opcional)" htmlFor="q-deadline" hint="Con plazo se calculan los días hábiles y las horas extra.">
+                <Input id="q-deadline" type="date" value={deadline} min={startDate} onChange={(e) => setDeadline(e.target.value)} />
+              </Field>
             </CardContent>
           </Card>
           <BudgetCalculator
@@ -97,7 +105,8 @@ export function QuotePage() {
             projectType={projectType}
             salesPrice={salesPrice}
             onSalesPrice={setSalesPrice}
-            onDueDate={setChosenDueDate}
+            onDueDate={setDeadline}
+            deadline={deadline}
           />
           {error && (
             <p role="alert" className="text-sm text-red-600">
@@ -113,7 +122,7 @@ export function QuotePage() {
               <Row label="Precio de venta" value={salesPrice > 0 ? formatCurrency(salesPrice) : "Sin definir"} />
               <Row label="Ganancia esperada" value={formatCurrencyOrDash(profit)} strong />
               <div className="border-t border-slate-100 pt-3">
-                <div className="text-xs text-slate-500">Margen esperado</div>
+                <div className="text-xs text-slate-500">Rentabilidad esperada</div>
                 <div className={cn("text-3xl font-semibold tabular", margin !== null && margin < 15 ? "text-amber-700" : "text-slate-900")} aria-live="polite">
                   {salesPrice > 0 ? formatPercent(margin) : "—"}
                 </div>

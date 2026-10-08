@@ -10,7 +10,7 @@ export function Problem() {
       <Container>
         <SectionHeading
           eyebrow="El problema"
-          title="Entre lo que cotizaste y lo que pasó, se pierde el margen"
+          title="Entre lo que cotizaste y lo que pasó, se pierde la rentabilidad"
           subtitle="Al cotizar estimás materiales, horas, tercerizaciones, logística e instalación. En la ejecución pasan cosas distintas, y parte de eso nunca se registra."
         />
         <div className="mt-14 grid gap-4 md:grid-cols-3">

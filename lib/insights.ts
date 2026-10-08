@@ -3,7 +3,7 @@
 // Cada texto se deriva de números visibles en la UI → sin caja negra.
 // ─────────────────────────────────────────────────────────────
 import type { Project } from "@/types";
-import { CATEGORY_LABELS, CATEGORY_ORDER, STATUS_LABELS } from "./constants";
+import { CATEGORY_LABELS, CATEGORY_ORDER } from "./constants";
 import {
   actualByCategory,
   budgetByCategory,
@@ -16,7 +16,6 @@ import { projectMaterialFlow } from "./material-flow";
 import type { StockState } from "./stock";
 import {
   formatCurrency,
-  formatMarginPoints,
   formatNumber,
   formatPercent,
   formatQty,
@@ -28,91 +27,19 @@ export interface Insight {
   text: string;
 }
 
-/** Título de la tarjeta de lectura rápida: en los finalizados cuenta el cierre. */
-export function insightsTitle(project: Pick<Project, "status">): string {
-  return project.status === "completed" ? "Cierre: qué pasó" : "Lectura rápida";
-}
-
-export function projectInsights(project: Project): Insight[] {
+/**
+ * Lo que queda por gastar del costo presupuestado (categorías todavía por debajo de lo presupuestado).
+ * Es lo que la rentabilidad proyectada asume que se va a gastar. null si no queda nada o el proyecto está finalizado.
+ */
+export function remainingBudgetText(project: Project): string | null {
+  if (project.status === "completed") return null;
   const econ = projectEconomics(project);
-  if (project.status === "completed") return closingInsights(project);
-  if (!econ.hasExecutionData) {
-    return [
-      {
-        tone: "neutral",
-        text:
-          project.status === "quotation" || project.status === "approved"
-            ? `El proyecto está en la etapa ${STATUS_LABELS[project.status]}: todavía no hay consumos ni costos registrados. Por ahora solo hay margen esperado.`
-            : "Todavía no hay consumos ni costos registrados. Cuando el taller registre, acá vas a ver cómo viene el margen.",
-      },
-    ];
-  }
-  const out: Insight[] = [];
-  const over = econ.categories
-    .filter((c) => c.actual > c.budget)
-    .sort((a, b) => b.actual - b.budget - (a.actual - a.budget));
-
-  for (const c of over.slice(0, 3)) {
-    const label = CATEGORY_LABELS[c.category];
-    const amount = c.actual - c.budget;
-    if (c.budget === 0) {
-      out.push({ tone: "negative", text: `${label} registra ${formatCurrency(amount)} sin costo presupuestado.` });
-    } else if (c === over[0]) {
-      out.push({ tone: "negative", text: `${label} está ${formatCurrency(amount)} por encima de lo presupuestado.` });
-    } else {
-      out.push({
-        tone: "negative",
-        text: `${label} acumula un desvío del ${formatPercent((amount / c.budget) * 100, 0)}.`,
-      });
-    }
-  }
-
-  if (econ.marginDeltaPp !== null) {
-    const d = econ.marginDeltaPp;
-    if (d < -0.05) {
-      out.push({
-        tone: "negative",
-        text: `Con los costos registrados hasta hoy, el margen proyectado cayó ${formatMarginPoints(-d)}.`,
-      });
-    } else {
-      out.push({ tone: "positive", text: "Con los costos registrados hasta hoy, el margen proyectado se mantiene." });
-    }
-  } else if (!econ.hasSalesPrice) {
-    out.push({ tone: "neutral", text: "El proyecto no tiene precio de venta: no se puede calcular ganancia ni margen." });
-  }
-
   const pending = econ.categories.filter((c) => c.actual < c.budget && c.budget > 0);
-  if (pending.length > 0) {
-    const remaining = pending.reduce((s, c) => s + (c.budget - c.actual), 0);
-    out.push({
-      tone: "neutral",
-      text: `Quedan ${formatCurrency(remaining)} del costo presupuestado por gastar (${pending
-        .map((c) => CATEGORY_LABELS[c.category])
-        .join(", ")}). El margen proyectado asume que se van a gastar.`,
-    });
-  }
-  return out;
-}
-
-/** "Cierre: qué pasó" — solo para finalizados: costo real final vs. presupuestado y margen real final. */
-export function closingInsights(project: Project): Insight[] {
-  const econ = projectEconomics(project);
-  const { costText, causeText } = closingSummary(project);
-  const out: Insight[] = [{ tone: "neutral", text: costText }];
-  if (causeText) out.push({ tone: "neutral", text: causeText });
-  if (econ.expectedMargin !== null && econ.finalMargin !== null) {
-    const d = econ.finalMargin - econ.expectedMargin;
-    out.push({
-      tone: d < -0.05 ? "negative" : "positive",
-      text:
-        Math.abs(d) < 0.05
-          ? `El margen real final fue ${formatPercent(econ.finalMargin)}, igual al esperado.`
-          : `El margen real final fue ${formatPercent(econ.finalMargin)}: ${formatMarginPoints(Math.abs(d))} ${d < 0 ? "menos" : "más"} que el esperado (${formatPercent(econ.expectedMargin)}).`,
-    });
-  } else if (!econ.hasSalesPrice) {
-    out.push({ tone: "neutral", text: "El proyecto no tenía precio de venta: no hay margen real final." });
-  }
-  return out;
+  if (pending.length === 0) return null;
+  const remaining = pending.reduce((s, c) => s + (c.budget - c.actual), 0);
+  return `Quedan ${formatCurrency(remaining)} del costo presupuestado por gastar (${pending
+    .map((c) => CATEGORY_LABELS[c.category])
+    .join(", ")}). La rentabilidad proyectada asume que se van a gastar.`;
 }
 
 export function materialInsights(project: Project, stock?: StockState): Insight[] {

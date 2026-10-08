@@ -66,9 +66,9 @@ export function formatSignedPercent(value: number | null, decimals = 1): string 
 }
 
 /**
- * Diferencia de margen en "puntos de margen" (nunca "%" ni "pp").
- *   formatMarginPoints(9.2)                 → "9,2 puntos de margen"
- *   formatMarginPoints(-9.2, { signed: true }) → "−9,2 puntos de margen"
+ * Diferencia de margen en "puntos de rentabilidad" (nunca "%" ni "pp").
+ *   formatMarginPoints(9.2)                 → "9,2 puntos de rentabilidad"
+ *   formatMarginPoints(-9.2, { signed: true }) → "−9,2 puntos de rentabilidad"
  *   formatMarginPoints(-9.2, { signed: true, short: true }) → "−9,2 puntos"
  */
 export function formatMarginPoints(
@@ -82,7 +82,7 @@ export function formatMarginPoints(
     maximumFractionDigits: decimals,
   }).format(Math.abs(r));
   const word = Math.abs(r) === 1 ? "punto" : "puntos";
-  const unit = short ? word : `${word} de margen`;
+  const unit = short ? word : `${word} de rentabilidad`;
   if (r === 0) return `0 ${unit}`;
   const sign = signed ? (r > 0 ? "+" : "−") : r < 0 ? "−" : "";
   return `${sign}${n} ${unit}`;

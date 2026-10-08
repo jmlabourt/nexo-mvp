@@ -290,7 +290,7 @@ class SeedBuilder {
     }
 
     if (spec.status === "completed" && spec.closedAt !== undefined) {
-      ev(spec.closedAt, "closed", MGMT, "Proyecto cerrado. Margen real calculado.", 17);
+      ev(spec.closedAt, "closed", MGMT, "Proyecto cerrado. Rentabilidad real calculada.", 17);
     }
     p.activity = activityTimeline(events, this.now.toISOString());
     // Línea base: el presupuesto con el que se aprobó el proyecto.

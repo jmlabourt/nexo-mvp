@@ -7,7 +7,8 @@ import { formatCurrency, formatDate, formatPercent, formatWorkingDays } from "@/
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DelayChart } from "@/components/charts/delay-chart";
-import { newLaborRow, newMachineRow, newMaterialRow, type CalcState, type CalculatorResult } from "./calculator-state";
+import { newMachineRow, newMaterialRow, type CalcState, type CalculatorResult } from "./calculator-state";
+import { LaborSection } from "./labor-section";
 
 interface Props {
   state: CalcState;
@@ -19,15 +20,18 @@ interface Props {
   priceError?: string;
   onSalesPrice: (n: number) => void;
   onDueDate: (iso: string) => void;
+  /** Plazo de entrega ("" = sin plazo): con él se estiman disponibilidad y horas extra. */
+  deadline: string;
 }
 
-const NumField = ({ id, label, value, onChange, suffix, placeholder }: { id: string; label: string; value: string; onChange: (v: string) => void; suffix?: string; placeholder?: string }) => (
+const NumField = ({ id, label, value, onChange, suffix, placeholder, help }: { id: string; label: string; value: string; onChange: (v: string) => void; suffix?: string; placeholder?: string; help?: string }) => (
   <div className="flex flex-col gap-1">
     <label htmlFor={id} className="text-xs font-medium text-slate-600">{label}</label>
     <div className="relative">
-      <Input id={id} inputMode="decimal" value={value} placeholder={placeholder ?? "0"} onChange={(e) => onChange(e.target.value)} className={suffix ? "pr-9 text-right" : "text-right"} />
+      <Input id={id} aria-describedby={help ? `${id}-help` : undefined} inputMode="decimal" value={value} placeholder={placeholder ?? "0"} onChange={(e) => onChange(e.target.value)} className={suffix ? "pr-9 text-right" : "text-right"} />
       {suffix && <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-slate-400">{suffix}</span>}
     </div>
+    {help && <p id={`${id}-help`} className="text-[11px] text-slate-500">{help}</p>}
   </div>
 );
 
@@ -59,7 +63,7 @@ const RemoveButton = ({ label, onClick }: { label: string; onClick: () => void }
   </Button>
 );
 
-export function BudgetCalculator({ state, onState, result, projectType, salesPrice, priceError, onSalesPrice, onDueDate }: Props) {
+export function BudgetCalculator({ state, onState, result, projectType, salesPrice, priceError, onSalesPrice, onDueDate, deadline }: Props) {
   const set = (patch: Partial<CalcState>) => onState({ ...state, ...patch });
   const { input, total } = result;
 
@@ -117,29 +121,19 @@ export function BudgetCalculator({ state, onState, result, projectType, salesPri
         </div>
       </Section>
 
-      <Section
-        title="2 · Mano de obra"
-        hint="Horas totales de trabajo de cada rol y cuántos operarios las hacen: de ahí sale la duración."
-        action={<Button variant="outline" size="sm" onClick={() => set({ labor: [...state.labor, newLaborRow()] })}><Plus /> Rol</Button>}
+      <LaborSection
+        rows={state.labor}
+        onRows={(labor) => set({ labor })}
+        plan={result.labor}
+        deadline={deadline}
+        installationDays={input.installationDays}
+        overtimeMultiplier={input.overtimeMultiplier}
       >
-        <div className="space-y-3">
-          {state.labor.map((l, i) => (
-            <div key={l.key} className="grid grid-cols-2 gap-2 sm:grid-cols-[2fr_1fr_1fr_1fr_auto]">
-              <div className="col-span-2 sm:col-span-1">
-                <TextField id={`l-role-${l.key}`} label="Rol" value={l.role} placeholder="Ej.: Carpintero" onChange={(v) => set({ labor: state.labor.map((x) => (x.key === l.key ? { ...x, role: v } : x)) })} />
-              </div>
-              <NumField id={`l-workers-${l.key}`} label="Operarios" value={l.workers} onChange={(v) => set({ labor: state.labor.map((x) => (x.key === l.key ? { ...x, workers: v } : x)) })} />
-              <NumField id={`l-hours-${l.key}`} label="Horas totales" suffix="h" value={l.hours} onChange={(v) => set({ labor: state.labor.map((x) => (x.key === l.key ? { ...x, hours: v } : x)) })} />
-              <NumField id={`l-cost-${l.key}`} label="Costo por hora" suffix="$" value={l.hourlyCost} onChange={(v) => set({ labor: state.labor.map((x) => (x.key === l.key ? { ...x, hourlyCost: v } : x)) })} />
-              <RemoveButton label={`Quitar rol ${i + 1}`} onClick={() => set({ labor: state.labor.filter((x) => x.key !== l.key) })} />
-            </div>
-          ))}
-        </div>
         <div className="mt-3 grid grid-cols-2 gap-2 sm:max-w-md">
           <NumField id="c-hpd" label="Horas por jornada" suffix="h" value={state.hoursPerDay} onChange={(v) => set({ hoursPerDay: v })} />
           <NumField id="c-instdays" label="Días de instalación" value={state.installationDays} onChange={(v) => set({ installationDays: v })} />
         </div>
-      </Section>
+      </LaborSection>
 
       <Section
         title="3 · Máquinas"
@@ -226,9 +220,9 @@ export function BudgetCalculator({ state, onState, result, projectType, salesPri
           </div>
           <div className="space-y-3 text-sm">
             <div className="grid grid-cols-2 gap-2">
-              <NumField id="c-target" label="Margen objetivo" suffix="%" value={state.targetMarginPct} onChange={(v) => set({ targetMarginPct: v })} />
+              <NumField id="c-target" label="Rentabilidad objetivo" help="Ganancia sobre el precio de venta" suffix="%" value={state.targetMarginPct} onChange={(v) => set({ targetMarginPct: v })} />
               <div className="flex flex-col gap-1">
-                <label htmlFor="c-price" className="text-xs font-medium text-slate-600">Precio de venta (ARS)</label>
+                <label htmlFor="c-price" className="text-xs font-medium text-slate-600">Precio de venta</label>
                 <Input id="c-price" inputMode="numeric" className="text-right" aria-invalid={!!priceError} value={salesPrice > 0 ? String(salesPrice) : ""} placeholder="0" onChange={(e) => onSalesPrice(Number(e.target.value.replace(/[^\d.]/g, "")) || 0)} />
               </div>
             </div>
@@ -239,10 +233,10 @@ export function BudgetCalculator({ state, onState, result, projectType, salesPri
                 <Button size="sm" variant="outline" onClick={() => onSalesPrice(suggested)}>Usar este precio</Button>
               </div>
             ) : (
-              <p className="text-slate-500">Cargá costos y un margen objetivo menor a 100% para ver un precio sugerido.</p>
+              <p className="text-slate-500">Cargá costos y una rentabilidad objetivo menor a 100% para ver un precio sugerido.</p>
             )}
             {margin !== null && (
-              <p>Con ese precio{usesSuggestedPrice ? " (el sugerido)" : ""} el <strong>margen esperado</strong> es <strong className="tabular">{formatPercent(margin)}</strong>.</p>
+              <p>Con ese precio{usesSuggestedPrice ? " (el sugerido)" : ""} la <strong>rentabilidad esperada</strong> es <strong className="tabular">{formatPercent(margin)}</strong>.</p>
             )}
             {dueDate ? (
               <div className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-white p-2.5">
@@ -268,15 +262,15 @@ export function BudgetCalculator({ state, onState, result, projectType, salesPri
               Con el equipo asignado, cada día laboral extra cuesta <strong className="tabular">{formatCurrency(daily)}</strong>
               {" "}(≈ {formatPercent((daily / salesPrice) * 100)} del precio de venta).{" "}
               {delay.belowTargetAtBase
-                ? "Con este costo ya no llegás al margen objetivo, incluso en fecha."
+                ? "Con este costo ya no llegás a la rentabilidad objetivo, incluso en fecha."
                 : delay.extraDaysBeforeTarget === 0
-                  ? "Desde el primer día de atraso el margen baja del objetivo."
-                  : `Podés absorber ${formatWorkingDays(delay.extraDaysBeforeTarget ?? 0)} de atraso antes de bajar del margen objetivo.`}
+                  ? "Desde el primer día de atraso la rentabilidad baja del objetivo."
+                  : `Podés absorber ${formatWorkingDays(delay.extraDaysBeforeTarget ?? 0)} de atraso antes de bajar de la rentabilidad objetivo.`}
               {delay.extraDaysToBreakEven !== null && ` Con ${formatWorkingDays(delay.extraDaysToBreakEven + 1)} extra la ganancia llegaría a cero.`}
             </p>
             <DelayChart points={delay.points} targetMarginPct={input.targetMarginPct} />
             <p className="text-xs text-slate-500">
-              Estimación: supone que todo el equipo sigue asignado al proyecto durante el atraso. La línea punteada es tu margen objetivo.
+              Estimación: supone que todo el equipo sigue asignado al proyecto durante el atraso. La línea punteada es tu rentabilidad objetivo.
               {usesSuggestedPrice && " Está calculado con el precio sugerido."}
             </p>
           </div>

@@ -16,7 +16,7 @@ import { Footer } from "@/components/landing/footer";
 export const metadata: Metadata = {
   title: `${APP_NAME} · Sabé si cada proyecto sigue siendo rentable`,
   description:
-    `${APP_NAME} conecta lo que presupuestaste con lo que realmente ocurre en el taller, para que PyMEs que fabrican por proyecto vean el margen mientras se fabrica.`,
+    `${APP_NAME} conecta lo que presupuestaste con lo que realmente ocurre en el taller, para que PyMEs que fabrican por proyecto vean la rentabilidad mientras se fabrica.`,
 };
 
 export default function LandingPage() {

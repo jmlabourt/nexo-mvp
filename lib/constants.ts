@@ -36,6 +36,9 @@ export const STATUS_LABELS: Record<ProjectStatus, string> = {
 };
 
 /** Estados en los que el proyecto está vendido y en ejecución. */
+/** Horas extra = costo por hora × multiplicador. Se cambia en Configuración (p. ej. 1,5 en días hábiles). */
+export const DEFAULT_OVERTIME_MULTIPLIER = 2;
+
 export const ACTIVE_STATUSES: ProjectStatus[] = ["approved", "purchasing", "production", "installation"];
 
 /** El presupuesto base solo se edita antes de ejecutar. Luego es la línea base contra la que se mide. */
@@ -231,4 +234,4 @@ export const TONE_CLASSES: Record<Tone, { badge: string; text: string; bg: strin
 };
 
 export const MARGIN_TOOLTIP =
-  "Margen proyectado: costo real hasta hoy + lo que falta del costo presupuestado. Es un cálculo por reglas, no una predicción.";
+  "Rentabilidad proyectada: costo real hasta hoy + lo que falta del costo presupuestado. Es un cálculo por reglas, no una predicción.";

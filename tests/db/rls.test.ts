@@ -299,3 +299,67 @@ describe("Operario dado de baja (Diego)", () => {
     expect((ws as { status: string }).status).toBe("active");
   });
 });
+
+describe("Lote 3 · operarios y horas extra en el costo presupuestado", () => {
+  const quote = () => seed.projects.find((p) => p.status === "quotation")!;
+
+  it("Gestión guarda el operario asignado y las horas normales y extra de cada rol", async () => {
+    const p = quote();
+    await asUser(db, laura, (tx) =>
+      tx.query(
+        `insert into budget_lines (organization_id, id, project_id, position, category, description, quantity, unit, unit_cost, total,
+           operator_id, labor_role, hour_type, overtime_multiplier)
+         values ($1, 'bl-l3-n', $2, 90, 'labor', 'Carpintería: Juan · horas normales', 80, 'h', 15000, 1200000, 'op-juan', 'Carpintería', 'normal', null),
+                ($1, 'bl-l3-x', $2, 91, 'labor', 'Carpintería: Juan · horas extra (×2)', 20, 'h', 30000, 600000, 'op-juan', 'Carpintería', 'overtime', 2)`,
+        [org, p.id],
+      ),
+    );
+    const saved = await rows(laura, "select id, operator_id, hour_type, quantity, overtime_multiplier from budget_lines where id like 'bl-l3-%' order by id");
+    expect(saved.map((r) => [r.operator_id, r.hour_type, Number(r.quantity)])).toEqual([
+      ["op-juan", "normal", 80],
+      ["op-juan", "overtime", 20],
+    ]);
+  });
+
+  it("el tipo de hora y el multiplicador se validan en la base", async () => {
+    const p = quote();
+    expect(
+      await errorAs(db, laura, (tx) =>
+        tx.query(
+          "insert into budget_lines (organization_id, id, project_id, category, description, quantity, unit, unit_cost, total, hour_type) values ($1, 'bl-bad', $2, 'labor', 'x', 1, 'h', 1, 1, 'feriado')",
+          [org, p.id],
+        ),
+      ),
+    ).toMatch(/budget_lines_hour_type_check/);
+  });
+
+  it("Gestión ajusta el multiplicador (por defecto 2, por ejemplo 1,5)", async () => {
+    await asUser(db, laura, (tx) => tx.query("insert into cost_settings (organization_id) values ($1)", [org]));
+    expect(Number((await rows(laura, "select overtime_multiplier from cost_settings"))[0].overtime_multiplier)).toBe(2);
+    await asUser(db, laura, (tx) => tx.query("update cost_settings set overtime_multiplier = 1.5 where organization_id = $1", [org]));
+    expect(Number((await rows(laura, "select overtime_multiplier from cost_settings"))[0].overtime_multiplier)).toBe(1.5);
+    expect(
+      await errorAs(db, laura, (tx) => tx.query("update cost_settings set overtime_multiplier = 0.5 where organization_id = $1", [org])),
+    ).toMatch(/check/);
+  });
+
+  it("Taller nunca ve el multiplicador, los costos ni las horas extra presupuestadas", async () => {
+    expect(await rows(juan, "select * from cost_settings")).toHaveLength(0);
+    expect(await rows(juan, "select * from budget_lines where hour_type is not null")).toHaveLength(0);
+    const updated = await rows(juan, "update cost_settings set overtime_multiplier = 1 where organization_id = $1 returning organization_id", [org]);
+    expect(updated).toHaveLength(0);
+    expect(await errorAs(db, juan, (tx) => tx.query("insert into cost_settings (organization_id) values ($1)", [org]))).toMatch(/row-level security|duplicate/);
+    const [{ ws }] = await rows(juan, "select taller_workspace() as ws");
+    const text = JSON.stringify(ws);
+    expect(text).not.toContain("overtime");
+    expect(text).not.toContain("hour_type");
+    // Ni el multiplicador ni el costo por hora aparecen en lo que recibe Taller.
+    const org_row = await rows(juan, "select * from organizations");
+    expect(JSON.stringify(org_row)).not.toContain("overtime");
+  });
+
+  it("un operario dado de baja y otra empresa tampoco lo ven", async () => {
+    expect(await rows(outsider, "select * from cost_settings")).toHaveLength(0);
+    expect(await rows(outsider, "select * from budget_lines where hour_type is not null")).toHaveLength(0);
+  });
+});

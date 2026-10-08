@@ -10,6 +10,7 @@ import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import type {
   AlertSettings,
+  CostSettings,
   AppMode,
   AppRole,
   Attachment,
@@ -30,7 +31,7 @@ import { materialKey } from "@/lib/material-reconciliation";
 import { createClient } from "@/lib/supabase/client";
 import { lotToRow } from "@/lib/supabase/mappers";
 import * as remote from "@/lib/supabase/workspace";
-import type { Workspace, WorkspaceData } from "@/lib/supabase/workspace";
+import { DEFAULT_COST_SETTINGS, type Workspace, type WorkspaceData } from "@/lib/supabase/workspace";
 import { tallerCalls } from "@/lib/supabase/taller";
 
 export type Result<T = undefined> = { ok: true; value: T } | { ok: false; error: string };
@@ -43,6 +44,8 @@ interface AppState {
   stock: StockState;
   requests: MaterialRequest[];
   settings: AlertSettings;
+  /** Multiplicador de horas extra (solo Gestión). */
+  costSettings: CostSettings;
   currentMode: AppMode;
   resolvedAlertIds: string[];
 
@@ -130,6 +133,7 @@ interface AppState {
   reopenAlert: (alertId: string) => void;
   updateSettings: (patch: Partial<AlertSettings>) => void;
   resetSettings: () => void;
+  updateCostSettings: (patch: Partial<CostSettings>) => Result;
   /** Reemplaza los datos de la empresa por la demo de Madera Sur. */
   resetDemo: () => Promise<Result>;
   /** Borra todos los datos de la empresa para empezar de cero. */
@@ -292,6 +296,7 @@ export const useAppStore = create<AppState>()(
 
       return {
         ...EMPTY_DATA,
+        costSettings: { ...DEFAULT_COST_SETTINGS },
         currentMode: "management",
         organizationId: null,
         organizationName: "",
@@ -310,6 +315,7 @@ export const useAppStore = create<AppState>()(
             stock: ws.stock,
             requests: ws.requests,
             settings: ws.settings,
+            costSettings: ws.costSettings,
             resolvedAlertIds: ws.resolvedAlertIds,
             organizationId: ws.organizationId,
             organizationName: ws.organizationName,
@@ -543,6 +549,16 @@ export const useAppStore = create<AppState>()(
           const settings = { ...DEFAULT_SETTINGS };
           set({ settings });
           void persistRemote((db, org) => remote.saveSettings(db, org, settings));
+        },
+
+        updateCostSettings: (patch) => {
+          const costSettings = { ...get().costSettings, ...patch };
+          if (!(costSettings.overtimeMultiplier >= 1 && costSettings.overtimeMultiplier <= 5)) {
+            return { ok: false, error: "El multiplicador de horas extra tiene que estar entre 1 y 5." };
+          }
+          set({ costSettings });
+          void persistRemote((db, org) => remote.saveCostSettings(db, org, costSettings));
+          return { ok: true, value: undefined };
         },
 
         resetDemo: () => replaceAll(demoData()),

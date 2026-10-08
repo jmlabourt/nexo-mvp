@@ -49,9 +49,9 @@ export function HistoryPage() {
                   <TH>Cierre</TH>
                   <TH className="text-right">Precio de venta</TH>
                   <TH className="text-right">Costo real final</TH>
-                  <TH className="text-right">Margen esperado</TH>
-                  <TH className="text-right">Margen real final</TH>
-                  <TH className="text-right">Desvío (puntos de margen)</TH>
+                  <TH className="text-right">Rentabilidad esperada</TH>
+                  <TH className="text-right">Rentabilidad real final</TH>
+                  <TH className="text-right">Desvío (puntos de rentabilidad)</TH>
                   <TH>Principal causa</TH>
                 </TR>
               </THead>

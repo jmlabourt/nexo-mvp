@@ -26,15 +26,17 @@
 
 Estas reglas no aplican durante el reset de la demo (`reset_workspace`) ni en una empresa recién creada que todavía no cargó su demo, que es el primer ingreso de un usuario nuevo.
 
-## Paso pendiente: aplicar `reset_workspace` (lo hacés vos)
+## `reset_workspace`
 
-La herramienta automática pide una confirmación para los comandos que borran datos (`DELETE`) y desde acá no se puede confirmar. El reset de la demo borra y recarga los datos de la empresa, así que esta parte se aplica a mano:
+Aplicado en Supabase (verificado el 8/10/2026).
 
-1. Abrí Supabase → proyecto **nexo** → **SQL Editor** → **New query**.
-2. Copiá **todo** el contenido de `supabase/migrations/20261009120150_seguridad_2b_reset_workspace.sql` y pegalo.
-3. Tocá **Run**. Tiene que decir "Success. No rows returned".
+## Lote 3: operarios y horas extra
 
-Hasta que lo apliques, en el preview no funcionan "Reset demo" ni "Vaciar datos", y un usuario nuevo no puede cargar su primera demo. El resto anda.
+Migración `20261010120000_lote3_operarios_horas_extra.sql` (aplicada el 8/10/2026, sin DROP):
+
+- `budget_lines` suma `operator_id`, `labor_role`, `hour_type` (normal / overtime) y `overtime_multiplier`. Es una tabla solo de Gestión: Taller no la lee y `taller_workspace()` no la incluye.
+- El multiplicador de horas extra vive en `cost_settings`, con políticas solo para Gestión. No va en `organizations.alert_settings` porque la empresa la leen también los operarios activos.
+- Tests en `tests/db/rls.test.ts` ("Lote 3"): Gestión guarda y ajusta; Taller y otra empresa no ven ni modifican nada.
 
 ## Cómo verificarlo
 

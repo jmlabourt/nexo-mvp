@@ -49,7 +49,7 @@ Eso llevó a una pregunta más importante que “¿cuánto stock tengo?”: **�
 Comparar presupuesto contra real ya lo hacen ERPs, MRPs y herramientas de *job costing*. Nuestra hipótesis más interesante es que **el problema difícil está antes: capturar qué ocurrió realmente en la fábrica**. El dashboard es fácil; capturar el mundo real es lo difícil. Por eso el MVP separa:
 
 - **Modo Taller**: registrar el mundo físico en menos de 30 segundos (“usé 2 placas, 0,2 fueron desperdicio, quedó 0,3 reutilizable”), sin precios ni márgenes.
-- **Modo Gestión**: el sistema traduce eso a costo, desvío e impacto en el margen.
+- **Modo Gestión**: el sistema traduce eso a costo, desvío e impacto en la rentabilidad.
 
 ## Compra vs. consumo
 
@@ -66,23 +66,23 @@ Distinguimos siempre:
 
 Ejemplo: se compran 12 placas ($ 600.000), se consumen 9, se desperdicia 1 y quedan 2 reutilizables. **El costo imputable es $ 500.000, no $ 600.000.** Registrar una compra no cambia el margen; registrar el consumo o el desperdicio sí.
 
-## Captura: mundo físico → dato → costo → margen
+## Captura: mundo físico → dato → costo → rentabilidad
 
 - El operario entra desde su celular y ve solo los proyectos que tiene asignados.
 - El operario elige el material, el origen y las cantidades.
 - El sistema valoriza con reglas explícitas (el consumo se valoriza al costo del lote del que sale) y guarda de dónde salió el precio.
-- Gestión ve el efecto sobre el costo real hasta hoy, el margen proyectado, las alertas y la actividad (quién, qué y cuándo).
+- Gestión ve el efecto sobre el costo real hasta hoy, la rentabilidad proyectada, las alertas y la actividad (quién, qué y cuándo).
 
 ## Propuesta de valor (provisoria)
 
-> “Conocé el margen esperado al cotizar y detectá durante la fabricación si el proyecto está dejando de ser rentable.”
+> “Conocé la rentabilidad esperada al cotizar y detectá durante la fabricación si el proyecto está dejando de ser rentable.”
 
-> “Conectamos lo que presupuestaste con lo que realmente ocurre en fábrica para que puedas entender y proteger el margen de cada proyecto.”
+> “Conectamos lo que presupuestaste con lo que realmente ocurre en fábrica para que puedas entender y proteger la rentabilidad de cada proyecto.”
 
 ## Qué queremos validar con el MVP
 
 - ¿Entienden la propuesta?
-- ¿Aporta valor ver el presupuesto contra lo real y el margen **proyectado**, no solo el final?
+- ¿Aporta valor ver el presupuesto contra lo real y la rentabilidad **proyectada**, no solo el final?
 - ¿Las alertas son útiles o generan ruido?
 - ¿Quién debería registrar? ¿Qué es realista registrar y qué no quieren registrar?
 - ¿Registrarían desde el celular durante la producción?
@@ -120,24 +120,27 @@ El stock aparece solo porque ayuda a explicar el **costo real y la rentabilidad*
 - Múltiples depósitos, transferencias, FIFO/LIFO, stock mínimo, lotes y códigos de barra empresariales.
 - Planificación de producción, nesting, CNC e IA generativa.
 
-Convertir Blerp en un ERP diluiría la hipótesis que queremos testear (la captura del mundo físico conectada al margen) y aumentaría la fricción de adopción en PyMEs que hoy trabajan con planillas.
+Convertir Blerp en un ERP diluiría la hipótesis que queremos testear (la captura del mundo físico conectada a la rentabilidad) y aumentaría la fricción de adopción en PyMEs que hoy trabajan con planillas.
 
 ## Glosario (una palabra, un significado)
+
+Rentabilidad = ganancia sobre el precio de venta: (precio de venta − costo) / precio de venta. Antes se llamaba "margen"; la fórmula no cambió.
 
 | Término | Significado |
 |---|---|
 | Costo presupuestado | Lo que se calculó que va a costar el proyecto. |
 | Precio de venta | Lo que se le cobra al cliente. |
 | Presupuesto base (línea base) | El costo presupuestado aprobado y congelado. No se dice "presupuesto" suelto. |
-| Margen esperado | Sale del presupuesto base: (precio de venta − costo presupuestado) / precio de venta. |
-| Margen proyectado | Costo real hasta hoy + lo que falta del costo presupuestado. Es un cálculo por reglas, no una predicción. |
-| Margen real final | Solo existe al cierre, en proyectos finalizados. |
+| Rentabilidad objetivo | La ganancia sobre el precio de venta que se busca al cotizar. Con ella el Cotizador sugiere un precio. |
+| Rentabilidad esperada | Sale del presupuesto base: (precio de venta − costo presupuestado) / precio de venta. |
+| Rentabilidad proyectada | Costo real hasta hoy + lo que falta del costo presupuestado. Es un cálculo por reglas, no una predicción. |
+| Rentabilidad real final | Solo existe al cierre, en proyectos finalizados. |
 | Etapa | Cotización, Aprobado, Compras, Producción, Instalación, Finalizado. |
 | Disponible | Solo lo libre en depósito. |
 | Asignado a este proyecto | Lo que el proyecto tiene para usar (lo que ve Taller). |
 | Costo real hasta hoy / Costo real final | El primero solo en proyectos activos; el segundo solo en finalizados. |
 | Plazo transcurrido | Tiempo que pasó entre inicio y entrega (no es avance de obra). |
-| Puntos de margen | Diferencia entre dos márgenes (nunca "%" ni "pp"). |
+| Puntos de rentabilidad | Diferencia entre dos rentabilidades (nunca "%" ni "pp"). |
 | Comprado ≠ Consumido ≠ Desperdicio ≠ Sobrante | Siempre se muestran por separado. Solo consumido + desperdicio es costo. |
 
 Las siete categorías de costo, iguales en todas las pantallas: **Materiales, Mano de obra, Máquinas, Tercerizaciones, Logística, Instalación, Imprevistos.** Los registros viejos de "Terminaciones" se cuentan en Tercerizaciones; los de "Otros", en Máquinas si eran líneas de máquina y si no en Imprevistos.

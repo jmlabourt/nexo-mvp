@@ -22,11 +22,11 @@ function ChartTooltip({ active, payload }: { active?: boolean; payload?: Array<{
         {d.code} · {d.name}
       </div>
       <div className="flex justify-between gap-4 text-slate-600">
-        <span>Esperado</span>
+        <span>Esperada</span>
         <span className="tabular">{formatPercent(d.expected)}</span>
       </div>
       <div className="flex justify-between gap-4 text-slate-600">
-        <span>Proyectado</span>
+        <span>Proyectada</span>
         <span className="tabular">{formatPercent(d.projected)}</span>
       </div>
       <div className="mt-1 flex justify-between gap-4 border-t border-slate-100 pt-1 font-medium text-slate-800">
@@ -39,7 +39,7 @@ function ChartTooltip({ active, payload }: { active?: boolean; payload?: Array<{
 
 export function MarginComparisonChart({ data }: { data: MarginDatum[] }) {
   return (
-    <div className="h-72 w-full" role="img" aria-label="Margen esperado versus margen proyectado por proyecto activo">
+    <div className="h-72 w-full" role="img" aria-label="Rentabilidad esperada versus rentabilidad proyectada por proyecto activo">
       <ResponsiveContainer width="100%" height="100%">
         <BarChart data={data} barGap={2} barCategoryGap="28%" margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
           <CartesianGrid vertical={false} stroke="#e2e8f0" />
@@ -47,8 +47,8 @@ export function MarginComparisonChart({ data }: { data: MarginDatum[] }) {
           <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 12, fill: "#64748b" }} tickFormatter={(v: number) => `${v}%`} domain={[0, "auto"]} />
           <Tooltip content={<ChartTooltip />} cursor={{ fill: "#f1f5f9" }} />
           <Legend iconType="square" iconSize={10} wrapperStyle={{ fontSize: 12, color: "#475569" }} />
-          <Bar dataKey="expected" name="Margen esperado" fill={EXPECTED} radius={[4, 4, 0, 0]} maxBarSize={28} isAnimationActive={false} />
-          <Bar dataKey="projected" name="Margen proyectado" fill={PROJECTED} radius={[4, 4, 0, 0]} maxBarSize={28} isAnimationActive={false} />
+          <Bar dataKey="expected" name="Rentabilidad esperada" fill={EXPECTED} radius={[4, 4, 0, 0]} maxBarSize={28} isAnimationActive={false} />
+          <Bar dataKey="projected" name="Rentabilidad proyectada" fill={PROJECTED} radius={[4, 4, 0, 0]} maxBarSize={28} isAnimationActive={false} />
         </BarChart>
       </ResponsiveContainer>
     </div>

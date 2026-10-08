@@ -1,9 +1,9 @@
 // Lote 1 — marca y mensajes honestos: reglas que las pantallas no recalculan por su cuenta.
 import { describe, expect, it } from "vitest";
 import type { Alert, Project } from "@/types";
-import { deviationReasons, projectEconomics } from "@/lib/calculations";
+import { projectEconomics } from "@/lib/calculations";
 import { openAlertCount, projectAlerts, projectHealth, splitAlerts, allAlerts } from "@/lib/alerts";
-import { closingInsights, insightsTitle, projectInsights } from "@/lib/insights";
+import { remainingBudgetText } from "@/lib/insights";
 import { activityTimeline } from "@/lib/activity";
 import { showDelayChart } from "@/lib/budget-calculator";
 import { APP_NAME, CATEGORY_LABELS, CATEGORY_ORDER, DEFAULT_SETTINGS as S, normalizeCategory } from "@/lib/constants";
@@ -23,8 +23,8 @@ describe("marca", () => {
   });
 });
 
-describe("¿Por qué? suma exacto a la Diferencia", () => {
-  it("lista positivas y negativas y el total es la Diferencia (finalizado)", () => {
+describe("la tabla de desvío suma exacto a la Diferencia", () => {
+  it("desvíos positivos y negativos por categoría; el total es la Diferencia (finalizado)", () => {
     const p = project({
       status: "completed",
       isClosed: true,
@@ -37,20 +37,17 @@ describe("¿Por qué? suma exacto a la Diferencia", () => {
       ],
     });
     const econ = projectEconomics(p);
-    const r = deviationReasons(econ);
-    expect(r.rows.map((x) => x.category)).toEqual(["materials", "machines", "labor", "logistics"]);
-    expect(r.rows.some((x) => x.amount < 0)).toBe(true);
-    const sum = r.rows.reduce((s, x) => s + x.amount, 0);
+    const rows = econ.categories.filter((c) => c.projectedVariance.amount !== 0);
+    expect(rows.map((x) => x.category).sort()).toEqual(["labor", "logistics", "machines", "materials"]);
+    expect(rows.some((x) => x.projectedVariance.amount < 0)).toBe(true);
+    const sum = econ.categories.reduce((s, x) => s + x.projectedVariance.amount, 0);
     expect(sum).toBeCloseTo(econ.costOverrun, 6);
-    expect(r.total).toBe(econ.costOverrun);
     expect(econ.costOverrun).toBeCloseTo(econ.projectedFinalCost - econ.budgetTotal, 6);
   });
   it("en el seed real, cada proyecto cierra exacto", () => {
     for (const p of buildSeed(new Date("2026-10-07T12:00:00")).projects) {
       const econ = projectEconomics(p);
-      const r = deviationReasons(econ);
-      expect(r.rows.reduce((s, x) => s + x.amount, 0)).toBeCloseTo(r.total, 6);
-      expect(r.rows.every((x) => x.amount !== 0)).toBe(true);
+      expect(econ.categories.reduce((s, x) => s + x.projectedVariance.amount, 0)).toBeCloseTo(econ.costOverrun, 6);
     }
   });
 });
@@ -84,10 +81,8 @@ describe("Cotización sin registros", () => {
     expect(projectHealth(q, [])).toBe("no_data");
     expect(projectEconomics(q).hasExecutionData).toBe(false);
   });
-  it("la lectura rápida no dice que el margen se mantiene", () => {
-    const texts = projectInsights(q).map((i) => i.text).join(" ");
-    expect(texts).not.toMatch(/se mantiene/);
-    expect(texts).toMatch(/Cotización/);
+  it("solo muestra lo que queda por gastar del costo presupuestado", () => {
+    expect(remainingBudgetText(q)).toMatch(/^Quedan \$ 600 del costo presupuestado por gastar \(Materiales\)/);
   });
 });
 
@@ -104,10 +99,8 @@ describe("Proyecto Finalizado", () => {
     expect(projectAlerts(done, S, TODAY)).toHaveLength(0);
     expect(projectHealth(done, [alert("p", "critical")])).toBeNull();
   });
-  it("la lectura rápida pasa a “Cierre: qué pasó” y habla del costo real final", () => {
-    expect(insightsTitle(done)).toBe("Cierre: qué pasó");
-    expect(projectInsights(done)).toEqual(closingInsights(done));
-    expect(projectInsights(done)[0].text).toMatch(/costo real final/);
+  it("no muestra lo que queda por gastar y el costo real final es el registrado", () => {
+    expect(remainingBudgetText(done)).toBeNull();
     const econ = projectEconomics(done);
     expect(econ.finalActualCost).toBe(900);
   });
@@ -164,11 +157,11 @@ describe("siete categorías", () => {
 });
 
 describe("textos", () => {
-  it("días y puntos de margen bien escritos, sin pp", () => {
+  it("días y puntos de rentabilidad bien escritos, sin pp", () => {
     expect(formatDays(1)).toBe("1 día");
     expect(formatWorkingDays(1)).toBe("1 día laboral");
     expect(formatWorkingDays(12)).toBe("12 días laborales");
-    expect(formatMarginPoints(-9.2, { signed: true })).toBe("−9,2 puntos de margen");
+    expect(formatMarginPoints(-9.2, { signed: true })).toBe("−9,2 puntos de rentabilidad");
     expect(formatMarginPoints(9.2, { short: true })).toBe("9,2 puntos");
     expect(formatMarginPoints(-9.2, { signed: true })).not.toMatch(/pp/);
   });

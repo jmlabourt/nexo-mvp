@@ -109,7 +109,7 @@ export function BudgetTab({ project }: { project: Project }) {
           <Card>
             <CardHeader>
               <CardTitle>Resumen</CardTitle>
-              <CardDescription>Las siete categorías y el margen esperado</CardDescription>
+              <CardDescription>Las siete categorías y la rentabilidad esperada</CardDescription>
             </CardHeader>
             <CardContent className="space-y-2 text-sm">
               {CATEGORY_ORDER.map((c) => (
@@ -127,7 +127,7 @@ export function BudgetTab({ project }: { project: Project }) {
                 <span className="tabular">{formatCurrencyOrDash(profitOrNull(project.salesPrice, total))}</span>
               </div>
               <div className="flex justify-between font-semibold">
-                <span>Margen esperado</span>
+                <span>Rentabilidad esperada</span>
                 <span className="tabular">{formatPercent(marginPercent(project.salesPrice - total, project.salesPrice))}</span>
               </div>
             </CardContent>

@@ -7,7 +7,7 @@ export function HowItWorks() {
       <Container>
         <SectionHeading
           eyebrow="Cómo funciona"
-          title="Mundo físico → dato → costo → margen"
+          title="Mundo físico → dato → costo → rentabilidad"
           subtitle="Un flujo simple que separa a quien registra de quien decide."
         />
         <ol className="relative mt-14 grid gap-4 md:grid-cols-4">

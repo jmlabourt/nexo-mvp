@@ -43,7 +43,7 @@ export function CloseDialog({ project, open, onOpenChange }: { project: Project;
     });
     if (!r.ok) setError(r.error);
   };
-  // Simulamos el cierre para mostrar el margen real antes de confirmar.
+  // Simulamos el cierre para mostrar la rentabilidad real antes de confirmar.
   const simulated = useMemo(() => ({ ...project, status: "completed" as const }), [project]);
   const econ = useMemo(() => projectEconomics(simulated), [simulated]);
   const texts = useMemo(() => closingSummary(simulated), [simulated]);
@@ -99,11 +99,11 @@ export function CloseDialog({ project, open, onOpenChange }: { project: Project;
             </div>
             <div className="flex flex-wrap items-end gap-6 rounded-lg bg-slate-50 p-4">
               <div>
-                <div className="text-xs text-slate-500">Margen esperado</div>
+                <div className="text-xs text-slate-500">Rentabilidad esperada</div>
                 <div className="text-3xl font-semibold tabular">{formatPercent(econ.expectedMargin)}</div>
               </div>
               <div>
-                <div className="text-xs text-slate-500">Margen real final</div>
+                <div className="text-xs text-slate-500">Rentabilidad real final</div>
                 <div className="text-3xl font-semibold tabular">{formatPercent(econ.finalMargin)}</div>
               </div>
               <div className="pb-1 text-lg font-medium tabular text-slate-700">{formatMarginPoints(econ.marginDeltaPp, { signed: true })}</div>
@@ -118,7 +118,7 @@ export function CloseDialog({ project, open, onOpenChange }: { project: Project;
                     .filter((c) => c.budget > 0 && c.actual === 0)
                     .map((c) => `${CATEGORY_LABELS[c.category]} (${formatCurrency(c.budget)})`)
                     .join(", ")}
-                  . Si esos costos ya ocurrieron, registralos antes de cerrar: si no, el margen real va a quedar más alto de lo que fue.
+                  . Si esos costos ya ocurrieron, registralos antes de cerrar: si no, la rentabilidad real va a quedar más alta de lo que fue.
                 </p>
               </div>
             )}

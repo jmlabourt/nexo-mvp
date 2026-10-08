@@ -39,7 +39,7 @@ function MarginVisual() {
         ))}
       </div>
       <div className="rounded-2xl border border-line bg-canvas px-5 py-4">
-        <div className="text-[11px] font-medium text-ink-faint">Margen proyectado</div>
+        <div className="text-[11px] font-medium text-ink-faint">Rentabilidad proyectada</div>
         <div className="mt-1 flex items-baseline gap-2 tabular">
           <span className="text-sm text-ink-faint line-through">40,0%</span>
           <span className="text-3xl font-semibold tracking-tight text-ink">30,8%</span>
@@ -84,7 +84,7 @@ function PurchaseVisual() {
 function AlertsVisual() {
   const items = [
     { t: "Materiales +22%", c: "bg-bad" },
-    { t: "Margen −9,2 puntos", c: "bg-bad" },
+    { t: "Rentabilidad −9,2 puntos", c: "bg-bad" },
     { t: "7 días sin registros", c: "bg-warn" },
   ];
   return (
@@ -124,7 +124,7 @@ export function Features() {
       <Container>
         <SectionHeading
           eyebrow="Producto"
-          title="Del mundo físico al margen, sin planillas en el medio"
+          title="Del mundo físico a la rentabilidad, sin planillas en el medio"
           subtitle={`El dashboard es fácil. Lo difícil es capturar lo que pasó en la fábrica. ${APP_NAME} está diseñado alrededor de eso.`}
         />
         <div className="mt-14 grid gap-4 md:grid-cols-6">

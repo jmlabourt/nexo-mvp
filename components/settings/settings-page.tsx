@@ -4,7 +4,9 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useState } from "react";
 import type { AlertSettings } from "@/types";
-import { APP_NAME, APP_SUBTITLE, COMPANY_NAME, DEFAULT_SETTINGS } from "@/lib/constants";
+import { APP_NAME, APP_SUBTITLE, COMPANY_NAME, DEFAULT_OVERTIME_MULTIPLIER, DEFAULT_SETTINGS } from "@/lib/constants";
+import { formatCurrency } from "@/lib/formatting";
+import { parseDecimal } from "@/lib/schemas";
 import { useAppStore } from "@/store/use-app-store";
 import { PageHeader } from "@/components/shared/page-header";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -57,18 +59,18 @@ const GROUPS: Group[] = [
     ],
   },
   {
-    title: "Caída del margen",
-    description: "Se compara el margen proyectado con el margen esperado. La diferencia se mide en puntos de margen.",
+    title: "Caída de la rentabilidad",
+    description: "Se compara la rentabilidad proyectada con la rentabilidad esperada. La diferencia se mide en puntos de rentabilidad.",
     fields: [
       {
         key: "marginWarningPp",
-        label: "Pasa a Atención si el margen cae (puntos)",
+        label: "Pasa a Atención si la rentabilidad cae (puntos)",
         hint: (v) =>
-          `Ej.: si el margen esperado era 40%, avisa cuando el proyectado baja a ${PTS(40 - v.marginWarningPp)}% o menos.`,
+          `Ej.: si la rentabilidad esperada era 40%, avisa cuando el proyectado baja a ${PTS(40 - v.marginWarningPp)}% o menos.`,
       },
       {
         key: "marginCriticalPp",
-        label: "Pasa a En riesgo si el margen cae (puntos)",
+        label: "Pasa a En riesgo si la rentabilidad cae (puntos)",
         hint: (v) =>
           `Ej.: con el mismo 40% esperado, es En riesgo cuando el proyectado baja de ${PTS(40 - v.marginCriticalPp)}%.`,
       },
@@ -192,10 +194,12 @@ export function SettingsPage() {
         </CardContent>
       </Card>
 
+      <OvertimeCard />
+
       <Card className="mt-6">
         <CardHeader>
           <CardTitle>Cómo se clasifica cada proyecto</CardTitle>
-          <CardDescription>Es una regla fija: usa las alertas abiertas del proyecto (costos, margen, plazos y material sin destino). Los finalizados no llevan esta etiqueta.</CardDescription>
+          <CardDescription>Es una regla fija: usa las alertas abiertas del proyecto (costos, rentabilidad, plazos y material sin destino). Los finalizados no llevan esta etiqueta.</CardDescription>
         </CardHeader>
         <CardContent>
           <ul className="space-y-2 text-sm text-slate-700">
@@ -277,5 +281,66 @@ export function SettingsPage() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+/** Multiplicador de horas extra: solo lo ve y lo cambia Gestión (Taller nunca lo recibe). */
+function OvertimeCard() {
+  const multiplier = useAppStore((s) => s.costSettings.overtimeMultiplier);
+  const updateCostSettings = useAppStore((s) => s.updateCostSettings);
+  const [value, setValue] = useState(() => String(multiplier).replace(".", ","));
+  const [error, setError] = useState("");
+  const [saved, setSaved] = useState(false);
+  const live = parseDecimal(value);
+  const example = Number.isFinite(live) && live >= 1 ? live : multiplier;
+
+  const save = (m: number) => {
+    const res = updateCostSettings({ overtimeMultiplier: m });
+    if (!res.ok) return setError(res.error);
+    setError("");
+    setValue(String(m).replace(".", ","));
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2500);
+  };
+
+  return (
+    <Card className="mt-6">
+      <CardHeader>
+        <CardTitle>Horas extra</CardTitle>
+        <CardDescription>
+          En el Cotizador, las horas que no entran en el horario normal de un operario hasta el plazo de entrega se calculan como horas extra:
+          costo por hora × este multiplicador. Suman a Mano de obra.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <form
+          noValidate
+          className="flex flex-wrap items-end gap-3"
+          onSubmit={(e) => {
+            e.preventDefault();
+            save(parseDecimal(value));
+          }}
+        >
+          <Field
+            label="Multiplicador de horas extra"
+            htmlFor="overtime-multiplier"
+            error={error || undefined}
+            hint={`Ej.: con $ 10.000 por hora, la hora extra cuesta ${formatCurrency(10_000 * example)}. Por defecto ${DEFAULT_OVERTIME_MULTIPLIER}; por ejemplo 1,5 para días hábiles.`}
+            className="w-full sm:max-w-sm"
+          >
+            <Input id="overtime-multiplier" inputMode="decimal" value={value} onChange={(e) => setValue(e.target.value)} aria-invalid={!!error} />
+          </Field>
+          <Button type="submit">Guardar</Button>
+          <Button type="button" variant="outline" onClick={() => save(DEFAULT_OVERTIME_MULTIPLIER)}>
+            Volver a {DEFAULT_OVERTIME_MULTIPLIER}
+          </Button>
+          {saved && (
+            <span role="status" className="text-sm text-emerald-700">
+              Guardado
+            </span>
+          )}
+        </form>
+      </CardContent>
+    </Card>
   );
 }

@@ -1,9 +1,8 @@
 "use client";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { ArrowRightLeft, ClipboardPen, FolderX, Lock, ShoppingCart } from "lucide-react";
 import { formatDate, formatDays, daysBetween, todayISO } from "@/lib/formatting";
-import { insightsTitle, projectInsights } from "@/lib/insights";
 import { useAppStore } from "@/store/use-app-store";
 import { useProjectAlerts, useProjectView } from "@/store/selectors";
 import { Button } from "@/components/ui/button";
@@ -12,7 +11,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { HealthBadge, StatusBadge } from "@/components/shared/badges";
 import { EmptyState } from "@/components/shared/empty-state";
-import { InsightList } from "@/components/shared/insight-list";
 import { StatusTimeline } from "./status-timeline";
 import { EconomicSummary } from "./economic-summary";
 import { DeviationSection } from "./deviation-section";
@@ -41,7 +39,6 @@ export function ProjectDetail({ id, tab: initialTab, purchase }: { id: string; t
   const alerts = useProjectAlerts(view?.project);
   const [dialog, setDialog] = useState<DialogName>(null);
   const [tab, setTab] = useState<string>(TABS.includes(initialTab as (typeof TABS)[number]) ? (initialTab as string) : purchase ? "materials" : "summary");
-  const insights = useMemo(() => (view ? projectInsights(view.project) : []), [view]);
 
   if (!view) {
     return (
@@ -125,34 +122,24 @@ export function ProjectDetail({ id, tab: initialTab, purchase }: { id: string; t
             <ScheduleCard project={p} />
             <TeamCard project={p} />
           </div>
-          <div className="grid gap-4 lg:grid-cols-2">
-            <Card>
-              <CardHeader>
-                <CardTitle>{insightsTitle(p)}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <InsightList insights={insights} />
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader>
-                <CardTitle>Alertas del proyecto</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                {alerts.length === 0 ? (
-                  <p className="text-sm text-slate-500">{p.status === "completed" ? "Los proyectos finalizados no generan alertas." : p.status === "quotation" ? "Los proyectos en Cotización no generan alertas." : "Sin alertas abiertas."}</p>
-                ) : (
-                  alerts.slice(0, 5).map((a) => <AlertItem key={a.id} alert={a} showProject={false} compact />)
-                )}
-                {alerts.length > 5 && (
-                  <Link href="/alerts" className="text-sm text-blue-700">
-                    Ver las {alerts.length} alertas
-                  </Link>
-                )}
-              </CardContent>
-            </Card>
-          </div>
           <DeviationSection econ={econ} settings={settings} completed={p.status === "completed"} />
+          <Card>
+            <CardHeader>
+              <CardTitle>Alertas del proyecto</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {alerts.length === 0 ? (
+                <p className="text-sm text-slate-500">{p.status === "completed" ? "Los proyectos finalizados no generan alertas." : p.status === "quotation" ? "Los proyectos en Cotización no generan alertas." : "Sin alertas abiertas."}</p>
+              ) : (
+                alerts.slice(0, 5).map((a) => <AlertItem key={a.id} alert={a} showProject={false} compact />)
+              )}
+              {alerts.length > 5 && (
+                <Link href="/alerts" className="text-sm text-blue-700">
+                  Ver las {alerts.length} alertas
+                </Link>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
         <TabsContent value="budget">
           <BudgetTab project={p} />

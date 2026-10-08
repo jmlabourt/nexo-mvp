@@ -32,6 +32,8 @@ function in30days() {
 export function NewProjectWizard() {
   const router = useRouter();
   const projects = useAppStore((s) => s.projects);
+  const operators = useAppStore((s) => s.operators);
+  const overtimeMultiplier = useAppStore((s) => s.costSettings.overtimeMultiplier);
   const createProject = useAppStore((s) => s.createProject);
   const code = useMemo(() => nextProjectCode(projects), [projects]);
   const [draft] = useState(peekQuoteDraft);
@@ -58,7 +60,11 @@ export function NewProjectWizard() {
   const salesPrice = Number(useWatch({ control, name: "salesPrice" })) || 0;
   const startDate = useWatch({ control, name: "startDate" });
   const projectType = useWatch({ control, name: "projectType" });
-  const calc = useMemo(() => computeCalculator(calcState, startDate, projectType, projects), [calcState, startDate, projectType, projects]);
+  const dueDate = useWatch({ control, name: "dueDate" });
+  const calc = useMemo(
+    () => computeCalculator(calcState, startDate, projectType, { operators, projects, deadline: dueDate, overtimeMultiplier, today: todayISO() }),
+    [calcState, startDate, projectType, operators, projects, dueDate, overtimeMultiplier],
+  );
   const budget = calc.total;
   const profit = profitOrNull(salesPrice, budget);
   const margin = marginPercent(salesPrice - budget, salesPrice);
@@ -145,7 +151,7 @@ export function NewProjectWizard() {
                 <Field label="Fecha inicio" htmlFor="startDate" error={formState.errors.startDate?.message}>
                   <Input id="startDate" type="date" {...register("startDate")} />
                 </Field>
-                <Field label="Fecha entrega" htmlFor="dueDate" error={formState.errors.dueDate?.message}>
+                <Field label="Plazo de entrega" htmlFor="dueDate" error={formState.errors.dueDate?.message} hint="Con este plazo se calculan los días hábiles y las horas extra.">
                   <Input id="dueDate" type="date" {...register("dueDate")} aria-invalid={!!formState.errors.dueDate} />
                 </Field>
                 <Field label="Responsable" htmlFor="owner" error={formState.errors.owner?.message}>
@@ -179,6 +185,7 @@ export function NewProjectWizard() {
                     if (n > 0) setPriceError("");
                   }}
                   onDueDate={(iso) => setValue("dueDate", iso, { shouldValidate: true })}
+                  deadline={dueDate}
                 />
               {formError && <p role="alert" className="text-sm text-red-600">{formError}</p>}
             </div>
@@ -222,7 +229,7 @@ export function NewProjectWizard() {
               <Row label="Costo presupuestado" value={formatCurrency(budget)} />
               <Row label="Ganancia esperada" value={formatCurrencyOrDash(profit)} strong />
               <div className="border-t border-slate-100 pt-3">
-                <div className="text-xs text-slate-500">Margen esperado</div>
+                <div className="text-xs text-slate-500">Rentabilidad esperada</div>
                 <div className={cn("text-3xl font-semibold tabular", margin !== null && margin < 15 ? "text-amber-700" : "text-slate-900")} aria-live="polite">
                   {formatPercent(margin)}
                 </div>

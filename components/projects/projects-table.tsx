@@ -21,9 +21,9 @@ export function ProjectsTable({ views, showSchedule = true }: { views: ProjectVi
           <TH>Entrega</TH>
           {showSchedule && <TH>Plazo transcurrido</TH>}
           <TH className="text-right">Precio de venta</TH>
-          <TH className="text-right">Margen esperado</TH>
-          <TH className="text-right">Margen proyectado / real final</TH>
-          <TH className="text-right">Desvío (puntos de margen)</TH>
+          <TH className="text-right">Rentabilidad esperada</TH>
+          <TH className="text-right">Rentabilidad proyectada / real final</TH>
+          <TH className="text-right">Desvío (puntos de rentabilidad)</TH>
           <TH>Salud</TH>
         </TR>
       </THead>
