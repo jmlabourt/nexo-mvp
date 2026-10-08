@@ -553,6 +553,35 @@ export function assignOperators(project: Project, operatorIds: string[], operato
   ]);
 }
 
+/**
+ * Baja de un operario en un proyecto abierto: lo saca del equipo y, si hay destino, suma a ese operario.
+ * Deja registro en la Actividad. No toca horas ni costos.
+ */
+export function reassignForDeactivation(
+  project: Project,
+  operatorId: string,
+  target: string | null,
+  operators: Operator[],
+  ctx: Ctx,
+): Project {
+  assertManager(ctx, "Reasignar operarios");
+  if (!project.assignedOperatorIds.includes(operatorId)) return project;
+  const rest = project.assignedOperatorIds.filter((x) => x !== operatorId);
+  const next = { ...project, assignedOperatorIds: target && !rest.includes(target) ? [...rest, target] : rest };
+  const leaving = operators.find((o) => o.id === operatorId)?.name ?? "El operario";
+  const incoming = target ? operators.find((o) => o.id === target)?.name : null;
+  return touch(next, ctx.now, [
+    activity(
+      "stage",
+      ctx.actor,
+      incoming
+        ? `${leaving} fue dado de baja. Su lugar en el equipo lo toma ${incoming}.`
+        : `${leaving} fue dado de baja. El proyecto quedó sin ese operario asignado.`,
+      ctx.now,
+    ),
+  ]);
+}
+
 // ── Muebles del proyecto ──────────────────────────────────────
 
 export function addItem(project: Project, input: { name: string; description?: string; quantity: number }, ctx: Ctx): Project {

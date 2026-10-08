@@ -107,6 +107,33 @@ export function deleteOperator<P extends Pick<Project, "actualEntries" | "assign
   };
 }
 
+// ── Baja con reasignación ─────────────────────────────────────
+
+/** Proyectos que no están Finalizados y tienen asignado al operario: necesitan destino antes de la baja. */
+export function openProjectsOf(projects: Project[], operatorId: string): Project[] {
+  return projects.filter((p) => !p.isClosed && p.status !== "completed" && p.assignedOperatorIds.includes(operatorId));
+}
+
+/** Destino de cada proyecto al dar de baja: id de otro operario activo, o null = "Sin asignar". */
+export type ReassignmentPlan = Record<string, string | null>;
+
+/** Error del plan (o null si cada proyecto abierto tiene un destino válido). */
+export function reassignmentPlanError(
+  operators: Operator[],
+  projects: Project[],
+  operatorId: string,
+  plan: ReassignmentPlan,
+): string | null {
+  for (const p of openProjectsOf(projects, operatorId)) {
+    if (!(p.id in plan) || plan[p.id] === undefined) return `Elegí un destino para ${p.code}: otro operario o “Sin asignar”.`;
+    const target = plan[p.id];
+    if (target === null) continue;
+    if (target === operatorId) return `${p.code}: elegí a otra persona, no a quien se da de baja.`;
+    if (!operators.some((o) => o.id === target && o.active)) return `${p.code}: el operario elegido no está activo.`;
+  }
+  return null;
+}
+
 /** Cómo entra a Taller un usuario operario: vinculado y activo, dado de baja o sin vincular. */
 export function operatorAccessForUser(
   operators: Operator[],

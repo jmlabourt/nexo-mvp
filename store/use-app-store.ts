@@ -106,8 +106,11 @@ interface AppState {
 
   createOperator: (input: people.OperatorInput) => Result<string>;
   updateOperator: (id: string, input: people.OperatorInput) => Result;
-  /** Baja lógica: el operario deja de aparecer en equipos y Taller. Sus horas se conservan. */
-  deactivateOperator: (id: string) => Result;
+  /**
+   * Baja lógica: el operario deja de aparecer en equipos y Taller. Sus horas se conservan.
+   * `plan` da destino a cada proyecto no finalizado donde estaba asignado (otro operario o null = "Sin asignar").
+   */
+  deactivateOperator: (id: string, plan?: people.ReassignmentPlan) => Result;
   reactivateOperator: (id: string) => Result;
   /** Solo si no tiene horas registradas. */
   deleteOperator: (id: string) => Result;
@@ -447,10 +450,18 @@ export const useAppStore = create<AppState>()(
             return undefined;
           }),
 
-        deactivateOperator: (id) =>
+        deactivateOperator: (id, plan = {}) =>
           run(() => {
             requireManager("Dar de baja operarios");
-            commit({ operators: people.deactivateOperator(get().operators, id, new Date().toISOString()) });
+            const { operators, projects } = get();
+            const planError = people.reassignmentPlanError(operators, projects, id, plan);
+            if (planError) throw new ops.DomainError(planError);
+            const open = new Set(people.openProjectsOf(projects, id).map((p) => p.id));
+            const c = ctx();
+            commit({
+              projects: projects.map((p) => (open.has(p.id) ? ops.reassignForDeactivation(p, id, plan[p.id] ?? null, operators, c) : p)),
+              operators: people.deactivateOperator(operators, id, c.now),
+            });
             if (get().actingOperatorId === id) set({ actingOperatorId: null });
             return undefined;
           }),
