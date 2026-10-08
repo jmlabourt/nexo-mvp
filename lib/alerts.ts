@@ -4,7 +4,7 @@
 // ─────────────────────────────────────────────────────────────
 import type { Alert, AlertLevel, AlertSettings, EconomicHealth, Project } from "@/types";
 import { projectEconomics, lastRecordDate } from "./calculations";
-import { projectSchedule } from "./project-rules";
+import { EXECUTION_STATUSES, projectSchedule } from "./project-rules";
 import { projectHoldings, type StockState } from "./stock";
 import { CATEGORY_IS_PLURAL, CATEGORY_LABELS, STATUS_LABELS } from "./constants";
 import { daysBetween, formatCurrency, formatDays, formatMarginPoints, formatPercent, formatQty, formatSignedCurrency } from "./formatting";
@@ -138,7 +138,20 @@ export function projectAlerts(project: Project, settings: AlertSettings, today: 
     });
   }
 
-  // 5. Material asignado y sin consumir (sin destino). En producción es normal → info;
+  // 5. Proyecto en ejecución sin operarios: nadie lo ve en Taller ni puede cargarle horas.
+  // Se resuelve sola al asignar a alguien (la alerta se deriva del equipo).
+  if (EXECUTION_STATUSES.includes(project.status) && project.assignedOperatorIds.length === 0) {
+    alerts.push({
+      ...base(project),
+      id: `${project.id}:staffing:warning`,
+      kind: "staffing",
+      level: "warning",
+      title: "Proyecto sin operario asignado",
+      message: `El proyecto está en la etapa ${STATUS_LABELS[project.status]} y no tiene operarios: nadie lo ve en Taller ni puede cargarle horas. Asigná a alguien desde “Editar equipo”.`,
+    });
+  }
+
+  // 6. Material asignado y sin consumir (sin destino). En producción es normal → info;
   // en instalación la fabricación terminó → hay que darle destino.
   if (stock && (project.status === "production" || project.status === "installation")) {
     const fabricationDone = project.status === "installation";

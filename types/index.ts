@@ -372,7 +372,7 @@ export interface AlertSettings {
   deadlineNoProductionPct: number;
 }
 
-export type AlertKind = "category" | "margin" | "stale" | "due" | "reconciliation";
+export type AlertKind = "category" | "margin" | "stale" | "due" | "reconciliation" | "staffing";
 
 export interface Alert {
   /** Determinístico: permite marcarla como resuelta. Incluye el nivel para que un agravamiento reaparezca. */

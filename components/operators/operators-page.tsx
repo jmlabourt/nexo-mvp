@@ -15,6 +15,7 @@ import { Card } from "@/components/ui/card";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
+import { DeactivatePanel } from "./deactivate-panel";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 type Confirm = "deactivate" | "delete" | null;
@@ -22,7 +23,6 @@ type Confirm = "deactivate" | "delete" | null;
 function OperatorDialog({ operator, hasRecords, open, onOpenChange }: { operator: Operator | null; hasRecords: boolean; open: boolean; onOpenChange: (o: boolean) => void }) {
   const createOperator = useAppStore((s) => s.createOperator);
   const updateOperator = useAppStore((s) => s.updateOperator);
-  const deactivateOperator = useAppStore((s) => s.deactivateOperator);
   const reactivateOperator = useAppStore((s) => s.reactivateOperator);
   const deleteOperator = useAppStore((s) => s.deleteOperator);
   const [name, setName] = useState(operator?.name ?? "");
@@ -67,16 +67,7 @@ function OperatorDialog({ operator, hasRecords, open, onOpenChange }: { operator
             <section aria-label="Alta y baja" className="space-y-3 rounded-lg border border-slate-200 p-3">
               {operator.active ? (
                 confirm === "deactivate" ? (
-                  <div className="space-y-2 text-sm">
-                    <p className="text-slate-800">
-                      ¿Dar de baja a <strong>{operator.name}</strong>? Deja de aparecer en los equipos de los proyectos y en Taller. Sus horas y costos
-                      registrados se conservan. Podés reactivarlo cuando quieras.
-                    </p>
-                    <div className="flex flex-wrap gap-2">
-                      <Button type="button" variant="outline" size="sm" onClick={() => setConfirm(null)}>No, volver</Button>
-                      <Button type="button" variant="destructive" size="sm" onClick={() => act(deactivateOperator)}>Sí, dar de baja</Button>
-                    </div>
-                  </div>
+                  <DeactivatePanel operator={operator} onCancel={() => setConfirm(null)} onDone={() => onOpenChange(false)} />
                 ) : (
                   <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
                     <span className="text-slate-600">Si ya no trabaja con ustedes, dalo de baja. No se borra nada.</span>
