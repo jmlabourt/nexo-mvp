@@ -31,6 +31,7 @@ import { createClient } from "@/lib/supabase/client";
 import { lotToRow } from "@/lib/supabase/mappers";
 import * as remote from "@/lib/supabase/workspace";
 import type { Workspace, WorkspaceData } from "@/lib/supabase/workspace";
+import { tallerCalls } from "@/lib/supabase/taller";
 
 export type Result<T = undefined> = { ok: true; value: T } | { ok: false; error: string };
 
@@ -217,6 +218,12 @@ export const useAppStore = create<AppState>()(
         const operators = next.operators ?? prev.operators;
         const requests = next.requests ?? prev.requests;
         set({ projects, stock, operators, requests });
+        if (prev.role === "operator") {
+          // Taller no escribe tablas: cada registro nuevo va a su función del servidor (que calcula los costos).
+          const calls = tallerCalls({ projects: prev.projects, stock: prev.stock, requests: prev.requests }, { projects, stock, requests }, prev.organizationId ?? "");
+          void persistRemote((db) => remote.runTallerCalls(db, calls));
+          return;
+        }
         void persistRemote(async (db, org) => {
           for (const p of projects) {
             const before = prev.projects.find((x) => x.id === p.id);
