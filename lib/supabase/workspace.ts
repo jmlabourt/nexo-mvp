@@ -8,6 +8,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { AlertSettings, AppRole, MaterialRequest, Operator, Project } from "@/types";
 import { DEFAULT_SETTINGS } from "@/lib/constants";
 import type { StockState } from "@/lib/stock";
+import type { TallerCall } from "./taller";
 import { deriveLedgerFromLegacy } from "@/lib/stock-legacy";
 import {
   CHILD_TABLES,
@@ -78,7 +79,10 @@ export async function loadWorkspace(db: SupabaseClient): Promise<Workspace> {
     role: AppRole;
     organizations: { name: string; demo_seeded: boolean; alert_settings: AlertSettings | null } | null;
   } | null;
-  if (!membership || !membership.organizations) throw new Error("Tu usuario no tiene una empresa asociada.");
+  if (!membership) throw new Error("Tu usuario no tiene una empresa asociada.");
+  // Taller no lee las tablas (tienen costos): todo lo suyo llega por taller_workspace().
+  if (membership.role === "operator") return loadTallerWorkspace(db, user, membership.display_name);
+  if (!membership.organizations) throw new Error("Tu usuario no tiene una empresa asociada.");
 
   const org = membership.organization_id;
   const [
@@ -144,6 +148,65 @@ export async function loadWorkspace(db: SupabaseClient): Promise<Workspace> {
     settings: { ...DEFAULT_SETTINGS, ...(membership.organizations.alert_settings ?? {}) },
     resolvedAlertIds: resolved.map((r) => r.alert_id),
   };
+}
+
+/** Mensaje para un operario dado de baja que inicia sesión. */
+export const INACTIVE_OPERATOR_MESSAGE =
+  "Tu usuario de Taller fue dado de baja, así que ya no tiene acceso a los proyectos. Si es un error, pedile a Gestión que te reactive.";
+
+type Row = Record<string, unknown>;
+
+interface TallerWorkspaceJson {
+  status: "active" | "inactive";
+  organization_id?: string;
+  organization_name?: string;
+  operator?: Row;
+  projects?: Row[];
+  project_items?: Row[];
+  stage_logs?: Row[];
+  attachments?: Row[];
+  actual_entries?: Row[];
+  stock_lots?: Row[];
+  stock_movements?: Row[];
+  material_requests?: Row[];
+}
+
+/** Workspace de un operario: solo sus proyectos asignados, sin costos, precios ni márgenes. */
+async function loadTallerWorkspace(db: SupabaseClient, user: { id: string; email?: string }, displayName: string): Promise<Workspace> {
+  const json = check(await db.rpc("taller_workspace")) as TallerWorkspaceJson;
+  if (json.status !== "active" || !json.organization_id || !json.operator) throw new Error(INACTIVE_OPERATOR_MESSAGE);
+  const operator = operatorFromRow(json.operator);
+  return {
+    organizationId: json.organization_id,
+    organizationName: json.organization_name ?? "",
+    userId: user.id,
+    userName: operator.name || displayName || user.email?.split("@")[0] || "Operario",
+    userEmail: user.email ?? "",
+    role: "operator",
+    demoSeeded: true,
+    stockMigrated: false,
+    projects: projectsFromRows({
+      projects: json.projects ?? [],
+      budgetLines: [],
+      purchaseEntries: [],
+      materialUsages: [],
+      actualEntries: json.actual_entries ?? [],
+      activity: [],
+      items: json.project_items ?? [],
+      stageLogs: json.stage_logs ?? [],
+      attachments: json.attachments ?? [],
+    }),
+    operators: [operator],
+    stock: { lots: (json.stock_lots ?? []).map(lotFromRow), movements: (json.stock_movements ?? []).map(movementFromRow) },
+    requests: (json.material_requests ?? []).map(requestFromRow),
+    settings: { ...DEFAULT_SETTINGS },
+    resolvedAlertIds: [],
+  };
+}
+
+/** Escrituras de un operario: una llamada a la función de Taller por cada registro nuevo. */
+export async function runTallerCalls(db: SupabaseClient, calls: TallerCall[]) {
+  for (const c of calls) check(await db.rpc(c.fn, { p: c.p }));
 }
 
 // ── Escrituras ────────────────────────────────────────────
@@ -224,47 +287,29 @@ export async function setAlertResolved(db: SupabaseClient, org: string, alertId:
   }
 }
 
-/** Borra todos los datos de la empresa y, si se pasa `data`, carga ese contenido (seed demo). */
+/**
+ * Filas de toda la empresa, por tabla, para reset_workspace (seed demo o vaciar).
+ * El servidor fuerza la empresa del usuario en cada fila.
+ */
+export function workspacePayload(org: string, data: WorkspaceData | null): Record<string, unknown> {
+  if (!data) return { settings: DEFAULT_SETTINGS };
+  const payload: Record<string, unknown> = {
+    operators: data.operators.map((o, i) => operatorToRow(org, o, i)),
+    projects: data.projects.map((p) => projectToRow(org, p)),
+    stock_lots: data.stock.lots.map((l) => lotToRow(org, l)),
+    stock_movements: data.stock.movements.map((m, i) => movementToRow(org, m, i)),
+    material_requests: data.requests.map((q, i) => requestToRow(org, q, i)),
+    resolved_alerts: data.resolvedAlertIds.map((alert_id) => ({ organization_id: org, alert_id })),
+    settings: data.settings,
+  };
+  for (const key of CHILD_KEYS) payload[CHILD_TABLES[key]] = data.projects.flatMap((p) => childrenToRows(key, org, p.id, p[key]));
+  return payload;
+}
+
+/**
+ * Borra todos los datos de la empresa y, si se pasa `data`, carga ese contenido (seed demo).
+ * Corre en el servidor en una sola transacción (reset_workspace): solo Gestión puede hacerlo.
+ */
 export async function replaceWorkspace(db: SupabaseClient, org: string, data: WorkspaceData | null) {
-  // Los hijos de proyectos se borran en cascada.
-  check(await db.from("projects").delete().eq("organization_id", org));
-  check(await db.from("stock_movements").delete().eq("organization_id", org));
-  check(await db.from("stock_lots").delete().eq("organization_id", org));
-  check(await db.from("material_requests").delete().eq("organization_id", org));
-  check(await db.from("reusable_materials").delete().eq("organization_id", org));
-  check(await db.from("resolved_alerts").delete().eq("organization_id", org));
-  // Los operarios vinculados a un usuario (con login) se conservan; el resto se reemplaza.
-  check(await db.from("operators").delete().eq("organization_id", org).is("user_id", null));
-
-  if (data) {
-    if (data.operators.length) {
-      check(
-        await db
-          .from("operators")
-          .upsert(data.operators.map((o, i) => operatorToRow(org, o, i)), { onConflict: "organization_id,id" }),
-      );
-    }
-    if (data.projects.length) {
-      check(await db.from("projects").insert(data.projects.map((p) => projectToRow(org, p))));
-      for (const key of CHILD_KEYS) {
-        const rows = data.projects.flatMap((p) => childrenToRows(key, org, p.id, p[key]));
-        if (rows.length) check(await db.from(CHILD_TABLES[key]).insert(rows));
-      }
-    }
-    if (data.stock.lots.length) check(await db.from("stock_lots").insert(data.stock.lots.map((l) => lotToRow(org, l))));
-    if (data.stock.movements.length) {
-      check(await db.from("stock_movements").insert(data.stock.movements.map((m, i) => movementToRow(org, m, i))));
-    }
-    if (data.requests.length) check(await db.from("material_requests").insert(data.requests.map((q, i) => requestToRow(org, q, i))));
-    if (data.resolvedAlertIds.length) {
-      check(await db.from("resolved_alerts").insert(data.resolvedAlertIds.map((alert_id) => ({ organization_id: org, alert_id }))));
-    }
-  }
-
-  check(
-    await db
-      .from("organizations")
-      .update({ demo_seeded: true, alert_settings: data?.settings ?? DEFAULT_SETTINGS })
-      .eq("id", org),
-  );
+  check(await db.rpc("reset_workspace", { p_data: workspacePayload(org, data) }));
 }

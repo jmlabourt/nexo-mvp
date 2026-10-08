@@ -49,7 +49,7 @@ export function DeactivatePanel({ operator, onCancel, onDone }: { operator: Oper
     <>
       <option value="">Elegí un destino</option>
       {candidates.map((o) => (
-        <option key={o.id} value={o.id}>{o.name} · {o.role}</option>
+        <option key={o.id} value={o.id}>{o.name} ({o.role})</option>
       ))}
       <option value={NONE}>Sin asignar</option>
     </>
@@ -73,7 +73,7 @@ export function DeactivatePanel({ operator, onCancel, onDone }: { operator: Oper
           </div>
           <ul className="space-y-2">
             {open.map((p) => (
-              <li key={p.id} className="grid gap-1 rounded-md bg-white p-2 ring-1 ring-slate-200 sm:grid-cols-[1fr_200px] sm:items-center sm:gap-3">
+              <li key={p.id} className="space-y-1.5 rounded-md bg-white p-2 ring-1 ring-slate-200">
                 <label htmlFor={`reassign-${p.id}`} className="min-w-0">
                   <span className="font-medium text-slate-900">{p.code}</span> · <span className="break-words">{p.name}</span>
                   <span className="block text-xs text-slate-500">Etapa: {STATUS_LABELS[p.status]}</span>

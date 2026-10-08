@@ -100,7 +100,7 @@ export function StockPage({ material, lot, tab }: { material?: string; lot?: str
         back={material || lot || tab ? "/stock" : undefined}
         title="Stock"
         subtitle="Todo el material físico: libre en el depósito y asignado a proyectos. Cada lote conserva su costo original."
-        actions={isManager ? <Button onClick={() => setAdd(true)}><Plus /> Registrar compra</Button> : undefined}
+        actions={isManager ? <Button onClick={() => setAdd(true)}><Plus /> Ingresar stock</Button> : undefined}
       />
       <div className="mb-5 grid grid-cols-2 gap-3 md:grid-cols-4">
         <Card><CardContent className="p-4"><div className="text-xs text-slate-500">Valor total en stock</div><div className="text-lg font-semibold tabular">{formatCurrency(total)}</div></CardContent></Card>

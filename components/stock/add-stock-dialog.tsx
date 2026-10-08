@@ -12,8 +12,8 @@ import { Input, Select } from "@/components/ui/input";
 type Kind = "purchase" | "opening";
 
 /**
- * Registrar compra para el depósito: el material queda LIBRE (Disponible), no asignado a un proyecto.
- * Opción secundaria: inventario inicial (material que ya tenías). En ningún caso es costo de un proyecto
+ * Ingresar stock al depósito: el material queda LIBRE (Disponible), no asignado a un proyecto.
+ * "Registrar compra" queda solo dentro del proyecto (etapa Compras). Opción secundaria: inventario inicial (material que ya tenías). En ningún caso es costo de un proyecto
  * hasta que se asigne y se consuma: compra ≠ costo.
  */
 export function AddStockDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
@@ -78,10 +78,10 @@ export function AddStockDialog({ open, onOpenChange }: { open: boolean; onOpenCh
     <Dialog open={open} onOpenChange={(o) => { onOpenChange(o); if (!o) reset(); }}>
       <DialogContent side="right">
         <DialogHeader>
-          <DialogTitle>{kind === "purchase" ? "Registrar compra" : "Cargar inventario inicial"}</DialogTitle>
+          <DialogTitle>{kind === "purchase" ? "Ingresar stock" : "Cargar inventario inicial"}</DialogTitle>
           <DialogDescription>
             {kind === "purchase"
-              ? "Compra para el depósito: el material queda disponible para asignar a cualquier proyecto. Todavía no es costo de ningún proyecto: lo es recién cuando se consume."
+              ? "Material comprado que entra al depósito, sin proyecto: queda disponible para asignar a cualquiera. Todavía no es costo: lo es recién cuando se consume. Para comprar para un proyecto, usá “Registrar compra” dentro del proyecto."
               : "Material que ya tenías en el depósito antes de usar la app. Queda disponible con el costo que le pongas; no es una compra ni costo de ningún proyecto."}
           </DialogDescription>
         </DialogHeader>
@@ -125,12 +125,12 @@ export function AddStockDialog({ open, onOpenChange }: { open: boolean; onOpenCh
                 <button type="button" className="font-medium text-blue-700 underline" onClick={() => setKind("opening")}>Cargarlo como inventario inicial</button>
               </>
             ) : (
-              <button type="button" className="font-medium text-blue-700 underline" onClick={() => setKind("purchase")}>Volver a registrar una compra</button>
+              <button type="button" className="font-medium text-blue-700 underline" onClick={() => setKind("purchase")}>Volver a ingresar stock comprado</button>
             )}
           </p>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-            <Button type="submit">{kind === "purchase" ? "Registrar compra" : "Cargar inventario inicial"}</Button>
+            <Button type="submit">{kind === "purchase" ? "Ingresar stock" : "Cargar inventario inicial"}</Button>
           </DialogFooter>
         </form>
       </DialogContent>
