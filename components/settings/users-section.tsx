@@ -11,7 +11,19 @@ import type { Operator } from "@/types";
 import { formatDate } from "@/lib/formatting";
 import { activeOperators } from "@/lib/operators";
 import { ROLE_KEYS, ROLE_LABELS, roleKeyOf, type RoleKey } from "@/lib/permissions";
-import { deactivateError, inviteLink, newUserSchema, roleChangeError, type Invitation, type Member, type NewUser } from "@/lib/users";
+import {
+  deactivateError,
+  duplicateOperatorError,
+  inviteLink,
+  newOperatorOf,
+  NEW_OPERATOR,
+  roleChangeError,
+  userFormSchema,
+  type Invitation,
+  type Member,
+  type UserFormInput,
+  type UserFormValues,
+} from "@/lib/users";
 import { createClient } from "@/lib/supabase/client";
 import { loadMembers, revokeInvitation, setMemberActive, setMemberRole } from "@/lib/supabase/users";
 import { inviteUser } from "@/app/(gestion)/settings/actions";
@@ -281,20 +293,47 @@ function MembersTable({ data, operators, run }: { data: { members: Member[]; inv
 }
 
 function NewUserCard({ free, onDone }: { free: Operator[]; onDone: () => Promise<void> }) {
+  const createOperator = useConfirmedAction("createOperator");
   const [pending, startTransition] = useTransition();
   const [status, setStatus] = useState<Status>(null);
-  const { register, handleSubmit, reset, control, formState } = useForm<NewUser>({
-    resolver: zodResolver(newUserSchema),
-    defaultValues: { displayName: "", email: "", role: "admin", operatorId: "" },
+  const { register, handleSubmit, reset, control, setValue, setError, formState } = useForm<UserFormInput, unknown, UserFormValues>({
+    resolver: zodResolver(userFormSchema),
+    defaultValues: { displayName: "", email: "", role: "admin", operatorId: "", position: "", hourlyCost: "" },
   });
   const role = useWatch({ control, name: "role" });
+  const operatorId = useWatch({ control, name: "operatorId" });
   const errors = formState.errors;
+  const isOperator = role === "operario";
+  const isNewOperator = isOperator && operatorId === NEW_OPERATOR;
+  const existing = isOperator && operatorId && operatorId !== NEW_OPERATOR ? free.find((o) => o.id === operatorId) : undefined;
+
+  const onRoleChange = (next: string) => {
+    // Operario: por defecto es una persona nueva. Otro rol: se limpian los datos propios de Operario.
+    setValue("operatorId", next === "operario" ? NEW_OPERATOR : "");
+    setValue("position", "");
+    setValue("hourlyCost", "");
+    if (existing) setValue("displayName", "");
+  };
+
+  const onOperatorChange = (id: string) => {
+    const op = free.find((o) => o.id === id);
+    if (op) {
+      // La persona ya está cargada: su nombre sale de Operarios, no se escribe de nuevo.
+      setValue("displayName", op.name, { shouldValidate: true });
+      if (op.email) setValue("email", op.email, { shouldValidate: true });
+    } else if (existing) {
+      setValue("displayName", "");
+    }
+  };
 
   return (
     <Card>
       <CardHeader>
         <CardTitle>Nuevo usuario</CardTitle>
-        <CardDescription>Le llega un mail de invitación y podés copiar su link. Después entra con ese mismo mail (te pedimos un código) o con Google si usa el mismo mail.</CardDescription>
+        <CardDescription>
+          Le llega un mail de invitación y podés copiar su link. Después entra con ese mismo mail (le pedimos un código) o con Google si usa el mismo mail.
+          Un Operario puede ser una persona nueva (se la carga en Operarios con su costo por hora) o una que ya está cargada.
+        </CardDescription>
       </CardHeader>
       <CardContent>
         <form
@@ -302,38 +341,77 @@ function NewUserCard({ free, onDone }: { free: Operator[]; onDone: () => Promise
           className="space-y-4"
           onSubmit={handleSubmit((v) =>
             startTransition(async () => {
-              const res = await inviteUser(v);
-              setStatus({ ok: res.ok, text: res.message });
-              if (res.ok) {
-                reset();
-                await onDone();
+              setStatus(null);
+              const person = newOperatorOf(v);
+              let linkedId = v.operatorId;
+              if (person) {
+                const dup = duplicateOperatorError(person.name, free);
+                if (dup) return setError("displayName", { message: dup });
+                const created = await createOperator(person);
+                if (!created.ok) return setStatus({ ok: false, text: created.error });
+                linkedId = created.value;
               }
+              const res = await inviteUser({
+                displayName: v.displayName,
+                email: v.email,
+                role: v.role,
+                operatorId: v.role === "operario" ? linkedId : undefined,
+              });
+              if (!res.ok) {
+                setStatus({
+                  ok: false,
+                  text: person ? `${res.message} El operario ya quedó cargado en Operarios: elegilo de la lista para volver a invitarlo.` : res.message,
+                });
+                return;
+              }
+              setStatus({ ok: true, text: person ? `${res.message} Se cargó también en Operarios (${person.role}).` : res.message });
+              reset();
+              await onDone();
             }),
           )}
         >
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Nombre" htmlFor="nu-name" error={errors.displayName?.message}>
-              <Input id="nu-name" autoComplete="off" aria-invalid={!!errors.displayName} {...register("displayName")} />
+            <Field
+              label="Nombre"
+              htmlFor="nu-name"
+              error={errors.displayName?.message}
+              hint={existing ? "Es el nombre cargado en Operarios." : undefined}
+            >
+              <Input id="nu-name" autoComplete="off" readOnly={!!existing} aria-invalid={!!errors.displayName} {...register("displayName")} />
             </Field>
             <Field label="Mail de invitación" htmlFor="nu-email" error={errors.email?.message}>
               <Input id="nu-email" type="email" autoComplete="off" aria-invalid={!!errors.email} {...register("email")} />
             </Field>
             <Field label="Rol" htmlFor="nu-role" error={errors.role?.message}>
-              <Select id="nu-role" {...register("role")}>
+              <Select id="nu-role" {...register("role", { onChange: (e) => onRoleChange(e.target.value) })}>
                 {ROLE_KEYS.map((k) => (
                   <option key={k} value={k}>{ROLE_LABELS[k]}</option>
                 ))}
               </Select>
             </Field>
-            {role === "operario" && (
-              <Field label="¿Qué operario es?" htmlFor="nu-operator" error={errors.operatorId?.message} hint="Solo operarios activos que todavía no tienen usuario.">
-                <Select id="nu-operator" aria-invalid={!!errors.operatorId} {...register("operatorId")}>
-                  <option value="">Elegí un operario…</option>
-                  {free.map((o) => (
-                    <option key={o.id} value={o.id}>{o.name} · {o.role}</option>
-                  ))}
+            {isOperator && (
+              <Field label="Operario" htmlFor="nu-operator" error={errors.operatorId?.message}>
+                <Select id="nu-operator" aria-invalid={!!errors.operatorId} {...register("operatorId", { onChange: (e) => onOperatorChange(e.target.value) })}>
+                  <option value={NEW_OPERATOR}>Persona nueva (la cargo ahora)</option>
+                  {free.length > 0 && (
+                    <optgroup label="Ya cargados en Operarios, sin usuario">
+                      {free.map((o) => (
+                        <option key={o.id} value={o.id}>{o.name} · {o.role}</option>
+                      ))}
+                    </optgroup>
+                  )}
                 </Select>
               </Field>
+            )}
+            {isNewOperator && (
+              <>
+                <Field label="Puesto o especialidad" htmlFor="nu-position" error={errors.position?.message} hint="Ej.: carpintero, lustrador.">
+                  <Input id="nu-position" autoComplete="off" aria-invalid={!!errors.position} {...register("position")} />
+                </Field>
+                <Field label="Costo por hora ($)" htmlFor="nu-cost" error={errors.hourlyCost?.message} hint="Con esto se valorizan las horas que cargue. Después se edita en Operarios.">
+                  <Input id="nu-cost" inputMode="decimal" autoComplete="off" aria-invalid={!!errors.hourlyCost} {...register("hourlyCost")} />
+                </Field>
+              </>
             )}
           </div>
           <div className="flex flex-wrap items-center gap-3 border-t border-slate-100 pt-4">

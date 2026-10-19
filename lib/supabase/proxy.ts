@@ -1,6 +1,8 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { isSupabaseConfigured, SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from "./env";
+import { sessionCookieOptions } from "./session";
+import { safeNext } from "./safe-next";
 
 /** Rutas públicas: el landing, el login, el intercambio del código OAuth y la confirmación de una invitación. */
 const PUBLIC_PATHS = ["/", "/login", "/auth/callback", "/auth/confirm"];
@@ -28,6 +30,7 @@ export async function updateSession(request: NextRequest) {
   }
 
   const supabase = createServerClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+    cookieOptions: sessionCookieOptions,
     cookies: {
       getAll() {
         return request.cookies.getAll();
@@ -53,9 +56,10 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
+  // Quien ya tiene sesión y abre un link de invitación (/login?next=/taller…) va directo a la pantalla de su rol.
   if (signedIn && pathname === "/login") {
     const url = request.nextUrl.clone();
-    url.pathname = "/dashboard";
+    url.pathname = safeNext(request.nextUrl.searchParams.get("next"));
     url.search = "";
     return NextResponse.redirect(url);
   }
