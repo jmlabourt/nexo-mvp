@@ -11,6 +11,7 @@ import { todayISO } from "@/lib/formatting";
 import { isBuyer, isManager } from "@/lib/project-rules";
 import { catalogPriceAt } from "@/lib/material-options";
 import { withEconomicImpact } from "@/lib/deviations";
+import { deliveryReviewAlerts } from "@/lib/plant-materials";
 import { effectiveIdentity, useAppStore } from "./use-app-store";
 
 export function useToday(): string {
@@ -87,15 +88,19 @@ export function useAlerts(): { open: Alert[]; resolved: Alert[]; count: number }
   const assignments = useAppStore((s) => s.assignments);
   const plant = usePlantAlerts();
   const buying = usePurchasingAlerts();
+  const stock = useAppStore((s) => s.stock);
+  const deliveries = useAppStore((s) => s.deliveries);
   const today = useToday();
   return useMemo(() => {
     // El Administrativo ve cuánto cuesta cada alerta (horas de más × costo por hora, puntos de margen).
     // "Falta material" del Jefe es la misma situación que "material sin pedir" / "pedido y no llegó" de Compras.
     const fromPlant = plant.filter((a) => a.kind !== "material_missing");
-    const all = withEconomicImpact([...allAlerts(projects, settings, today), ...fromPlant, ...buying], projects, assignments, today);
+    // Entregas y cierres del Jefe de planta, con su costo (solo el Administrativo lo ve).
+    const planta = deliveryReviewAlerts(projects, stock, deliveries, today);
+    const all = withEconomicImpact([...allAlerts(projects, settings, today), ...fromPlant, ...buying, ...planta], projects, assignments, today);
     const split = splitAlerts(sortAlerts(all), resolvedKeys);
     return { ...split, count: openAlertCount(split.open) };
-  }, [projects, settings, resolvedKeys, today, plant, buying, assignments]);
+  }, [projects, settings, resolvedKeys, today, plant, buying, assignments, stock, deliveries]);
 }
 
 export function useProjectAlerts(project: Project | undefined): Alert[] {

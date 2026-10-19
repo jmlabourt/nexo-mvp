@@ -5,7 +5,7 @@
 // alcanza con comparar referencias).
 // ─────────────────────────────────────────────────────────────
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { AlertSettings, AppRole, CostSettings, DayException, HourRate, MaterialRequest, Operator, PriceRecord, Project, PurchaseOrder, ValueCorrection, WorkAssignment } from "@/types";
+import type { AlertSettings, AppRole, CostSettings, DayException, HourRate, MaterialDelivery, MaterialRequest, Operator, PriceRecord, Project, PurchaseOrder, ValueCorrection, WorkAssignment } from "@/types";
 import { DEFAULT_FINANCIAL_PCT, DEFAULT_HOUR_RATES, DEFAULT_HOURS_PER_DAY, DEFAULT_OVERTIME_MULTIPLIER, DEFAULT_SETTINGS } from "@/lib/constants";
 import type { StockState } from "@/lib/stock";
 import type { TallerCall } from "./taller";
@@ -39,6 +39,7 @@ import {
   orderToParams,
   ordersFromRows,
   dayExceptionFromRow,
+  deliveryFromRow,
   type ChildKey,
 } from "./mappers";
 
@@ -49,6 +50,8 @@ export interface WorkspaceData {
   assignments: WorkAssignment[];
   /** Excepciones de días laborales por operario (Lote 6 · Fase 3). Las leen Administrativo y Jefe de planta. */
   dayExceptions?: DayException[];
+  /** Entregas de material del Jefe de planta (solo cantidades). Las leen Administrativo y Jefe de planta. */
+  deliveries?: MaterialDelivery[];
   /** Órdenes de compra con sus líneas (Lote 6). Las leen Administrativo y Compras. */
   orders: PurchaseOrder[];
   operators: Operator[];
@@ -145,6 +148,7 @@ export async function loadWorkspace(db: SupabaseClient): Promise<Workspace> {
     assignments,
     orders,
     dayExceptions,
+    deliveries,
   ] = await Promise.all([
     check(await db.from("projects").select("*").eq("organization_id", org).order("created_at", { ascending: false })) as Record<
       string,
@@ -171,6 +175,7 @@ export async function loadWorkspace(db: SupabaseClient): Promise<Workspace> {
     loadAssignments(db, org),
     loadOrders(db, org),
     loadDayExceptions(db, org),
+    loadDeliveries(db, org),
   ]);
 
   const domainProjects = projectsFromRows({ projects, budgetLines, purchaseEntries, materialUsages, actualEntries, activity, items, stageLogs, attachments });
@@ -201,6 +206,7 @@ export async function loadWorkspace(db: SupabaseClient): Promise<Workspace> {
     assignments,
     orders,
     dayExceptions,
+    deliveries,
     projects: domainProjects,
     operators: operatorsAt(operators.map(operatorFromRow), priceHistory, todayISO()),
     stock,
@@ -233,6 +239,37 @@ async function loadDayExceptions(db: SupabaseClient, org: string): Promise<DayEx
   if (error) throw new Error(error.message);
   if (!data) return [];
   return (data as Record<string, unknown>[]).map(dayExceptionFromRow);
+}
+
+/** "No existe" en la base (tabla o función sin migrar): esa parte se carga vacía en lugar de romper toda la carga. */
+const missingInDb = (e: { code?: string; message?: string }) =>
+  ["42P01", "42883", "PGRST202", "PGRST205"].includes(e.code ?? "") || /does not exist|could not find/i.test(e.message ?? "");
+
+/** Entregas de material del Jefe de planta (migración 20261024120000). Sin la migración aplicada: lista vacía. */
+async function loadDeliveries(db: SupabaseClient, org: string): Promise<MaterialDelivery[]> {
+  const { data, error } = await db.from("material_deliveries").select("*").eq("organization_id", org).order("date").order("created_at");
+  if (error) {
+    if (missingInDb(error)) return [];
+    throw new Error(error.message);
+  }
+  return ((data ?? []) as Record<string, unknown>[]).map(deliveryFromRow);
+}
+
+/** Jefe de planta: lotes y movimientos SIN costo, y las entregas (planta_stock). Sin la migración: vacío. */
+async function loadPlantStock(db: SupabaseClient): Promise<{ stock: StockState; deliveries: MaterialDelivery[] } | null> {
+  const { data, error } = await db.rpc("planta_stock");
+  if (error) {
+    if (missingInDb(error)) return null;
+    throw new Error(error.message);
+  }
+  const json = data as { stock_lots?: Record<string, unknown>[]; stock_movements?: Record<string, unknown>[]; deliveries?: Record<string, unknown>[] };
+  return {
+    stock: {
+      lots: (json.stock_lots ?? []).map((r) => lotFromRow({ ...r, unit_cost: 0 })),
+      movements: (json.stock_movements ?? []).map(movementFromRow),
+    },
+    deliveries: (json.deliveries ?? []).map(deliveryFromRow),
+  };
 }
 
 async function loadOrders(db: SupabaseClient, org: string): Promise<PurchaseOrder[]> {
@@ -398,6 +435,8 @@ const withZeros = (rows: Row[] | undefined, zeros: Row): Row[] => (rows ?? []).m
 async function loadStaffWorkspace(db: SupabaseClient, user: { id: string; email?: string }, role: "compras" | "jefe_planta"): Promise<Workspace> {
   const json = check(await db.rpc(role === "compras" ? "compras_workspace" : "planta_workspace")) as StaffWorkspaceJson;
   if (json.status !== "active" || !json.organization_id) throw new Error(INACTIVE_USER_MESSAGE);
+  // Jefe de planta: el material (cantidades, sin costos) y las entregas, desde su función.
+  const plant = role === "jefe_planta" ? await loadPlantStock(db) : null;
   const projects = withZeros(json.projects, { sales_price: 0, progress_percent: 0, baseline: null });
   const actualEntries = (json.actual_entries ?? []).map((r) => ({ ...r, amount: 0, labor: { ...((r.labor as Row | null) ?? {}), hourlyCost: 0 } }));
   return {
@@ -431,7 +470,8 @@ async function loadStaffWorkspace(db: SupabaseClient, user: { id: string; email?
       attachments: [],
     }),
     operators: withZeros(json.operators, { hourly_cost: 0 }).map(operatorFromRow),
-    stock: { lots: (json.stock_lots ?? []).map(lotFromRow), movements: (json.stock_movements ?? []).map(movementFromRow) },
+    stock: plant?.stock ?? { lots: (json.stock_lots ?? []).map(lotFromRow), movements: (json.stock_movements ?? []).map(movementFromRow) },
+    deliveries: plant?.deliveries ?? [],
     requests: (json.material_requests ?? []).map(requestFromRow),
     settings: { ...DEFAULT_SETTINGS, ...(json.alert_settings ?? {}) },
     resolvedAlertIds: [],

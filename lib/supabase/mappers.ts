@@ -15,6 +15,7 @@ import type {
   CostSettings,
   HourRate,
   LaborValuation,
+  MaterialDelivery,
   MaterialRequest,
   MaterialUsageEntry,
   DayException,
@@ -521,6 +522,31 @@ export function dayExceptionFromRow(r: Row): DayException {
     works: r.works === true,
     hours: r.hours === null || r.hours === undefined ? undefined : num(r.hours),
     note: opt(r.note as string | null),
+    createdBy: String(r.created_by ?? ""),
+    createdAt: iso(r.created_at),
+  };
+}
+
+// ── Entregas de material (Jefe de planta) ─────────────────
+
+export function deliveryFromRow(r: Row): MaterialDelivery {
+  const n = (v: unknown) => (v === null || v === undefined ? undefined : num(v));
+  return {
+    id: String(r.id),
+    projectId: String(r.project_id),
+    itemId: opt(r.item_id as string | null),
+    operatorId: opt(r.operator_id as string | null),
+    materialId: String(r.material_id),
+    materialName: String(r.material_name),
+    unit: String(r.unit ?? ""),
+    quantity: num(r.quantity),
+    source: r.source === "warehouse" ? "warehouse" : "project",
+    date: String(r.date),
+    closedAt: r.closed_at ? iso(r.closed_at) : undefined,
+    closeId: opt(r.close_id as string | null),
+    consumed: n(r.consumed),
+    waste: n(r.waste),
+    leftover: n(r.leftover),
     createdBy: String(r.created_by ?? ""),
     createdAt: iso(r.created_at),
   };

@@ -361,11 +361,11 @@ export interface MaterialUsageInput {
   };
 }
 
-function usageOrigin(lot: StockLot): UnitCostOrigin {
+export function usageOrigin(lot: StockLot): UnitCostOrigin {
   return lot.kind === "leftover" ? "reusable_pool" : lot.kind === "purchase" ? "purchase" : "manual";
 }
 
-function usageSource(lot: StockLot, projectId: string): MaterialSource {
+export function usageSource(lot: StockLot, projectId: string): MaterialSource {
   if (lot.kind === "leftover") return "reused_leftover";
   return lot.originProjectId === projectId ? "purchased_for_project" : "existing_stock";
 }

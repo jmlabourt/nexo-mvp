@@ -43,6 +43,11 @@ export function productInputError(input: ProductInput, completedUnits = 0): stri
   return null;
 }
 
+/** Unidades terminadas de un producto: entero entre 0 y la cantidad (la carga el Jefe de planta). */
+export function completedUnitsError(item: Pick<ProjectItem, "quantity">, units: number): string | null {
+  return Number.isInteger(units) && units >= 0 && units <= item.quantity ? null : `Las unidades terminadas van de 0 a ${item.quantity}.`;
+}
+
 // ── Mano de obra presupuestada vs horas de los productos (P0-7) ──
 
 /** Horas de mano de obra del costo presupuestado, por rubro (líneas con cantidad en horas, normales y extra). */

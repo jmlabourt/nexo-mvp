@@ -439,6 +439,32 @@ export interface DayException {
   createdAt: string;
 }
 
+/**
+ * Entrega de material del Jefe de planta a un producto (y un operario): solo cantidades (docs/PLANTA_MATERIALES.md).
+ * No es costo: lo es lo que el cierre del día registra como consumo o desperdicio.
+ */
+export interface MaterialDelivery {
+  id: string;
+  projectId: string;
+  itemId?: string;
+  operatorId?: string;
+  materialId: string;
+  materialName: string;
+  unit: string;
+  quantity: number;
+  /** De dónde salió: el depósito (stock libre) o lo ya asignado al proyecto. */
+  source: "warehouse" | "project";
+  date: string;
+  /** Cierre del día que la cerró (sin cerrar = sigue en planta). */
+  closedAt?: string;
+  closeId?: string;
+  consumed?: number;
+  waste?: number;
+  leftover?: number;
+  createdBy: string;
+  createdAt: string;
+}
+
 export interface MaterialRequest {
   id: string;
   projectId: string;
@@ -581,7 +607,11 @@ export type AlertKind =
   /** Compras/Administrativo: pedido en una orden y sin recibir, para una obra que arranca pronto o ya arrancó. */
   | "material_arrival"
   /** Jefe de planta (sin importes): la obra arranca pronto o ya arrancó y el material no está completo. */
-  | "material_missing";
+  | "material_missing"
+  /** Administrativo: material entregado en planta y sin cierre del día (no se sabe cuánto se consumió). */
+  | "delivery_open"
+  /** Administrativo: resumen con costo de un cierre del día del Jefe de planta. */
+  | "day_close";
 
 export interface Alert {
   /** Determinístico: permite marcarla como resuelta. Incluye el nivel para que un agravamiento reaparezca. */

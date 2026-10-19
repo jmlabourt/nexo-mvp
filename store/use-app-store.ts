@@ -16,6 +16,7 @@ import type {
   HourRate,
   AppRole,
   Attachment,
+  MaterialDelivery,
   MaterialRequest,
   Operator,
   PriceRecord,
@@ -35,7 +36,7 @@ import * as ops from "@/lib/project-operations";
 import * as people from "@/lib/operators";
 import { createId } from "@/lib/activity";
 import { checkHours, isBuyer, isManager } from "@/lib/project-rules";
-import type { ProductInput } from "@/lib/production";
+import { completedUnitsError, type ProductInput } from "@/lib/production";
 import { EMPTY_STOCK, applyChange, receiveStock, type StockState } from "@/lib/stock";
 import { materialKey } from "@/lib/material-reconciliation";
 import { createClient } from "@/lib/supabase/client";
@@ -59,6 +60,7 @@ import { todayISO } from "@/lib/formatting";
 import { hourRatesAt, laborCostAt, OVERTIME_SUBJECT, priceChange, priceChangeError, valueAt } from "@/lib/price-history";
 import { applyCorrection, correctionError, type CorrectionInput } from "@/lib/corrections";
 import { assignmentError, type AssignmentInput } from "@/lib/plant";
+import { closeDay, closeDayPayload, deliverMaterial, deliveryPayload, type CloseDayInput, type DeliveryInput } from "@/lib/plant-materials";
 
 export type Result<T = undefined> = { ok: true; value: T } | { ok: false; error: string };
 
@@ -74,6 +76,8 @@ interface AppState {
   orders: PurchaseOrder[];
   /** Excepciones de días laborales (Lote 6 · Fase 3). */
   dayExceptions: DayException[];
+  /** Entregas de material del Jefe de planta (docs/PLANTA_MATERIALES.md). Solo cantidades. */
+  deliveries: MaterialDelivery[];
   operators: Operator[];
   stock: StockState;
   requests: MaterialRequest[];
@@ -138,6 +142,10 @@ interface AppState {
   updateItem: (id: string, itemId: string, input: ProductInput) => Result;
   /** Unidades terminadas de un producto: las carga el Jefe de planta (o un Administrativo). */
   setCompletedUnits: (projectId: string, itemId: string, units: number) => Result;
+  /** Entrega de material del Jefe de planta a un producto (del depósito o de lo asignado al proyecto). */
+  deliverMaterial: (input: DeliveryInput) => Result;
+  /** Cierre del día del Jefe de planta: unidades terminadas y consumo / desperdicio / sobrante de lo entregado. */
+  closeDay: (input: CloseDayInput) => Result;
   removeItem: (id: string, itemId: string) => Result;
   addStageLog: (id: string, input: ops.StageLogInput) => Result;
   addAttachment: (id: string, attachment: Attachment) => Result;
@@ -414,7 +422,7 @@ export const useAppStore = create<AppState>()(
         const run2 = queue.then(async (): Promise<Result> => {
           try {
             await remote.replaceWorkspace(createClient(), org, isDemo ? data : null);
-            set({ ...data, dayExceptions: data.dayExceptions ?? [], isDemo, currentMode: "admin", actingOperatorId: null, syncStatus: "idle", syncError: null });
+            set({ ...data, dayExceptions: data.dayExceptions ?? [], deliveries: data.deliveries ?? [], isDemo, currentMode: "admin", actingOperatorId: null, syncStatus: "idle", syncError: null });
             return { ok: true, value: undefined };
           } catch (e) {
             set({ syncStatus: "error", syncError: `No se pudo guardar: ${errorMessage(e)}` });
@@ -440,6 +448,7 @@ export const useAppStore = create<AppState>()(
         ...EMPTY_DATA,
         reviewedHoursKeys: [],
         dayExceptions: [],
+        deliveries: [],
         costSettings: { ...DEFAULT_COST_SETTINGS },
         hourRates: DEFAULT_HOUR_RATES.map((r) => ({ ...r })),
         priceHistory: [],
@@ -489,6 +498,7 @@ export const useAppStore = create<AppState>()(
             assignments: ws.assignments,
             orders: ws.orders,
             dayExceptions: ws.dayExceptions ?? [],
+            deliveries: ws.deliveries ?? [],
             operators: ws.operators,
             stock: ws.stock,
             requests: ws.requests,
@@ -629,7 +639,8 @@ export const useAppStore = create<AppState>()(
             const project = find(projectId);
             const item = project.items.find((i) => i.id === itemId);
             if (!item) throw new ops.DomainError("Producto no encontrado.");
-            if (!Number.isInteger(units) || units < 0 || units > item.quantity) throw new ops.DomainError(`Las unidades terminadas van de 0 a ${item.quantity}.`);
+            const unitsError = completedUnitsError(item, units);
+            if (unitsError) throw new ops.DomainError(unitsError);
             const now = new Date().toISOString();
             // Ya se guarda con la función de planta: se actualiza la memoria sin volver a escribir el proyecto.
             set({
@@ -638,6 +649,34 @@ export const useAppStore = create<AppState>()(
               ),
             });
             void persistRemote((db) => remote.setCompletedUnits(db, projectId, itemId, units));
+            return undefined;
+          }),
+        deliverMaterial: (input) =>
+          run(() => {
+            const who = effectiveIdentity(get()).roleKey;
+            if (who !== "admin" && who !== "jefe_planta") throw new ops.DomainError("La entrega de material la registra el Jefe de planta.");
+            const r = deliverMaterial(find(input.projectId), get().stock, get().deliveries, input, { ...ctx(), today: todayISO() });
+            // Va a su función de la base (valida saldos por lote): no pasa por la escritura general.
+            set({ stock: r.stock, deliveries: [...get().deliveries, r.delivery] });
+            const p = deliveryPayload(r);
+            void persistRemote(async (db) => {
+              const { error } = await db.rpc("planta_deliver_material", { p });
+              if (error) throw new Error(error.message);
+            });
+            return undefined;
+          }),
+        closeDay: (input) =>
+          run(() => {
+            const who = effectiveIdentity(get()).roleKey;
+            if (who !== "admin" && who !== "jefe_planta") throw new ops.DomainError("El cierre del día lo hace el Jefe de planta.");
+            const r = closeDay(find(input.projectId), get().stock, get().deliveries, input, { ...ctx(), today: todayISO() });
+            set({ projects: get().projects.map((p) => (p.id === input.projectId ? r.project : p)), stock: r.stock, deliveries: r.deliveries });
+            // El costo de cada uso y de cada sobrante lo pone la base con el lote (el Jefe no lo conoce).
+            const p = closeDayPayload(input, r);
+            void persistRemote(async (db) => {
+              const { error } = await db.rpc("planta_close_day", { p });
+              if (error) throw new Error(error.message);
+            });
             return undefined;
           }),
         removeItem: (id, itemId) => mutate(id, (p) => ops.removeItem(p, itemId, ctx())),
