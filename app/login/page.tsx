@@ -39,7 +39,7 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
           </p>
           {invitedEmail && (
             <p role="status" className="mt-6 rounded-xl bg-white px-3 py-2 text-sm text-ink-soft ring-1 ring-line">
-              Te invitaron a Blerp. Pedí tu código para entrar con <strong className="break-all text-ink">{invitedEmail}</strong>.
+              Te invitaron a Blerp. Pedí tu código y entrá: no necesitás crear una cuenta.
             </p>
           )}
           {!isSupabaseConfigured && (

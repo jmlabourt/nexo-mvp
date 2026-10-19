@@ -3,7 +3,9 @@
 // errores antes de invitar; cada persona recibe el mail y queda un link propio para pasarle por el canal que quieras.
 import { useMemo, useState, useTransition } from "react";
 import { Copy, Upload, Users } from "lucide-react";
+import { formatCurrency } from "@/lib/formatting";
 import { ROLE_LABELS } from "@/lib/permissions";
+import { useConfirmedAction } from "@/store/confirmed-action";
 import { parseUserList, type Invitation, type Member } from "@/lib/users";
 import { inviteUsers, type BulkInviteResult } from "@/app/(gestion)/settings/actions";
 import { Badge } from "@/components/ui/badge";
@@ -12,7 +14,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Textarea } from "@/components/ui/input";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 
-const EXAMPLE = "Nombre, Mail, Rol\nLaura Gómez, laura@empresa.com, Administrativo\nMartín Ruiz, martin@empresa.com, Compras\nCarla Sosa, carla@empresa.com, Jefe de planta\nJuan Pérez, juan@empresa.com, Operario";
+const EXAMPLE =
+  "Nombre; Mail; Rol; Puesto; Costo por hora\nLaura Gómez; laura@empresa.com; Administrativo\nMartín Ruiz; martin@empresa.com; Compras\nCarla Sosa; carla@empresa.com; Jefe de planta\nJuan Pérez; juan@empresa.com; Operario; Carpintero; 4500";
 
 async function copy(text: string): Promise<boolean> {
   try {
@@ -33,6 +36,7 @@ export function BulkInviteCard({ free, members, invitations, onDone }: {
   const [results, setResults] = useState<BulkInviteResult[] | null>(null);
   const [note, setNote] = useState("");
   const [pending, startTransition] = useTransition();
+  const createOperator = useConfirmedAction("createOperator");
 
   const existing = useMemo(() => [...members.map((m) => m.email), ...invitations.map((i) => i.email)].filter(Boolean), [members, invitations]);
   const rows = useMemo(() => parseUserList(text, free, existing), [text, free, existing]);
@@ -47,8 +51,23 @@ export function BulkInviteCard({ free, members, invitations, onDone }: {
 
   function send() {
     startTransition(async () => {
-      const res = await inviteUsers(valid.map((r) => ({ displayName: r.displayName, email: r.email, role: r.role, operatorId: r.operatorId })));
-      setResults(res);
+      // Los operarios nuevos se cargan primero en Operarios (con su costo por hora); después se invita a cada persona.
+      const failed: BulkInviteResult[] = [];
+      const toInvite: { displayName: string; email: string; role?: string; operatorId?: string }[] = [];
+      for (const r of valid) {
+        let operatorId = r.operatorId;
+        if (r.newOperator) {
+          const created = await createOperator({ name: r.displayName, role: r.newOperator.position, hourlyCost: r.newOperator.hourlyCost, email: r.email });
+          if (!created.ok) {
+            failed.push({ ok: false, message: created.error, email: r.email, displayName: r.displayName });
+            continue;
+          }
+          operatorId = created.value;
+        }
+        toInvite.push({ displayName: r.displayName, email: r.email, role: r.role, operatorId });
+      }
+      const res = await inviteUsers(toInvite);
+      setResults([...failed, ...res]);
       setText("");
       await onDone();
     });
@@ -65,7 +84,8 @@ export function BulkInviteCard({ free, members, invitations, onDone }: {
         <CardTitle className="flex items-center gap-2"><Users className="size-4" aria-hidden /> Cargar un listado de usuarios</CardTitle>
         <CardDescription>
           Pegá desde Excel o subí un CSV con una persona por línea: nombre, mail y rol (Administrativo, Compras, Jefe de planta u Operario).
-          Cada una recibe un mail y un link que la lleva directo a la pantalla de su rol. Un Operario tiene que estar cargado antes en Operarios.
+          Cada una recibe un mail y un link que la lleva directo a la pantalla de su rol. Un Operario que ya está en Operarios se vincula por nombre;
+          si es nuevo, agregá las columnas Puesto y Costo por hora y se carga en Operarios al invitarlo. Si usás coma decimal en el costo, separá las columnas con tab o punto y coma.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -94,7 +114,16 @@ export function BulkInviteCard({ free, members, invitations, onDone }: {
                       <TD className="font-medium text-slate-900">{r.displayName || "—"}</TD>
                       <TD className="break-all text-slate-600">{r.email || "—"}</TD>
                       <TD>{r.role ? ROLE_LABELS[r.role] : "—"}</TD>
-                      <TD>{r.error ? <span role="alert" className="text-xs text-red-600">Línea {r.line}: {r.error}</span> : <Badge>Listo</Badge>}</TD>
+                      <TD>{r.error ? (
+                          <span role="alert" className="text-xs text-red-600">Línea {r.line}: {r.error}</span>
+                        ) : (
+                          <span className="flex flex-col items-start gap-1">
+                            <Badge>Listo</Badge>
+                            {r.newOperator && (
+                              <span className="text-xs text-slate-600">Se carga en Operarios: {r.newOperator.position}, {formatCurrency(r.newOperator.hourlyCost)}/h</span>
+                            )}
+                          </span>
+                        )}</TD>
                     </TR>
                   ))}
                 </TBody>

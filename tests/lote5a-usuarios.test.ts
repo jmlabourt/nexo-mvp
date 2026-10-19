@@ -1,6 +1,21 @@
 // Lote 5A — usuarios: reglas de rol y baja, y el formulario de alta (Zod).
 import { describe, expect, it } from "vitest";
-import { authErrorMessage, deactivateError, inviteLink, membersFromJson, newUserSchema, parseRole, parseUserList, roleChangeError, type Member } from "@/lib/users";
+import {
+  authErrorMessage,
+  deactivateError,
+  duplicateOperatorError,
+  inviteLink,
+  membersFromJson,
+  newOperatorOf,
+  NEW_OPERATOR,
+  newUserSchema,
+  parseRole,
+  parseUserList,
+  roleChangeError,
+  userFormSchema,
+  type Member,
+} from "@/lib/users";
+import { SESSION_MAX_AGE_SECONDS, sessionCookieOptions } from "@/lib/supabase/session";
 
 const m = (userId: string, role: Member["role"], extra: Partial<Member> = {}): Member => ({
   userId,
@@ -115,7 +130,7 @@ describe("alta masiva: listado nombre, mail, rol", () => {
     expect(rows[2].error).toMatch(/Rol no reconocido/);
     expect(rows[3].error).toMatch(/repetido/);
     expect(rows[4].error).toMatch(/ya es un usuario/);
-    expect(rows[5].error).toMatch(/Operarios/);
+    expect(rows[5].error).toMatch(/operario nuevo/);
     expect(rows[6].error).toMatch(/nombre/);
   });
 
@@ -130,5 +145,65 @@ describe("alta masiva: listado nombre, mail, rol", () => {
     expect(inviteLink("https://app.test", "a@x.com", "compras")).toContain("next=%2Fcompras");
     expect(inviteLink("https://app.test", "a@x.com", "jefe_planta")).toContain("next=%2Fplanta");
     expect(inviteLink("https://app.test", "a@x.com", "admin")).toContain("next=%2Fdashboard");
+  });
+});
+
+describe("alta de Operario sin contradicciones", () => {
+  const base = { displayName: "Juan Pérez", email: "juan@x.com", role: "operario" as const };
+
+  it("un operario nuevo pide puesto y costo por hora, y no pide elegir a nadie de la lista", () => {
+    const sin = userFormSchema.safeParse({ ...base, operatorId: NEW_OPERATOR });
+    expect(sin.error?.issues.map((i) => i.path[0])).toEqual(["position", "hourlyCost"]);
+    const cero = userFormSchema.safeParse({ ...base, operatorId: NEW_OPERATOR, position: "Carpintero", hourlyCost: "0" });
+    expect(cero.error?.issues.map((i) => i.path[0])).toEqual(["hourlyCost"]);
+    const ok = userFormSchema.safeParse({ ...base, operatorId: NEW_OPERATOR, position: "Carpintero", hourlyCost: "4500,50" });
+    expect(ok.success).toBe(true);
+    expect(ok.success && newOperatorOf(ok.data)).toEqual({ name: "Juan Pérez", role: "Carpintero", hourlyCost: 4500.5, email: "juan@x.com" });
+  });
+
+  it("un operario ya cargado se elige de la lista y no se crea de nuevo", () => {
+    const ok = userFormSchema.safeParse({ ...base, operatorId: "op-juan" });
+    expect(ok.success).toBe(true);
+    expect(ok.success && newOperatorOf(ok.data)).toBeNull();
+  });
+
+  it("sin elegir nada para un Operario hay un error claro; otros roles no piden nada de operario", () => {
+    expect(userFormSchema.safeParse({ ...base }).error?.issues[0].message).toMatch(/nuevo o uno ya cargado/);
+    expect(userFormSchema.safeParse({ displayName: "Ana Paz", email: "ana@x.com", role: "compras" }).success).toBe(true);
+  });
+
+  it("avisa si el operario nuevo ya está cargado (sin importar tildes ni mayúsculas)", () => {
+    const free = [{ name: "Juan Pérez" }];
+    expect(duplicateOperatorError("juan perez", free)).toMatch(/elegilo de la lista/);
+    expect(duplicateOperatorError("Pedro Gómez", free)).toBeNull();
+    expect(duplicateOperatorError("  ", free)).toBeNull();
+  });
+
+  it("en el listado, un operario nuevo se crea si trae puesto y costo; sin eso, error", () => {
+    const text = "Nombre; Mail; Rol; Puesto; Costo por hora\nPedro Gómez; pedro@x.com; Operario; Lustrador; 3800,5\nLuis Ríos; luis@x.com; Operario; ; \nJuan Pérez; juan@x.com; Operario";
+    const rows = parseUserList(text, [{ id: "op-juan", name: "Juan Pérez" }], []);
+    expect(rows[0].error).toBeUndefined();
+    expect(rows[0].newOperator).toEqual({ position: "Lustrador", hourlyCost: 3800.5 });
+    expect(rows[1].error).toMatch(/Puesto/);
+    expect(rows[2].operatorId).toBe("op-juan");
+    expect(rows[2].newOperator).toBeUndefined();
+  });
+
+  it("dos operarios nuevos con el mismo nombre en el listado no se crean duplicados", () => {
+    const rows = parseUserList("A Uno; a@x.com; Operario; Carpintero; 1000\nA Uno; b@x.com; Operario; Carpintero; 1000", [], []);
+    expect(rows[0].error).toBeUndefined();
+    expect(rows[1].error).toMatch(/repetido/);
+  });
+
+  it("sin encabezado, las columnas 4 y 5 son puesto y costo por hora", () => {
+    const rows = parseUserList("Pedro Gómez\tpedro@x.com\tOperario\tLustrador\t3800", [], []);
+    expect(rows[0].newOperator).toEqual({ position: "Lustrador", hourlyCost: 3800 });
+  });
+});
+
+describe("sesión iniciada una semana", () => {
+  it("las cookies de Supabase duran 7 días", () => {
+    expect(SESSION_MAX_AGE_SECONDS).toBe(604800);
+    expect(sessionCookieOptions.maxAge).toBe(SESSION_MAX_AGE_SECONDS);
   });
 });
