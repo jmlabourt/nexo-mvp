@@ -24,6 +24,7 @@ const SUPABASE_STUBS = `
   create table auth.users (
     id uuid primary key default gen_random_uuid(),
     email text,
+    phone text,
     raw_user_meta_data jsonb not null default '{}'::jsonb
   );
   create function auth.uid() returns uuid language sql stable as
@@ -88,6 +89,14 @@ export async function errorAs(db: PGlite, userId: string, fn: (tx: Transaction) 
 }
 
 /** Alta de un usuario como lo hace Supabase al registrarse (dispara handle_new_user). */
+export async function signUpPhone(db: PGlite, phone: string, name: string): Promise<string> {
+  const r = await db.query<{ id: string }>(
+    "insert into auth.users (phone, raw_user_meta_data) values ($1, jsonb_build_object('full_name', $2::text)) returning id",
+    [phone, name],
+  );
+  return r.rows[0].id;
+}
+
 export async function signUp(db: PGlite, email: string, name: string): Promise<string> {
   const r = await db.query<{ id: string }>(
     "insert into auth.users (email, raw_user_meta_data) values ($1, jsonb_build_object('full_name', $2::text)) returning id",

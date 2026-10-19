@@ -140,3 +140,16 @@ El pedido fue "Cotizador de materiales: variante para Compras que solo trabaja c
   - `tests/lote5a-vistas.test.ts`;
   - `tests/lote5a-pantallas.test.tsx`;
   - `tests/db/lote5a.test.ts`: políticas en Postgres real.
+
+## Ingreso e invitaciones (oct 2026)
+
+- **Administrativo**: crea la empresa entrando con Google (la primera vez).
+- **Invitar**: Configuración → Usuarios → Nuevo usuario (nombre, rol y mail). Sale la invitación de Supabase por mail (requiere `SUPABASE_SERVICE_ROLE_KEY` en Vercel).
+- **Cargar un listado** (Configuración → Usuarios → "Cargar un listado de usuarios"): se pega desde Excel o se sube un CSV con `nombre, mail, rol` (una persona por línea; separador coma, punto y coma o tab; encabezado opcional). Hay una vista previa con los errores por línea (mail inválido, rol desconocido, mail repetido o ya invitado) y solo se invitan las filas sin error. Roles aceptados: Administrativo, Compras, Jefe de planta, Operario (también "planta", "taller", etc.). Un Operario se vincula por nombre a una persona ya cargada en Operarios que no tenga usuario.
+- **Link por rol**: cada invitación tiene un link `…/login?next=<pantalla del rol>&email=<mail>` que abre el login con el mail ya puesto y, al entrar, lleva a la pantalla de su rol: Administrativo `/dashboard`, Compras `/compras`, Jefe de planta `/planta`, Operario `/taller`. Se copia desde la lista de invitaciones pendientes o desde el resultado de la carga masiva, para pasarlo por el canal que quieras. El mail de invitación también lleva a la misma pantalla.
+- **Entrar** (pantalla de login): Google o **código por mail** (no hace falta cuenta de Google). Quien entra con un mail invitado queda en la empresa con el rol asignado y ve solo su vista. Un mail sin invitación crea su propia empresa, igual que Google.
+- Queda todo en Supabase: `member_invitations`, `organization_members` y `auth.users`.
+- **WhatsApp: descartado por ahora.** El envío de códigos por WhatsApp requiere pagar una API (Twilio/Meta). La base conserva la columna `phone` en las invitaciones (migración `20261023130000`), pero la app no la usa. Un celular sin invitación igual se rechaza si algún día se habilita el ingreso por teléfono.
+
+### Configuración que falta en el panel de Supabase
+- **Código por mail**: Authentication → Email Templates → plantilla "Magic Link" → incluir `{{ .Token }}` en el texto (ej. "Tu código es: {{ .Token }}"). Sin eso el mail trae un link en vez del código.

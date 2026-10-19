@@ -1,6 +1,6 @@
 // Lote 5A — usuarios: reglas de rol y baja, y el formulario de alta (Zod).
 import { describe, expect, it } from "vitest";
-import { deactivateError, membersFromJson, newUserSchema, roleChangeError, type Member } from "@/lib/users";
+import { authErrorMessage, deactivateError, inviteLink, membersFromJson, newUserSchema, parseRole, parseUserList, roleChangeError, type Member } from "@/lib/users";
 
 const m = (userId: string, role: Member["role"], extra: Partial<Member> = {}): Member => ({
   userId,
@@ -59,5 +59,76 @@ describe("lectura de admin_members()", () => {
     });
     expect(r.members[0]).toEqual({ canViewCommercial: false, userId: "u1", displayName: "Laura", email: "l@x.com", role: "owner", deactivatedAt: undefined, createdAt: "2026-01-01", operatorId: undefined, isSelf: true });
     expect(r.invitations[0]).toMatchObject({ id: "i1", role: "compras", displayName: "Martín" });
+  });
+});
+
+describe("ingreso con código por mail", () => {
+  it("explica en castellano los errores de ingreso", () => {
+    expect(authErrorMessage("Database error saving new user")).toMatch(/No pudimos crear tu cuenta/);
+    expect(authErrorMessage("Token has expired or is invalid")).toMatch(/venció/);
+    expect(authErrorMessage("For security purposes, you can only request this after 30 seconds")).toMatch(/Esperá/);
+  });
+});
+
+describe("alta masiva: listado nombre, mail, rol", () => {
+  const free = [{ id: "op-juan", name: "Juan Pérez" }, { id: "op-sofia", name: "Sofía Díaz" }];
+
+  it("reconoce los roles con distintos nombres", () => {
+    expect(parseRole("Administrativo")).toBe("admin");
+    expect(parseRole(" jefe de PLANTA ")).toBe("jefe_planta");
+    expect(parseRole("Planta")).toBe("jefe_planta");
+    expect(parseRole("Taller")).toBe("operario");
+    expect(parseRole("Compras")).toBe("compras");
+    expect(parseRole("gerente")).toBeUndefined();
+  });
+
+  it("lee un listado con encabezado, separado por coma, tab o punto y coma", () => {
+    const text = "Nombre, Mail, Rol\nMartín Ruiz, Martin@Empresa.com, Compras\nCarla Sosa;carla@empresa.com;Jefe de planta\nJuan Pérez\tjuan@empresa.com\tOperario\n";
+    const rows = parseUserList(text, free, []);
+    expect(rows.map((r) => [r.displayName, r.email, r.role, r.error])).toEqual([
+      ["Martín Ruiz", "martin@empresa.com", "compras", undefined],
+      ["Carla Sosa", "carla@empresa.com", "jefe_planta", undefined],
+      ["Juan Pérez", "juan@empresa.com", "operario", undefined],
+    ]);
+    expect(rows[2].operatorId).toBe("op-juan");
+  });
+
+  it("respeta el orden de las columnas del encabezado", () => {
+    const rows = parseUserList("Rol;Mail;Nombre\nCompras;ana@x.com;Ana Paz", free, []);
+    expect(rows[0]).toMatchObject({ displayName: "Ana Paz", email: "ana@x.com", role: "compras" });
+    expect(rows[0].error).toBeUndefined();
+  });
+
+  it("marca los errores fila por fila sin frenar las demás", () => {
+    const text = [
+      "Ana Paz, ana@x.com, Compras",
+      "Sin Mail, no-es-mail, Compras",
+      "Rol Raro, raro@x.com, Gerente",
+      "Ana Otra, ANA@x.com, Compras",
+      "Ya Existe, existe@x.com, Compras",
+      "Pedro Nadie, pedro@x.com, Operario",
+      "X, x@x.com, Compras",
+    ].join("\n");
+    const rows = parseUserList(text, free, ["existe@x.com"]);
+    expect(rows.map((r) => !!r.error)).toEqual([false, true, true, true, true, true, true]);
+    expect(rows[1].error).toMatch(/mail no es válido/);
+    expect(rows[2].error).toMatch(/Rol no reconocido/);
+    expect(rows[3].error).toMatch(/repetido/);
+    expect(rows[4].error).toMatch(/ya es un usuario/);
+    expect(rows[5].error).toMatch(/Operarios/);
+    expect(rows[6].error).toMatch(/nombre/);
+  });
+
+  it("un mismo operario no se puede vincular a dos personas", () => {
+    const rows = parseUserList("Juan Pérez, a@x.com, Operario\nJuan Perez, b@x.com, Operario", free, []);
+    expect(rows[0].error).toBeUndefined();
+    expect(rows[1].error).toBeDefined();
+  });
+
+  it("el link lleva al login con el mail y a la pantalla de cada rol", () => {
+    expect(inviteLink("https://app.test", "juan@x.com", "operario")).toBe("https://app.test/login?next=%2Ftaller&email=juan%40x.com");
+    expect(inviteLink("https://app.test", "a@x.com", "compras")).toContain("next=%2Fcompras");
+    expect(inviteLink("https://app.test", "a@x.com", "jefe_planta")).toContain("next=%2Fplanta");
+    expect(inviteLink("https://app.test", "a@x.com", "admin")).toContain("next=%2Fdashboard");
   });
 });
