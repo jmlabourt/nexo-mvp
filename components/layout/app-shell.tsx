@@ -23,6 +23,7 @@ import {
 import { cn } from "@/lib/utils";
 import { APP_NAME, APP_SUBTITLE } from "@/lib/constants";
 import { useAppStore } from "@/store/use-app-store";
+import { DemoBanner } from "./demo-banner";
 import { useAlertCount } from "@/store/selectors";
 import { Button } from "@/components/ui/button";
 import { ModeSwitch } from "./mode-switch";
@@ -177,6 +178,8 @@ function NoAccess({ home }: { home: string }) {
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { roleKey } = useIdentity();
+  const isDemo = useAppStore((s) => s.isDemo);
+  const realRole = useAppStore((s) => s.role);
   const [menuOpen, setMenuOpen] = useState(false);
   useTrackNavigation();
 
@@ -201,7 +204,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       )}
       <div className="min-w-0 lg:pl-60">
         <Header onMenu={() => setMenuOpen(true)} />
-        <main className="mx-auto max-w-7xl px-4 py-6 lg:px-8 lg:py-8">{allowed ? children : <NoAccess home={homeFor(roleKey)} />}</main>
+        <main className="mx-auto max-w-7xl px-4 py-6 lg:px-8 lg:py-8">
+          {isDemo && (realRole === "owner" || realRole === "member") && <DemoBanner />}
+          {allowed ? children : <NoAccess home={homeFor(roleKey)} />}
+        </main>
       </div>
     </div>
   );
