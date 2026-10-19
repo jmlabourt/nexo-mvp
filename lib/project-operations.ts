@@ -369,7 +369,8 @@ export function registerUsage(
   ctx: Ctx,
 ): { project: Project; stock: StockState } {
   assertExecutable(project, "consumo de material");
-  assertCanWork(project, ctx);
+  // El material usado, el desperdicio y el sobrante los carga el Administrativo (Auditoría UX · P0-6), no el Operario.
+  assertManager(ctx, "Cargar material usado");
   if (input.itemId && !project.items.some((i) => i.id === input.itemId)) {
     throw new DomainError("El producto elegido no existe en este proyecto.");
   }

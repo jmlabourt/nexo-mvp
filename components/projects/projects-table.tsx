@@ -24,7 +24,7 @@ export function ProjectsTable({ views, showSchedule = true }: { views: ProjectVi
           <TH className="text-right">Precio de venta</TH>
           <TH className="text-right">Rentabilidad esperada</TH>
           <TH className="text-right">Rentabilidad proyectada / real final</TH>
-          <TH className="text-right">Desvío (puntos de rentabilidad)</TH>
+          <TH className="text-right">Desvío (puntos de margen)</TH>
           <TH>
             <span className="inline-flex items-center gap-1">
               Salud <HealthHelp />

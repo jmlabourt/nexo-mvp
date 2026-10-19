@@ -113,7 +113,8 @@ export function projectProduction(project: Pick<Project, "items" | "actualEntrie
 
 export type ScheduleSignal = "on_time" | "at_risk" | "late";
 
-export const SCHEDULE_LABELS: Record<ScheduleSignal, string> = { on_time: "En tiempo", at_risk: "En riesgo", late: "Atrasado" };
+/** Plazo: nunca "En riesgo" a secas, que se confunde con la economía (Auditoría UX). */
+export const SCHEDULE_LABELS: Record<ScheduleSignal, string> = { on_time: "En tiempo", at_risk: "Plazo en riesgo", late: "Atrasado" };
 
 /**
  * Supuesto (a validar con el cliente) para no confiar en una fecha sola:

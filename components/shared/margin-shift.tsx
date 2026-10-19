@@ -2,7 +2,7 @@ import { ArrowDown, ArrowRight, ArrowUp } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatMarginPoints, formatPercent } from "@/lib/formatting";
 
-/** Diferencia de margen en puntos de rentabilidad, con color semántico. */
+/** Diferencia de margen en puntos de margen, con color semántico. */
 export function DeltaPoints({ value, className }: { value: number | null; className?: string }) {
   if (value === null) return <span className={cn("text-slate-400", className)}>—</span>;
   const r = Number(value.toFixed(1));

@@ -1,3 +1,4 @@
+import { unresolvedMaterial } from "@/lib/material-flow";
 import { describe, expect, it } from "vitest";
 import { categoryAlertLevel, marginAlertLevel, projectAlerts, projectHealth } from "@/lib/alerts";
 import { DEFAULT_SETTINGS as S } from "@/lib/constants";
@@ -41,14 +42,15 @@ describe("alertas derivadas", () => {
     const a = projectAlerts(p, S, "2026-01-11").find((x) => x.kind === "due");
     expect(a?.level).toBe("critical");
   });
-  it("material asignado sin consumir en Instalación → aviso", () => {
+  it("material asignado sin consumir: ya no es alerta diaria; aparece al cerrar el proyecto (Auditoría UX)", () => {
     const p = project({ status: "installation", dueDate: "2026-06-01" });
     const stock = {
       lots: [{ id: "l1", materialId: "m", materialName: "Placa", unit: "placa", unitCost: 100, kind: "purchase" as const, createdBy: "t", createdAt: "2026-01-02T00:00:00Z" }],
       movements: [{ id: "m1", lotId: "l1", kind: "purchase_in" as const, quantity: 3, from: { type: "supplier" as const }, to: { type: "project" as const, projectId: "p" }, date: "2026-01-02", createdBy: "t", createdAt: "2026-01-02T00:00:00Z" }],
     };
-    expect(projectAlerts(p, S, "2026-01-11", stock).some((x) => x.kind === "reconciliation" && x.level === "warning")).toBe(true);
     expect(projectAlerts(p, S, "2026-01-11").some((x) => x.kind === "reconciliation")).toBe(false);
+    // Dentro del cierre: el material sin destino aparece y bloquea cerrar hasta darle destino.
+    expect(unresolvedMaterial(stock, "p").map((h) => [h.lot.materialName, h.quantity])).toEqual([["Placa", 3]]);
   });
   it("salud económica: crítico → En riesgo", () => {
     const p = project({

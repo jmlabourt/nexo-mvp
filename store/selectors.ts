@@ -10,6 +10,7 @@ import { projectEconomics, type ProjectEconomics } from "@/lib/calculations";
 import { todayISO } from "@/lib/formatting";
 import { isBuyer, isManager } from "@/lib/project-rules";
 import { catalogPriceAt } from "@/lib/material-options";
+import { withEconomicImpact } from "@/lib/deviations";
 import { effectiveIdentity, useAppStore } from "./use-app-store";
 
 export function useToday(): string {
@@ -75,14 +76,16 @@ export function useAlerts(): { open: Alert[]; resolved: Alert[]; count: number }
   const projects = useAppStore((s) => s.projects);
   const settings = useAppStore((s) => s.settings);
   const resolvedKeys = useAppStore((s) => s.resolvedAlertIds);
-  const stock = useAppStore((s) => s.stock);
+  const assignments = useAppStore((s) => s.assignments);
   const plant = usePlantAlerts();
   const buying = usePurchasingAlerts();
   const today = useToday();
   return useMemo(() => {
-    const split = splitAlerts(sortAlerts([...allAlerts(projects, settings, today, stock), ...plant, ...buying]), resolvedKeys);
+    // El Administrativo ve cuánto cuesta cada alerta (horas de más × costo por hora, puntos de margen).
+    const all = withEconomicImpact([...allAlerts(projects, settings, today), ...plant, ...buying], projects, assignments, today);
+    const split = splitAlerts(sortAlerts(all), resolvedKeys);
     return { ...split, count: openAlertCount(split.open) };
-  }, [projects, settings, resolvedKeys, today, stock, plant, buying]);
+  }, [projects, settings, resolvedKeys, today, plant, buying, assignments]);
 }
 
 export function useProjectAlerts(project: Project | undefined): Alert[] {

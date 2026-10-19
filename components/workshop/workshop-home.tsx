@@ -151,7 +151,7 @@ function AssignmentCard({ item, onSaved }: { item: MyDayItem; onSaved: (msg: str
           </div>
           <Button type="submit" size="lg" className="flex-1" disabled={busy}>{busy ? "Guardando…" : "Guardar"}</Button>
         </form>
-      <Link href={`/taller/${item.project.id}`} className="mt-3 block text-xs text-blue-700 underline">Materiales o incidencias de este proyecto</Link>
+      <Link href={`/taller/${item.project.id}`} className="mt-3 block text-xs text-blue-700 underline">Pedir material o avisar un problema</Link>
       {error && <p role="alert" className="mt-2 text-sm text-red-600">{error}</p>}
       {warn && !error && (
         <div role="alert" className="mt-2 space-y-2 rounded-md bg-amber-50 p-3 text-sm text-amber-900">

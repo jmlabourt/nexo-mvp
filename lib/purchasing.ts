@@ -6,7 +6,7 @@
 // ─────────────────────────────────────────────────────────────
 import type { ActivityEvent, Alert, AlertLevel, AlertSettings, OrderReceived, Project, PurchaseEntry, PurchaseOrder, PurchaseOrderLine } from "@/types";
 import { receiveStock, warehouseHoldings, type StockChange, type StockCtx, type StockState } from "./stock";
-import { alertBase, alertResolutionKey, sortAlerts } from "./alerts";
+import { alertBase, keyed, sortAlerts } from "./alerts";
 import { materialBudgetQuantity, type QuoteMaterial } from "./budget-calculator";
 import { daysBetween, formatCurrency, formatDate, formatNumber, formatQty } from "./formatting";
 import { materialKey } from "./material-reconciliation";
@@ -448,7 +448,7 @@ export function purchasingAlerts(ctx: PurchasingContext): Alert[] {
     const days = mine[0].daysLeft;
     const when = days < 0 ? `se necesitaban desde el ${formatDate(p.startDate)}` : days === 0 ? "se necesitan hoy" : `se necesitan en ${days} ${days === 1 ? "día" : "días"}`;
     const id = `${p.id}:purchase-due:${mine.map((l) => l.lineId).join(",")}`;
-    alerts.push({
+    alerts.push(keyed({
       ...alertBase(p),
       id,
       kind: "purchase_due",
@@ -456,8 +456,8 @@ export function purchasingAlerts(ctx: PurchasingContext): Alert[] {
       title: `${mine.length} ${mine.length === 1 ? "material sin pedir" : "materiales sin pedir"}: ${when}`,
       message: `El proyecto arranca el ${formatDate(p.startDate)}. Falta pedir: ${mine.map((l) => l.description).join(", ")}.`,
       records: mine.map((l) => `${l.description} · faltan ${formatQty(l.toBuy, l.unit)} · ${NEED_STATUS_LABELS[l.status].toLowerCase()}`),
-      resolutionKey: alertResolutionKey(id, p, ctx.today),
-    });
+      action: "Compras → Necesidades: elegir los materiales y generar la orden de compra.",
+    }));
   }
   for (const o of overBudgetPurchases(ctx.projects)) {
     const p = byId.get(o.projectId);
@@ -465,7 +465,7 @@ export function purchasingAlerts(ctx: PurchasingContext): Alert[] {
     if (!p || o.pct < ctx.settings.categoryWarningPct) continue;
     const level: AlertLevel = o.pct >= ctx.settings.categoryCriticalPct ? "critical" : "warning";
     const id = `${p.id}:purchase-cost:${o.purchaseId}`;
-    alerts.push({
+    alerts.push(keyed({
       ...alertBase(p),
       id,
       kind: "purchase_cost",
@@ -474,8 +474,8 @@ export function purchasingAlerts(ctx: PurchasingContext): Alert[] {
       message: `Estimado ${formatCurrency(o.budgetUnitCost)} por ${o.unit || "unidad"}; costo real ${formatCurrency(o.paidUnitCost)}${o.supplier ? ` de ${o.supplier}` : ""} el ${formatDate(o.date)} (${formatQty(o.quantity, o.unit)}): ${formatCurrency(o.overBy)} más.`,
       impactAmount: o.overBy,
       records: [`Compra ${o.purchaseId} · ${formatDate(o.date)} · ${o.supplier ?? "sin proveedor"}`],
-      resolutionKey: alertResolutionKey(id, p, ctx.today),
-    });
+      action: "Órdenes de compra → revisar la factura y el precio del proveedor.",
+    }));
   }
   return sortAlerts(alerts);
 }

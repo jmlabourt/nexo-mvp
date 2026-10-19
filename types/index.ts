@@ -589,14 +589,19 @@ export interface Alert {
   level: AlertLevel;
   title: string;
   message: string;
+  /** Cuánto cuesta, en pesos (solo Administrativo y Compras; nunca Jefe de planta ni Operario). */
   impactAmount?: number;
+  /** El costo en puntos de margen sobre el precio de venta (solo Administrativo). */
+  impactPoints?: number;
   expectedMargin?: number;
   projectedMargin?: number;
+  /** Qué revisar: dónde se resuelve. */
+  action?: string;
   /** De dónde sale (registros de horas, asignaciones): la alerta se puede rastrear hasta ellos. */
   records?: string[];
   /**
-   * Clave con la que se marca como resuelta: alerta + día + última modificación del proyecto.
-   * Si el problema persiste (al día siguiente o después de un nuevo registro), la alerta reaparece.
+   * Clave con la que se marca como resuelta: alerta + sus datos (título e importe).
+   * Queda resuelta hasta que cambie el dato: si cambia (más horas, otro monto), la alerta vuelve.
    */
   resolutionKey: string;
 }

@@ -4,10 +4,9 @@
 // ─────────────────────────────────────────────────────────────
 import type { Alert, AlertLevel, AlertSettings, EconomicHealth, Project } from "@/types";
 import { projectEconomics, lastRecordDate } from "./calculations";
-import { EXECUTION_STATUSES, projectSchedule } from "./project-rules";
-import { projectHoldings, type StockState } from "./stock";
-import { CATEGORY_IS_PLURAL, CATEGORY_LABELS, STATUS_LABELS } from "./constants";
-import { daysBetween, formatCurrency, formatDays, formatMarginPoints, formatPercent, formatQty, formatSignedCurrency } from "./formatting";
+import { projectSchedule } from "./project-rules";
+import { CATEGORY_LABELS, STATUS_LABELS } from "./constants";
+import { daysBetween, formatCurrency, formatDays, formatMarginPoints, formatPercent, formatSignedCurrency } from "./formatting";
 
 export const LEVEL_RANK: Record<AlertLevel, number> = { info: 0, warning: 1, critical: 2 };
 
@@ -29,66 +28,64 @@ export function alertBase(project: Pick<Project, "id" | "code" | "name">) {
   return { projectId: project.id, projectCode: project.code, projectName: project.name };
 }
 
-/** Clave de resolución: si cambia el día o se registra algo nuevo en el proyecto, la alerta vuelve a evaluarse. */
-export function alertResolutionKey(alertId: string, project: Pick<Project, "updatedAt">, today: string): string {
-  return `${alertId}~${today}~${project.updatedAt}`;
+/**
+ * Clave de resolución: la alerta y sus datos (título e importe). "Marcar resuelta" dura hasta que cambie el dato
+ * (más horas, otro monto, otro estado): ahí la alerta vuelve. Ya no vence al día siguiente (Auditoría UX · P0-4).
+ */
+export function alertResolutionKey(alert: Pick<Alert, "id" | "title" | "impactAmount">): string {
+  return `${alert.id}~${alert.title}~${Math.round(alert.impactAmount ?? 0)}`;
 }
 
-export function projectAlerts(project: Project, settings: AlertSettings, today: string, stock?: StockState): Alert[] {
+/** Completa la clave de resolución de una alerta. */
+export const keyed = (a: Omit<Alert, "resolutionKey">): Alert => ({ ...a, resolutionKey: alertResolutionKey(a) });
+
+/** Qué revisar en el proyecto según la categoría que más se desvía. */
+const CATEGORY_ACTION: Record<string, string> = {
+  materials: "Proyecto → Materiales: facturas por encima de lo estimado y material consumido.",
+  labor: "Proyecto → Costos reales, filtrado por Mano de obra: horas por producto y operario.",
+  design: "Proyecto → Costos reales, filtrado por Diseño.",
+  admin: "Proyecto → Costos reales, filtrado por Administración.",
+  transport: "Proyecto → Costos reales, filtrado por Transporte y fletes.",
+  financial: "Proyecto → Costos reales, filtrado por Gasto financiero.",
+  unexpected: "Proyecto → Costos reales, filtrado por Imprevistos.",
+};
+
+export function projectAlerts(project: Project, settings: AlertSettings, today: string): Alert[] {
   if (project.status === "completed" || project.status === "quotation") return [];
   const econ = projectEconomics(project);
   const alerts: Omit<Alert, "resolutionKey">[] = [];
 
-  // 1. Categorías por encima del presupuesto
-  for (const row of econ.categories) {
-    const over = row.actual - row.budget;
-    if (over <= 0) continue;
-    const label = CATEGORY_LABELS[row.category];
-    const pl = CATEGORY_IS_PLURAL[row.category];
-    if (row.budget === 0) {
+  // 1. Pérdida de margen: UNA alerta por proyecto (qué pasó, cuánto cuesta, qué revisar). Las categorías por encima
+  //    del presupuesto son su causa, no alertas aparte (Auditoría UX · P0-3). Sin alerta por debajo del umbral de Atención.
+  const over = econ.categories
+    .map((row) => ({ row, amount: row.actual - row.budget }))
+    .filter((x) => x.amount > 0)
+    .sort((x, y) => y.amount - x.amount);
+  if (over.length > 0 && econ.marginDeltaPp !== null && econ.expectedMargin !== null && econ.projectedMargin !== null) {
+    const drop = Math.max(0, -econ.marginDeltaPp);
+    const catLevels = over.map((x) => (x.row.budget === 0 ? ("warning" as AlertLevel) : categoryAlertLevel((x.amount / x.row.budget) * 100, settings)));
+    const level = [marginAlertLevel(drop, settings), ...catLevels].reduce((m, l) => (LEVEL_RANK[l] > LEVEL_RANK[m] ? l : m), "info" as AlertLevel);
+    if (level !== "info") {
+      const main = over[0];
+      const describeCat = (x: (typeof over)[number]) =>
+        `${CATEGORY_LABELS[x.row.category]} ${formatSignedCurrency(x.amount)}${x.row.budget > 0 ? ` (${formatPercent((x.amount / x.row.budget) * 100, 0)} sobre lo presupuestado)` : " (sin costo presupuestado)"}`;
+      const others = over.slice(1).map(describeCat);
       alerts.push({
         ...alertBase(project),
-        id: `${project.id}:category:${row.category}:warning`,
-        kind: "category",
-        level: "warning",
-        title: `${label}: costo no presupuestado`,
-        message: `${label} registra ${formatSignedCurrency(over)} sin costo presupuestado.`,
-        impactAmount: over,
-        expectedMargin: econ.expectedMargin ?? undefined,
-        projectedMargin: econ.projectedMargin ?? undefined,
+        id: `${project.id}:margin:${level}`,
+        kind: "margin",
+        level,
+        title: `Pierde ${formatMarginPoints(drop)}: ${formatCurrency(econ.costOverrun)}`,
+        message:
+          `Margen esperado ${formatPercent(econ.expectedMargin)} → Margen proyectado ${formatPercent(econ.projectedMargin)}. ` +
+          `Causa principal: ${describeCat(main)}.${others.length ? ` También: ${others.join("; ")}.` : ""}`,
+        impactAmount: econ.costOverrun,
+        expectedMargin: econ.expectedMargin,
+        projectedMargin: econ.projectedMargin,
+        action: CATEGORY_ACTION[main.row.category] ?? "Proyecto → Costos reales.",
+        records: over.map((x) => `${CATEGORY_LABELS[x.row.category]}: presupuestado ${formatCurrency(x.row.budget)} · real hasta hoy ${formatCurrency(x.row.actual)}`),
       });
-      continue;
     }
-    const pct = (over / row.budget) * 100;
-    const level = categoryAlertLevel(pct, settings);
-    alerts.push({
-      ...alertBase(project),
-      id: `${project.id}:category:${row.category}:${level}`,
-      kind: "category",
-      level,
-      title: `${label} ${pl ? "superaron" : "superó"} su costo presupuestado en ${formatPercent(pct, 0)}`,
-      message: `${label} ${pl ? "están" : "está"} ${formatCurrency(over)} por encima de lo presupuestado.`,
-      impactAmount: over,
-      expectedMargin: econ.expectedMargin ?? undefined,
-      projectedMargin: econ.projectedMargin ?? undefined,
-    });
-  }
-
-  // 2. Caída de rentabilidad proyectado
-  if (econ.marginDeltaPp !== null && econ.marginDeltaPp < -0.05) {
-    const drop = -econ.marginDeltaPp;
-    const level = marginAlertLevel(drop, settings);
-    alerts.push({
-      ...alertBase(project),
-      id: `${project.id}:margin:${level}`,
-      kind: "margin",
-      level,
-      title: `La rentabilidad proyectada cayó ${formatMarginPoints(drop)}`,
-      message: `Con los costos registrados hasta hoy, la rentabilidad pasó de ${formatPercent(econ.expectedMargin)} a ${formatPercent(econ.projectedMargin)}.`,
-      impactAmount: econ.costOverrun,
-      expectedMargin: econ.expectedMargin ?? undefined,
-      projectedMargin: econ.projectedMargin ?? undefined,
-    });
   }
 
   // 3. Producción sin registros
@@ -102,7 +99,8 @@ export function projectAlerts(project: Project, settings: AlertSettings, today: 
         kind: "stale",
         level: "warning",
         title: "Sin registros recientes",
-        message: `Hace ${formatDays(days)} que no se registran consumos o costos en este proyecto.`,
+        message: `Hace ${formatDays(days)} que no se registran consumos o costos en este proyecto: el costo real puede estar incompleto.`,
+        action: "Preguntar al Jefe de planta si se está trabajando y si se cargan las horas.",
       });
     }
   }
@@ -117,7 +115,8 @@ export function projectAlerts(project: Project, settings: AlertSettings, today: 
       kind: "due",
       level: "critical",
       title: "Entrega vencida",
-      message: `La entrega venció hace ${formatDays(Math.abs(sched.remainingDays))} y el proyecto sigue en la etapa ${STATUS_LABELS[project.status]}.`,
+      message: `La entrega venció hace ${formatDays(Math.abs(sched.remainingDays))} y el proyecto sigue en la etapa ${STATUS_LABELS[project.status]}. Es plazo, no costo.`,
+      action: "Hablar con el cliente y con el Jefe de planta: nueva fecha y qué falta terminar.",
     });
   } else if (preProduction && sched.remainingDays <= settings.dueSoonDays) {
     alerts.push({
@@ -127,6 +126,7 @@ export function projectAlerts(project: Project, settings: AlertSettings, today: 
       level: "warning",
       title: `Entrega próxima y todavía en ${STATUS_LABELS[project.status]}`,
       message: `Faltan ${formatDays(sched.remainingDays)} para la entrega y el proyecto aún no pasó a la etapa Producción.`,
+      action: "Revisar materiales (Compras) y la planificación del Jefe de planta.",
     });
   } else if (preProduction && sched.elapsedPct >= settings.deadlineNoProductionPct) {
     alerts.push({
@@ -136,58 +136,23 @@ export function projectAlerts(project: Project, settings: AlertSettings, today: 
       level: "warning",
       title: "Mucho plazo consumido sin empezar a producir",
       message: `Pasó el ${sched.elapsedPct}% del plazo y el proyecto sigue en la etapa ${STATUS_LABELS[project.status]}.`,
+      action: "Revisar materiales (Compras) y la planificación del Jefe de planta.",
     });
   }
 
-  // 5. Proyecto en ejecución sin operarios: ningún operario lo ve ni puede cargarle horas.
-  // Se resuelve sola al asignar a alguien (la alerta se deriva del equipo).
-  if (EXECUTION_STATUSES.includes(project.status) && project.assignedOperatorIds.length === 0) {
-    alerts.push({
-      ...alertBase(project),
-      id: `${project.id}:staffing:warning`,
-      kind: "staffing",
-      level: "warning",
-      title: "Proyecto sin operario asignado",
-      message: `El proyecto está en la etapa ${STATUS_LABELS[project.status]} y no tiene operarios: ningún operario lo ve ni puede cargarle horas. Asigná a alguien desde “Editar equipo”.`,
-    });
-  }
+  // "Proyecto sin operario asignado" ya no es alerta: lo cubre "Pendientes de asignar" del Jefe de planta.
+  // "Material sin consumir" ya no es alerta diaria: aparece al cerrar el proyecto, dentro del cierre (Auditoría UX · P0-3).
 
-  // 6. Material asignado y sin consumir (sin destino). En producción es normal → info;
-  // en instalación la fabricación terminó → hay que darle destino.
-  if (stock && (project.status === "production" || project.status === "installation")) {
-    const fabricationDone = project.status === "installation";
-    const byMaterial = new Map<string, { name: string; unit: string; qty: number; value: number }>();
-    for (const h of projectHoldings(stock, project.id)) {
-      const cur = byMaterial.get(h.lot.materialId) ?? { name: h.lot.materialName, unit: h.lot.unit, qty: 0, value: 0 };
-      cur.qty += h.quantity;
-      cur.value += h.quantity * h.lot.unitCost;
-      byMaterial.set(h.lot.materialId, cur);
-    }
-    for (const [key, m] of byMaterial) {
-      const q = formatQty(m.qty, m.unit);
-      alerts.push({
-        ...alertBase(project),
-        id: `${project.id}:reconciliation:${key}:${Math.round(m.qty * 1000)}`,
-        kind: "reconciliation",
-        level: fabricationDone ? "warning" : "info",
-        title: `${m.name} sin consumir`,
-        message: fabricationDone
-          ? `Quedan ${q} asignados al proyecto sin usar. Devolvelos al stock, transferilos, marcalos como sobrante o desperdicio antes de cerrar.`
-          : `Hay ${q} de ${m.name} asignados al proyecto que todavía no tienen consumo registrado.`,
-        impactAmount: Math.round(m.value),
-      });
-    }
-  }
-
-  return sortAlerts(alerts.map((a) => ({ ...a, resolutionKey: alertResolutionKey(a.id, project, today) })));
+  return sortAlerts(alerts.map(keyed));
 }
 
+/** Primero lo más grave; dentro del mismo nivel, lo que más cuesta (Auditoría UX: lista priorizada por pesos). */
 export function sortAlerts(alerts: Alert[]): Alert[] {
-  return [...alerts].sort((a, b) => LEVEL_RANK[b.level] - LEVEL_RANK[a.level]);
+  return [...alerts].sort((a, b) => LEVEL_RANK[b.level] - LEVEL_RANK[a.level] || (b.impactAmount ?? 0) - (a.impactAmount ?? 0));
 }
 
-export function allAlerts(projects: Project[], settings: AlertSettings, today: string, stock?: StockState): Alert[] {
-  return sortAlerts(projects.flatMap((p) => projectAlerts(p, settings, today, stock)));
+export function allAlerts(projects: Project[], settings: AlertSettings, today: string): Alert[] {
+  return sortAlerts(projects.flatMap((p) => projectAlerts(p, settings, today)));
 }
 
 /** Separa abiertas y resueltas. Es la ÚNICA cuenta: el globo, la pestaña "Todas" y la salud salen de acá. */
