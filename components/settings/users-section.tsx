@@ -6,12 +6,12 @@ import { setCommercialAccess } from "@/lib/supabase/users";
 import { useCallback, useEffect, useState, useTransition } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { UserCheck, UserMinus, UserPlus } from "lucide-react";
+import { MessageCircle, UserCheck, UserMinus, UserPlus } from "lucide-react";
 import type { Operator } from "@/types";
 import { formatDate } from "@/lib/formatting";
 import { activeOperators } from "@/lib/operators";
 import { ROLE_KEYS, ROLE_LABELS, roleKeyOf, type RoleKey } from "@/lib/permissions";
-import { deactivateError, newUserSchema, roleChangeError, type Invitation, type Member, type NewUser } from "@/lib/users";
+import { deactivateError, formatPhone, newUserSchema, roleChangeError, whatsappInviteLink, type Invitation, type Member, type NewUser, type NewUserInput } from "@/lib/users";
 import { createClient } from "@/lib/supabase/client";
 import { loadMembers, revokeInvitation, setMemberActive, setMemberRole } from "@/lib/supabase/users";
 import { inviteUser } from "@/app/(gestion)/settings/actions";
@@ -99,12 +99,29 @@ export function UsersSection() {
                 {data.invitations.map((i) => (
                   <li key={i.id} className="flex flex-wrap items-center justify-between gap-2 p-3 text-sm">
                     <span className="min-w-0 break-words">
-                      <strong>{i.displayName}</strong> · {i.email} · {ROLE_LABELS[roleKeyOf(i.role)]}
-                      <span className="block text-xs text-slate-500">Invitado el {formatDate(i.createdAt)}. Entra cuando use ese mail.</span>
+                      <strong>{i.displayName}</strong> · {[i.email, i.phone && `WhatsApp ${formatPhone(i.phone)}`].filter(Boolean).join(" · ")} · {ROLE_LABELS[roleKeyOf(i.role)]}
+                      <span className="block text-xs text-slate-500">Invitado el {formatDate(i.createdAt)}. Entra cuando use {i.email && i.phone ? "ese mail o ese celular" : i.phone ? "ese celular" : "ese mail"}.</span>
                     </span>
-                    <Button size="sm" variant="ghost" onClick={() => run(() => revokeInvitation(createClient(), i.id), "Invitación cancelada.")}>
-                      Cancelar invitación
-                    </Button>
+                    <span className="flex flex-wrap gap-2">
+                      {i.phone && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() =>
+                            window.open(
+                              whatsappInviteLink({ phone: i.phone ?? "", displayName: i.displayName, roleLabel: ROLE_LABELS[roleKeyOf(i.role)], loginUrl: `${window.location.origin}/login` }),
+                              "_blank",
+                              "noopener,noreferrer",
+                            )
+                          }
+                        >
+                          <MessageCircle /> Enviar por WhatsApp
+                        </Button>
+                      )}
+                      <Button size="sm" variant="ghost" onClick={() => run(() => revokeInvitation(createClient(), i.id), "Invitación cancelada.")}>
+                        Cancelar invitación
+                      </Button>
+                    </span>
                   </li>
                 ))}
               </ul>
@@ -170,7 +187,10 @@ function MembersTable({ data, operators, run }: { data: { members: Member[]; inv
                   {operatorOf(m) && <span className="block text-xs font-normal text-slate-500">Operario: {operatorOf(m)?.name}</span>}
                   {rowError[m.userId] && <span role="alert" className="block text-xs font-normal text-red-600">{rowError[m.userId]}</span>}
                 </TD>
-                <TD className="break-all text-slate-600">{m.email}</TD>
+                <TD className="break-all text-slate-600">
+                  {m.email || "—"}
+                  {m.phone && <span className="block text-xs text-slate-500">WhatsApp {formatPhone(m.phone)}</span>}
+                </TD>
                 <TD>
                   <label className="sr-only" htmlFor={`role-${m.userId}`}>Rol de {m.displayName}</label>
                   <Select
@@ -261,9 +281,10 @@ function MembersTable({ data, operators, run }: { data: { members: Member[]; inv
 function NewUserCard({ free, onDone }: { free: Operator[]; onDone: () => Promise<void> }) {
   const [pending, startTransition] = useTransition();
   const [status, setStatus] = useState<Status>(null);
-  const { register, handleSubmit, reset, control, formState } = useForm<NewUser>({
+  const [whatsappUrl, setWhatsappUrl] = useState<string | null>(null);
+  const { register, handleSubmit, reset, control, formState } = useForm<NewUserInput, unknown, NewUser>({
     resolver: zodResolver(newUserSchema),
-    defaultValues: { displayName: "", email: "", role: "admin", operatorId: "" },
+    defaultValues: { displayName: "", email: "", phone: "", role: "admin", operatorId: "" },
   });
   const role = useWatch({ control, name: "role" });
   const errors = formState.errors;
@@ -272,7 +293,7 @@ function NewUserCard({ free, onDone }: { free: Operator[]; onDone: () => Promise
     <Card>
       <CardHeader>
         <CardTitle>Nuevo usuario</CardTitle>
-        <CardDescription>Le llega un mail de invitación. También puede entrar con Google usando ese mismo mail.</CardDescription>
+        <CardDescription>Cargá su mail, su celular de WhatsApp o los dos. Al mail le llega la invitación; al celular se la mandás por WhatsApp. Después entra con ese mismo mail (código) o celular (código por WhatsApp), o con Google si usa el mismo mail.</CardDescription>
       </CardHeader>
       <CardContent>
         <form
@@ -282,6 +303,7 @@ function NewUserCard({ free, onDone }: { free: Operator[]; onDone: () => Promise
             startTransition(async () => {
               const res = await inviteUser(v);
               setStatus({ ok: res.ok, text: res.message });
+              setWhatsappUrl(res.ok ? (res.whatsappUrl ?? null) : null);
               if (res.ok) {
                 reset();
                 await onDone();
@@ -293,8 +315,11 @@ function NewUserCard({ free, onDone }: { free: Operator[]; onDone: () => Promise
             <Field label="Nombre" htmlFor="nu-name" error={errors.displayName?.message}>
               <Input id="nu-name" autoComplete="off" aria-invalid={!!errors.displayName} {...register("displayName")} />
             </Field>
-            <Field label="Mail de invitación" htmlFor="nu-email" error={errors.email?.message}>
+            <Field label="Mail" htmlFor="nu-email" error={errors.email?.message} hint="Opcional si cargás el celular.">
               <Input id="nu-email" type="email" autoComplete="off" aria-invalid={!!errors.email} {...register("email")} />
+            </Field>
+            <Field label="Celular de WhatsApp" htmlFor="nu-phone" error={errors.phone?.message} hint="Con código de país, ej. +54 9 11 5555 1234. Opcional si cargás el mail.">
+              <Input id="nu-phone" type="tel" inputMode="tel" autoComplete="off" aria-invalid={!!errors.phone} {...register("phone")} />
             </Field>
             <Field label="Rol" htmlFor="nu-role" error={errors.role?.message}>
               <Select id="nu-role" {...register("role")}>
@@ -318,6 +343,11 @@ function NewUserCard({ free, onDone }: { free: Operator[]; onDone: () => Promise
             <Button type="submit" disabled={pending}>
               <UserPlus /> {pending ? "Invitando…" : "Invitar"}
             </Button>
+            {whatsappUrl && (
+              <Button type="button" variant="outline" onClick={() => window.open(whatsappUrl, "_blank", "noopener,noreferrer")}>
+                <MessageCircle /> Enviar por WhatsApp
+              </Button>
+            )}
             {status && (
               <p role={status.ok ? "status" : "alert"} className={status.ok ? "text-sm text-emerald-700" : "text-sm text-red-600"}>
                 {status.text}

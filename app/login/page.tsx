@@ -2,6 +2,7 @@ import { APP_NAME } from "@/lib/constants";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
+import { CodeSignIn } from "@/components/auth/code-sign-in";
 import { GoogleSignInButton } from "@/components/auth/google-sign-in-button";
 import { Logo } from "@/components/landing/primitives";
 import { safeNext } from "@/lib/supabase/safe-next";
@@ -33,7 +34,7 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
           </Link>
           <h1 className="mt-8 text-2xl font-semibold tracking-[-0.03em] text-ink">Accedé a {APP_NAME}</h1>
           <p className="mt-2 text-sm text-pretty text-ink-soft">
-            Entrá con tu cuenta de Google. La primera vez creamos tu empresa con los datos demo de Madera Sur S.R.L.
+            Si te invitaron, entrá con tu mail o tu WhatsApp. Si vas a crear la empresa, entrá con Google: la primera vez la armamos con los datos demo de Madera Sur S.R.L.
           </p>
           {!isSupabaseConfigured && (
             <p role="alert" className="mt-6 rounded-xl bg-bad/5 px-3 py-2 text-sm text-bad ring-1 ring-bad/20">
@@ -47,14 +48,18 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
           )}
           {inviteNotice && (
             <p role="status" className="mt-6 rounded-xl bg-white px-3 py-2 text-sm text-ink-soft ring-1 ring-line">
-              Tu invitación quedó confirmada. Entrá con Google usando el mismo mail al que te llegó la invitación.
+              Tu invitación quedó confirmada. Entrá con el mismo mail al que te llegó (con un código o con Google) o con tu WhatsApp.
             </p>
           )}
           <div className="mt-8">
             <GoogleSignInButton next={next} />
           </div>
+          <div className="my-6 flex items-center gap-3 text-xs text-ink-faint" aria-hidden>
+            <span className="h-px flex-1 bg-line" /> o con un código <span className="h-px flex-1 bg-line" />
+          </div>
+          <CodeSignIn next={next} />
           <p className="mt-6 text-xs text-ink-faint">
-            Solo usamos tu nombre y tu email para identificarte dentro de tu empresa.
+            Solo usamos tu nombre y tu mail o celular para identificarte dentro de tu empresa.
           </p>
         </div>
       </main>

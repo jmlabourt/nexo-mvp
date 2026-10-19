@@ -1,6 +1,6 @@
 // Lote 5A — usuarios: reglas de rol y baja, y el formulario de alta (Zod).
 import { describe, expect, it } from "vitest";
-import { deactivateError, membersFromJson, newUserSchema, roleChangeError, type Member } from "@/lib/users";
+import { authErrorMessage, deactivateError, membersFromJson, newUserSchema, normalizePhone, roleChangeError, whatsappInviteLink, type Member } from "@/lib/users";
 
 const m = (userId: string, role: Member["role"], extra: Partial<Member> = {}): Member => ({
   userId,
@@ -59,5 +59,42 @@ describe("lectura de admin_members()", () => {
     });
     expect(r.members[0]).toEqual({ canViewCommercial: false, userId: "u1", displayName: "Laura", email: "l@x.com", role: "owner", deactivatedAt: undefined, createdAt: "2026-01-01", operatorId: undefined, isSelf: true });
     expect(r.invitations[0]).toMatchObject({ id: "i1", role: "compras", displayName: "Martín" });
+  });
+});
+
+describe("invitar por celular (WhatsApp)", () => {
+  const base = { displayName: "Carla Sosa", role: "jefe_planta" as const };
+
+  it("normaliza el celular a solo dígitos con código de país", () => {
+    expect(normalizePhone("+54 9 11 5555-1234")).toBe("5491155551234");
+    expect(normalizePhone("(011) 5555 1234")).toBe("01155551234");
+  });
+
+  it("alcanza con mail o con celular, pero tiene que haber uno", () => {
+    expect(newUserSchema.safeParse({ ...base, email: "", phone: "+54 9 11 5555 1234" }).success).toBe(true);
+    expect(newUserSchema.safeParse({ ...base, email: "carla@x.com", phone: "" }).success).toBe(true);
+    expect(newUserSchema.safeParse({ ...base, email: "", phone: "" }).error?.issues[0].message).toMatch(/mail o un celular/);
+  });
+
+  it("rechaza un celular demasiado corto y entrega los dígitos normalizados", () => {
+    expect(newUserSchema.safeParse({ ...base, email: "", phone: "12345" }).error?.issues[0].message).toMatch(/código de país/);
+    const ok = newUserSchema.safeParse({ ...base, email: "", phone: "+54 9 11 5555 1234" });
+    expect(ok.success && ok.data.phone).toBe("5491155551234");
+  });
+
+  it("arma el link de WhatsApp con el mensaje escrito", () => {
+    const url = whatsappInviteLink({ phone: "+54 9 11 5555-1234", displayName: "Carla", roleLabel: "Jefe de planta", companyName: "Madera Sur", loginUrl: "https://app.test/login" });
+    expect(url.startsWith("https://wa.me/5491155551234?text=")).toBe(true);
+    const text = decodeURIComponent(url.split("?text=")[1]);
+    expect(text).toContain("Hola Carla");
+    expect(text).toContain("Jefe de planta");
+    expect(text).toContain("de Madera Sur");
+    expect(text).toContain("https://app.test/login");
+  });
+
+  it("explica en castellano los errores de ingreso", () => {
+    expect(authErrorMessage("Database error saving new user", "whatsapp")).toMatch(/no tiene una invitación/);
+    expect(authErrorMessage("Unsupported phone provider", "whatsapp")).toMatch(/todavía no está habilitado/);
+    expect(authErrorMessage("Token has expired or is invalid", "email")).toMatch(/venció/);
   });
 });
