@@ -12,8 +12,8 @@ const inputClass =
 const buttonClass =
   "flex h-12 w-full items-center justify-center gap-2 rounded-full bg-ink text-[15px] font-medium text-white transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:opacity-60";
 
-export function CodeSignIn({ next }: { next: string }) {
-  const [email, setEmail] = useState("");
+export function CodeSignIn({ next, initialEmail = "" }: { next: string; initialEmail?: string }) {
+  const [email, setEmail] = useState(initialEmail);
   const [code, setCode] = useState("");
   const [sent, setSent] = useState(false);
   const [pending, setPending] = useState(false);

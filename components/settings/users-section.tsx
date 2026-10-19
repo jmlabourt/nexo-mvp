@@ -6,12 +6,12 @@ import { setCommercialAccess } from "@/lib/supabase/users";
 import { useCallback, useEffect, useState, useTransition } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { UserCheck, UserMinus, UserPlus } from "lucide-react";
+import { Copy, UserCheck, UserMinus, UserPlus } from "lucide-react";
 import type { Operator } from "@/types";
 import { formatDate } from "@/lib/formatting";
 import { activeOperators } from "@/lib/operators";
 import { ROLE_KEYS, ROLE_LABELS, roleKeyOf, type RoleKey } from "@/lib/permissions";
-import { deactivateError, newUserSchema, roleChangeError, type Invitation, type Member, type NewUser } from "@/lib/users";
+import { deactivateError, inviteLink, newUserSchema, roleChangeError, type Invitation, type Member, type NewUser } from "@/lib/users";
 import { createClient } from "@/lib/supabase/client";
 import { loadMembers, revokeInvitation, setMemberActive, setMemberRole } from "@/lib/supabase/users";
 import { inviteUser } from "@/app/(gestion)/settings/actions";
@@ -23,6 +23,7 @@ import { Field } from "@/components/ui/field";
 import { HelpTip } from "@/components/ui/help-tip";
 import { Input, Select } from "@/components/ui/input";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
+import { BulkInviteCard } from "@/components/settings/bulk-invite-card";
 import { DeactivatePanel } from "@/components/operators/deactivate-panel";
 
 type Status = { ok: boolean; text: string } | null;
@@ -102,9 +103,22 @@ export function UsersSection() {
                       <strong>{i.displayName}</strong> · {i.email} · {ROLE_LABELS[roleKeyOf(i.role)]}
                       <span className="block text-xs text-slate-500">Invitado el {formatDate(i.createdAt)}. Entra cuando use ese mail.</span>
                     </span>
-                    <Button size="sm" variant="ghost" onClick={() => run(() => revokeInvitation(createClient(), i.id), "Invitación cancelada.")}>
-                      Cancelar invitación
-                    </Button>
+                    <span className="flex flex-wrap gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() =>
+                          run(async () => {
+                            await navigator.clipboard.writeText(inviteLink(window.location.origin, i.email, roleKeyOf(i.role)));
+                          }, `Link de ${i.displayName} copiado.`)
+                        }
+                      >
+                        <Copy /> Copiar link
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={() => run(() => revokeInvitation(createClient(), i.id), "Invitación cancelada.")}>
+                        Cancelar invitación
+                      </Button>
+                    </span>
                   </li>
                 ))}
               </ul>
@@ -113,6 +127,14 @@ export function UsersSection() {
         </CardContent>
       </Card>
       {data && <NewUserCard free={freeOperators(operators, data.members, data.invitations)} onDone={load} />}
+      {data && (
+        <BulkInviteCard
+          free={freeOperators(operators, data.members, data.invitations).map((o) => ({ id: o.id, name: o.name }))}
+          members={data.members}
+          invitations={data.invitations}
+          onDone={load}
+        />
+      )}
     </div>
   );
 }
@@ -272,7 +294,7 @@ function NewUserCard({ free, onDone }: { free: Operator[]; onDone: () => Promise
     <Card>
       <CardHeader>
         <CardTitle>Nuevo usuario</CardTitle>
-        <CardDescription>Le llega un mail de invitación. Después entra con ese mismo mail (te pedimos un código) o con Google si usa el mismo mail.</CardDescription>
+        <CardDescription>Le llega un mail de invitación y podés copiar su link. Después entra con ese mismo mail (te pedimos un código) o con Google si usa el mismo mail.</CardDescription>
       </CardHeader>
       <CardContent>
         <form
