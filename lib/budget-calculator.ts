@@ -7,7 +7,7 @@
 // de trabajo, las horas extra, el precio sugerido y la rentabilidad.
 // Todo es una ESTIMACIÓN con lo que carga el usuario: sin datos ocultos.
 // ─────────────────────────────────────────────────────────────
-import type { BudgetCategory, HourCategory, HourRate, RubroId } from "@/types";
+import type { BudgetCategory, HourCategory, HourRate, ProductRubro, RubroId } from "@/types";
 import type { BudgetLineInput } from "./project-operations";
 import { laborAmount, splitOvertime } from "./capacity";
 import { RUBROS, rubroDef } from "./rubros";
@@ -42,6 +42,46 @@ export interface QuoteRubro {
   adminHours: number;
   /** Solo rubros de importe (Transporte / Fletes, Imprevistos). */
   amount: number;
+  /**
+   * Mano de obra de un producto (ver productLaborRubros): horas estimadas en total para toda la cantidad. Manda sobre
+   * operarios × horas por operario, así la mano de obra presupuestada es exactamente la suma de los productos.
+   */
+  totalHours?: number;
+  /** Producto al que pertenece esta mano de obra ("Mesa de comedor × 10"): va en la descripción de la línea. */
+  product?: string;
+}
+
+/** Producto de la cotización: nombre, cantidad y, por rubro, horas estimadas (para toda la cantidad) y operarios. */
+export interface QuoteProduct {
+  name: string;
+  quantity: number;
+  rubros: ProductRubro[];
+}
+
+/**
+ * Mano de obra presupuestada = suma de los productos (Auditoría UX · P0-7). Cada producto + rubro es una entrada de
+ * mano de obra con sus horas y sus operarios: las horas se cargan una sola vez y de ahí salen el costo, los días de
+ * trabajo (producto detrás de producto, el mismo supuesto conservador que los rubros) y las horas extra.
+ */
+export function productLaborRubros(products: QuoteProduct[]): QuoteRubro[] {
+  return products.flatMap((p) =>
+    p.rubros
+      .filter((r) => rubroDef(r.rubro).kind === "full" && positive(r.hours) > 0 && Math.round(finite(r.workers)) >= 1)
+      .map((r): QuoteRubro => {
+        const workers = Math.round(r.workers);
+        return {
+          rubro: r.rubro,
+          product: `${p.name.trim()} × ${p.quantity}`,
+          materials: [],
+          workers,
+          hoursPerWorker: positive(r.hours) / workers,
+          totalHours: positive(r.hours),
+          designHours: 0,
+          adminHours: 0,
+          amount: 0,
+        };
+      }),
+  );
 }
 
 export interface QuoteTargets {
@@ -150,14 +190,22 @@ const hourCharge = (hours: number, rate: number): HourCharge => {
 
 /** Horas normales × tarifa + horas extra × tarifa × multiplicador + diseño × su tarifa + administración × su tarifa. */
 export function rubroLabor(
-  r: Pick<QuoteRubro, "workers" | "hoursPerWorker" | "designHours" | "adminHours">,
+  r: Pick<QuoteRubro, "workers" | "hoursPerWorker" | "designHours" | "adminHours" | "totalHours">,
   p: { normalShare: number; laborRate: number; designRate: number; adminRate: number; overtimeMultiplier: number },
 ): RubroLabor {
   const workers = Math.max(0, Math.round(finite(r.workers)));
   const hoursPerWorker = workers > 0 ? positive(r.hoursPerWorker) : 0;
-  const perWorker = splitOvertime(hoursPerWorker, hoursPerWorker * Math.min(1, Math.max(0, p.normalShare)));
-  const normalHours = round2(perWorker.normalHours * workers);
-  const overtimeHours = round2(perWorker.overtimeHours * workers);
+  const share = Math.min(1, Math.max(0, p.normalShare));
+  let perWorker = splitOvertime(hoursPerWorker, hoursPerWorker * share);
+  let normalHours = round2(perWorker.normalHours * workers);
+  let overtimeHours = round2(perWorker.overtimeHours * workers);
+  if (r.totalHours !== undefined && workers > 0) {
+    // Producto: el total manda (100 h con 3 operarios son 100 h, no 3 × 33,33 h = 99,99 h).
+    const total = splitOvertime(r.totalHours, r.totalHours * share);
+    normalHours = total.normalHours;
+    overtimeHours = total.overtimeHours;
+    perWorker = { normalHours: round2(normalHours / workers), overtimeHours: round2(overtimeHours / workers) };
+  }
   const labor = laborAmount({ normalHours, overtimeHours, hourlyCost: p.laborRate, multiplier: p.overtimeMultiplier });
   const design = hourCharge(r.designHours, p.designRate);
   const admin = hourCharge(r.adminHours, p.adminRate);
@@ -218,11 +266,12 @@ export function rubroLines(r: QuoteRubro, labor: RubroLabor | null, { rates, ove
       notes: m.wastePct > 0 ? `Incluye ${num(m.wastePct)}% de desperdicio esperado sobre ${num(m.quantity)} ${m.unit}.` : undefined,
     });
   }
+  const who = r.product ? `${r.product} · ${def.label}` : def.label;
   if (labor && labor.normalHours > 0) {
     lines.push({
       category: "labor",
       rubro: r.rubro,
-      description: `${def.label}: mano de obra (${plural(labor.workers, "operario", "operarios")} × ${num(labor.normalHoursPerWorker)} h)`,
+      description: `${who}: mano de obra (${plural(labor.workers, "operario", "operarios")} × ${num(labor.normalHoursPerWorker)} h)`,
       quantity: labor.normalHours,
       unit: "h",
       unitCost: labor.rate,
@@ -238,7 +287,7 @@ export function rubroLines(r: QuoteRubro, labor: RubroLabor | null, { rates, ove
     lines.push({
       category: "labor",
       rubro: r.rubro,
-      description: `${def.label}: horas extra (${plural(labor.workers, "operario", "operarios")} × ${num(labor.overtimeHoursPerWorker)} h, ×${num(multiplier)})`,
+      description: `${who}: horas extra (${plural(labor.workers, "operario", "operarios")} × ${num(labor.overtimeHoursPerWorker)} h, ×${num(multiplier)})`,
       quantity: labor.overtimeHours,
       unit: "h",
       unitCost: labor.overtimeRate,

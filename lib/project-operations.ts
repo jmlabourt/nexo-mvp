@@ -122,6 +122,8 @@ export interface NewProjectInput {
   owner: string;
   salesPrice: number;
   budgetLines: BudgetLineInput[];
+  /** Productos con sus horas por rubro (de ahí salió la mano de obra presupuestada). */
+  items?: ProductInput[];
 }
 
 export function nextProjectCode(projects: Pick<Project, "code">[]): string {
@@ -133,6 +135,10 @@ export function nextProjectCode(projects: Pick<Project, "code">[]): string {
 }
 
 export function createProject(input: NewProjectInput, ctx: Ctx): Project {
+  for (const item of input.items ?? []) {
+    const error = productInputError(item);
+    if (error) throw new DomainError(`${item.name || "Producto"}: ${error}`);
+  }
   return {
     id: createId("p"),
     code: input.code,
@@ -154,7 +160,14 @@ export function createProject(input: NewProjectInput, ctx: Ctx): Project {
     activity: [activity("created", ctx.actor, "Proyecto creado.", ctx.now)],
     isClosed: false,
     assignedOperatorIds: [],
-    items: [],
+    items: (input.items ?? []).map((i) => ({
+      id: createId("itm"),
+      name: i.name.trim(),
+      description: i.description?.trim() || undefined,
+      quantity: i.quantity,
+      rubros: i.rubros,
+      completedUnits: 0,
+    })),
     stageLogs: [],
     attachments: [],
   };

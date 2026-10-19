@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Pencil, Plus, Trash2 } from "lucide-react";
 import type { ProductRubro, Project, ProjectItem, RubroId } from "@/types";
 import { formatCurrency, formatNumber } from "@/lib/formatting";
-import { itemHours, productStatus, type ProductInput } from "@/lib/production";
+import { itemHours, laborHoursGaps, productStatus, type ProductInput } from "@/lib/production";
 import { RUBROS, rubroLabel } from "@/lib/rubros";
 import { parseDecimal } from "@/lib/schemas";
 import { ProductionBadge } from "@/components/shared/badges";
@@ -32,10 +32,19 @@ export function ItemsTab({ project }: { project: Project }) {
     return { mats, other, total: mats + other };
   };
   const general = project.attachments.filter((a) => !a.itemId && !a.stage);
+  // Solo si hay productos: un proyecto anterior sin productos se explica en docs/PRODUCCION.md (migración propuesta).
+  const gaps = project.items.length > 0 ? laborHoursGaps(project) : [];
   const generalCost = costOf(undefined);
 
   return (
     <div className="space-y-6">
+      {isManager && gaps.length > 0 && (
+        <p role="status" className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          Las horas de los productos no coinciden con la mano de obra presupuestada:{" "}
+          {gaps.map((g) => `${rubroLabel(g.rubro)} ${formatNumber(g.products)} h en productos y ${formatNumber(g.budget)} h presupuestadas`).join(" · ")}. El costo
+          presupuestado no cambia solo: la planta usa las horas de los productos.
+        </p>
+      )}
       {editable && (
         <Card>
           <CardHeader>

@@ -25,10 +25,12 @@ export interface QuoteWorkspaceProps {
   onAction: () => void;
   /** Línea de contexto arriba del resumen (en Nuevo proyecto: código y cliente). */
   context?: ReactNode;
+  /** Nuevo proyecto: no se sigue sin al menos un producto. */
+  requireProducts?: boolean;
 }
 
-export function QuoteWorkspace({ state, onState, result, projectType, salesPrice, onSalesPrice, priceError, actionLabel, onAction, context }: QuoteWorkspaceProps) {
-  const blocker = quoteActionBlocker(result, salesPrice);
+export function QuoteWorkspace({ state, onState, result, projectType, salesPrice, onSalesPrice, priceError, actionLabel, onAction, context, requireProducts }: QuoteWorkspaceProps) {
+  const blocker = quoteActionBlocker(result, salesPrice, { requireProducts });
   const { schedule, breakdown: b } = result;
   const sale = (v: number | null) => (v === null ? "—" : formatCurrency(v));
 
