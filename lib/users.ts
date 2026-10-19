@@ -12,8 +12,6 @@ export interface Member {
   userId: string;
   displayName: string;
   email: string;
-  /** Celular (solo dígitos, con código de país) si entra por WhatsApp. */
-  phone?: string;
   role: AppRole;
   deactivatedAt?: string;
   createdAt: string;
@@ -25,9 +23,7 @@ export interface Member {
 
 export interface Invitation {
   id: string;
-  /** Vacío si se invitó solo por celular. */
   email: string;
-  phone?: string;
   displayName: string;
   role: AppRole;
   operatorId?: string;
@@ -55,40 +51,17 @@ export function deactivateError(members: Member[], target: Member): string | nul
   return null;
 }
 
-/** Celular → solo dígitos con código de país (lo mismo que guarda Supabase Auth). "+54 9 11 5555-1234" → "5491155551234". */
-export function normalizePhone(raw: string): string {
-  return raw.replace(/\D/g, "");
-}
-
-/** Celular para mostrar: "+5491155551234". */
-export const formatPhone = (digits: string) => `+${digits}`;
-
-/** Alta de un usuario: nombre, rol y mail y/o celular (WhatsApp). Un Operario se vincula a una persona de Operarios. */
+/** Alta de un usuario: nombre, rol y mail de invitación. Un Operario se vincula a una persona de Operarios. */
 export const newUserSchema = z
   .object({
     displayName: z.string().trim().min(2, "Ingresá el nombre."),
-    email: z.string().trim().toLowerCase().refine((v) => v === "" || z.email().safeParse(v).success, "Ingresá un mail válido."),
-    phone: z.string().trim().default("").transform(normalizePhone).refine((v) => v === "" || /^[0-9]{8,15}$/.test(v), "Ingresá el celular con código de país (ej. +54 9 11 5555 1234)."),
+    email: z.string().trim().toLowerCase().email("Ingresá un mail válido."),
     role: z.enum(ROLE_KEYS as [RoleKey, ...RoleKey[]], { error: "Elegí un rol." }),
     operatorId: z.string().optional(),
   })
-  .refine((v) => v.email !== "" || v.phone !== "", { path: ["email"], message: "Ingresá un mail o un celular." })
   .refine((v) => v.role !== "operario" || !!v.operatorId, { path: ["operatorId"], message: "Elegí qué operario es." });
 
 export type NewUser = z.infer<typeof newUserSchema>;
-export type NewUserInput = z.input<typeof newUserSchema>;
-
-/**
- * Mensaje de invitación para mandar por WhatsApp (click-to-chat: lo manda el Administrativo desde su propio WhatsApp,
- * no hay envío automático). Link `wa.me` con el texto ya escrito.
- */
-export function whatsappInviteLink(args: { phone: string; displayName: string; roleLabel: string; companyName?: string; loginUrl: string }): string {
-  const empresa = args.companyName ? ` de ${args.companyName}` : "";
-  const text =
-    `Hola ${args.displayName}, te invité a Blerp${empresa} con el rol ${args.roleLabel}.\n` +
-    `Entrá acá con este mismo número de WhatsApp (te llega un código): ${args.loginUrl}`;
-  return `https://wa.me/${normalizePhone(args.phone)}?text=${encodeURIComponent(text)}`;
-}
 
 /** Filas que devuelve admin_members() → modelo. */
 export function membersFromJson(json: { members?: Record<string, unknown>[]; invitations?: Record<string, unknown>[] }): { members: Member[]; invitations: Invitation[] } {
@@ -98,7 +71,6 @@ export function membersFromJson(json: { members?: Record<string, unknown>[]; inv
       userId: String(m.user_id),
       displayName: String(m.display_name ?? ""),
       email: String(m.email ?? ""),
-      phone: str(m.phone),
       role: m.role as AppRole,
       deactivatedAt: str(m.deactivated_at),
       createdAt: String(m.created_at),
@@ -108,8 +80,7 @@ export function membersFromJson(json: { members?: Record<string, unknown>[]; inv
     })),
     invitations: (json.invitations ?? []).map((i) => ({
       id: String(i.id),
-      email: String(i.email ?? ""),
-      phone: str(i.phone),
+      email: String(i.email),
       displayName: String(i.display_name),
       role: i.role as AppRole,
       operatorId: str(i.operator_id),
@@ -118,17 +89,11 @@ export function membersFromJson(json: { members?: Record<string, unknown>[]; inv
   };
 }
 
-/** Errores de Supabase Auth → texto claro para quien intenta entrar (código por mail o WhatsApp). */
-export function authErrorMessage(message: string, channel: "email" | "whatsapp"): string {
+/** Errores de Supabase Auth → texto claro para quien intenta entrar con un código por mail. */
+export function authErrorMessage(message: string): string {
   const m = message.toLowerCase();
-  if (m.includes("database error")) {
-    return channel === "whatsapp"
-      ? "Ese celular no tiene una invitación. Pedile al Administrativo de tu empresa que te invite."
-      : "No pudimos crear tu cuenta. Probá de nuevo.";
-  }
-  if (m.includes("provider") || m.includes("not enabled") || m.includes("disabled") || m.includes("unsupported")) {
-    return channel === "whatsapp" ? "El ingreso por WhatsApp todavía no está habilitado. Probá con tu mail." : "El ingreso por mail no está disponible ahora.";
-  }
+  if (m.includes("database error")) return "No pudimos crear tu cuenta. Probá de nuevo.";
+  if (m.includes("provider") || m.includes("not enabled") || m.includes("disabled")) return "El ingreso por mail no está disponible ahora.";
   if (m.includes("expired") || m.includes("invalid")) return "El código no es válido o venció. Pedí uno nuevo.";
   if (m.includes("rate") || m.includes("seconds")) return "Esperá un minuto antes de pedir otro código.";
   return "No pudimos validar tus datos. Probá de nuevo.";

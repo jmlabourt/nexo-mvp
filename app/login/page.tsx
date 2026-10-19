@@ -34,7 +34,7 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
           </Link>
           <h1 className="mt-8 text-2xl font-semibold tracking-[-0.03em] text-ink">Accedé a {APP_NAME}</h1>
           <p className="mt-2 text-sm text-pretty text-ink-soft">
-            Si te invitaron, entrá con tu mail o tu WhatsApp. Si vas a crear la empresa, entrá con Google: la primera vez la armamos con los datos demo de Madera Sur S.R.L.
+            Si te invitaron, entrá con tu mail. Si vas a crear la empresa, entrá con Google: la primera vez la armamos con los datos demo de Madera Sur S.R.L.
           </p>
           {!isSupabaseConfigured && (
             <p role="alert" className="mt-6 rounded-xl bg-bad/5 px-3 py-2 text-sm text-bad ring-1 ring-bad/20">
@@ -48,7 +48,7 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
           )}
           {inviteNotice && (
             <p role="status" className="mt-6 rounded-xl bg-white px-3 py-2 text-sm text-ink-soft ring-1 ring-line">
-              Tu invitación quedó confirmada. Entrá con el mismo mail al que te llegó (con un código o con Google) o con tu WhatsApp.
+              Tu invitación quedó confirmada. Entrá con el mismo mail al que te llegó (con un código o con Google).
             </p>
           )}
           <div className="mt-8">
@@ -59,7 +59,7 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
           </div>
           <CodeSignIn next={next} />
           <p className="mt-6 text-xs text-ink-faint">
-            Solo usamos tu nombre y tu mail o celular para identificarte dentro de tu empresa.
+            Solo usamos tu nombre y tu mail para identificarte dentro de tu empresa.
           </p>
         </div>
       </main>

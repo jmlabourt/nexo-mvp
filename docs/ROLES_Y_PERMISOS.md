@@ -141,17 +141,13 @@ El pedido fue "Cotizador de materiales: variante para Compras que solo trabaja c
   - `tests/lote5a-pantallas.test.tsx`;
   - `tests/db/lote5a.test.ts`: políticas en Postgres real.
 
-## Ingreso e invitaciones por mail y WhatsApp (oct 2026)
+## Ingreso e invitaciones (oct 2026)
 
 - **Administrativo**: crea la empresa entrando con Google (la primera vez).
-- **Invitar**: Configuración → Usuarios → Nuevo usuario. Se carga nombre, rol y **mail, celular de WhatsApp o ambos**. El celular va con código de país (ej. +54 9 11 5555 1234) y se guarda solo con dígitos.
-  - Mail: sale la invitación de Supabase (requiere `SUPABASE_SERVICE_ROLE_KEY` en Vercel).
-  - WhatsApp: la app arma un link `wa.me` con el mensaje ya escrito y lo manda el Administrativo desde su propio WhatsApp. No hay envío automático.
-- **Entrar** (pantalla de login): Google, **código por mail** o **código por WhatsApp**. Quien entra con un mail o celular invitado queda en la empresa con el rol asignado y ve solo su vista.
-- **Celular sin invitación**: se rechaza, no crea una empresa nueva. Un mail sin invitación sigue creando su propia empresa (igual que Google).
-- Queda todo en Supabase: `member_invitations` (mail/celular, rol, quién invitó, cuándo se aceptó), `organization_members` y `auth.users`.
+- **Invitar**: Configuración → Usuarios → Nuevo usuario (nombre, rol y mail). Sale la invitación de Supabase por mail (requiere `SUPABASE_SERVICE_ROLE_KEY` en Vercel).
+- **Entrar** (pantalla de login): Google o **código por mail** (no hace falta cuenta de Google). Quien entra con un mail invitado queda en la empresa con el rol asignado y ve solo su vista. Un mail sin invitación crea su propia empresa, igual que Google.
+- Queda todo en Supabase: `member_invitations`, `organization_members` y `auth.users`.
+- **WhatsApp: descartado por ahora.** El envío de códigos por WhatsApp requiere pagar una API (Twilio/Meta). La base conserva la columna `phone` en las invitaciones (migración `20261023130000`), pero la app no la usa. Un celular sin invitación igual se rechaza si algún día se habilita el ingreso por teléfono.
 
-### Configuración que falta en el panel de Supabase (no se puede hacer desde el código)
-1. **Código por mail**: Authentication → Email Templates → plantilla "Magic Link" → incluir `{{ .Token }}` en el texto (ej. "Tu código es: {{ .Token }}").
-2. **Código por WhatsApp**: Authentication → Sign In / Providers → Phone → activar, proveedor **Twilio** con WhatsApp habilitado (Account SID, Auth Token y sender de WhatsApp aprobado por Meta). Hasta entonces la pantalla avisa "El ingreso por WhatsApp todavía no está habilitado".
-3. Si el celular se carga en Argentina, el número debe coincidir con el que escribe la persona al entrar (con 549). Se recomienda que el Administrativo cargue el mismo formato que usa su WhatsApp.
+### Configuración que falta en el panel de Supabase
+- **Código por mail**: Authentication → Email Templates → plantilla "Magic Link" → incluir `{{ .Token }}` en el texto (ej. "Tu código es: {{ .Token }}"). Sin eso el mail trae un link en vez del código.
