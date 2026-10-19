@@ -41,6 +41,8 @@ import { materialKey } from "@/lib/material-reconciliation";
 import { createClient } from "@/lib/supabase/client";
 import { lotToRow } from "@/lib/supabase/mappers";
 import * as remote from "@/lib/supabase/workspace";
+import { recordClosure } from "@/lib/supabase/closures";
+import { buildClosureSnapshot } from "@/lib/closure-snapshot";
 import { DEFAULT_COST_SETTINGS, type ScheduleChange, type Workspace, type WorkspaceData } from "@/lib/supabase/workspace";
 import { exceptionError, workDaysError } from "@/lib/schedule";
 import { tallerCalls } from "@/lib/supabase/taller";
@@ -559,6 +561,15 @@ export const useAppStore = create<AppState>()(
             const project = find(id);
             const closed = ops.closeProject(project, get().stock, ctx());
             commit({ projects: get().projects.map((p) => (p.id === id ? closed : p)) });
+            // El cierre queda congelado para el historial. Va en la misma cola (después de guardar el cierre) y,
+            // si fallara, NO frena la app: se completa en la próxima carga (backfillClosures).
+            void persistRemote(async (db) => {
+              try {
+                await recordClosure(db, buildClosureSnapshot(closed));
+              } catch (e) {
+                console.warn("No se pudo guardar el historial del cierre:", errorMessage(e));
+              }
+            });
             return undefined;
           }),
 

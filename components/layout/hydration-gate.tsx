@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { APP_NAME } from "@/lib/constants";
 import { createClient } from "@/lib/supabase/client";
+import { backfillClosures } from "@/lib/supabase/closures";
 import { loadWorkspace, replaceWorkspace } from "@/lib/supabase/workspace";
 import { demoData, useAppStore } from "@/store/use-app-store";
 
@@ -27,6 +28,8 @@ export function HydrationGate({ children }: { children: React.ReactNode }) {
       }
       useAppStore.getState().loadWorkspace(ws);
       setState({ status: "ready" });
+      // Completa el historial de cierres de proyectos finalizados antes de que existiera (no bloquea ni falla la carga).
+      if (ws.role === "owner" || ws.role === "member") void backfillClosures(db, ws.projects);
     } catch (e) {
       setState({ status: "error", message: e instanceof Error ? e.message : "No pudimos cargar tus datos." });
     }
