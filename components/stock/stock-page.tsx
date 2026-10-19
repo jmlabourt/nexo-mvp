@@ -103,7 +103,7 @@ export function StockPage({ material, lot, tab, basePath = "/stock" }: { materia
     <div>
       <PageHeader
         back={material || lot || tab ? basePath : undefined}
-        title="Stock"
+        title={canManage ? "Stock" : "Disponible en depósito"}
         subtitle="Todo el material físico: libre en el depósito y asignado a proyectos. Cada lote conserva su costo original."
         actions={canManage ? <Button onClick={() => setAdd(true)}><Plus /> Ingresar stock</Button> : undefined}
       />

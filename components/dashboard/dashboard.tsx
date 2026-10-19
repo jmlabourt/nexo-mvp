@@ -1,5 +1,5 @@
 "use client";
-// Dashboard del Administrativo (Auditoría UX · P0-5): responde primero "¿qué proyectos se desvían y por qué?".
+// Resumen del Administrativo (Auditoría UX · P0-5): responde primero "¿qué proyectos se desvían y por qué?".
 //  1. Cuatro números económicos: plata en riesgo, Margen esperado → Margen proyectado (puntos de margen), desvíos
 //     detectados aún no proyectados y Margen real final de los cerrados. Nunca se mezclan los márgenes.
 //  2. Proyectos ordenados por impacto en pesos, con la causa principal y su monto; el plazo va en otra columna.
@@ -8,8 +8,8 @@
 // Cada número se abre hasta el proyecto y, desde ahí, hasta sus registros.
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { ArrowRight, ChevronDown } from "lucide-react";
-import { profitOverview, type OverviewRow } from "@/lib/dashboard";
+import { ArrowRight, CheckCircle2, ChevronDown } from "lucide-react";
+import { profitOverview, type OverviewRow, type Severity } from "@/lib/dashboard";
 import { costWithPoints } from "@/lib/deviations";
 import { formatCurrency, formatDate, formatMarginPoints, formatPercent } from "@/lib/formatting";
 import { useAppStore } from "@/store/use-app-store";
@@ -19,28 +19,31 @@ import { ScheduleBadge } from "@/components/shared/badges";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
-function Kpi({ href, label, value, hint, tone }: { href: string; label: string; value: React.ReactNode; hint: React.ReactNode; tone?: "red" | "amber" }) {
+type Tone = "red" | "amber" | "green";
+
+const TONE_TEXT: Record<Tone, string> = { red: "text-red-700", amber: "text-amber-700", green: "text-emerald-700" };
+
+/** Rojo solo para lo grave (umbral de Configuración); lo menor, en naranja; sin desvío, sin color. */
+const severityTone = (s: Severity): Tone | undefined => (s === "grave" ? "red" : s === "menor" ? "amber" : undefined);
+
+function Kpi({ href, label, value, hint, tone }: { href: string; label: string; value: React.ReactNode; hint: React.ReactNode; tone?: Tone }) {
   return (
     <a
       href={href}
       className="block rounded-lg border border-slate-200 bg-white p-4 hover:border-blue-300 focus-visible:outline-2 focus-visible:outline-blue-600"
     >
       <span className="text-xs font-medium text-slate-500">{label}</span>
-      <span className={cn("mt-1 block text-2xl font-semibold tabular", tone === "red" ? "text-red-700" : tone === "amber" ? "text-amber-700" : "text-slate-900")}>
-        {value}
-      </span>
+      <span className={cn("mt-1 block text-2xl font-semibold tabular", tone ? TONE_TEXT[tone] : "text-slate-900")}>{value}</span>
       <span className="mt-1 block text-xs text-slate-500">{hint}</span>
     </a>
   );
 }
 
-function Delta({ points }: { points: number | null }) {
-  if (points === null || Math.abs(points) < 0.05) return null;
-  return <span className={cn("block text-xs tabular", points < 0 ? "text-red-700" : "text-emerald-700")}>{formatMarginPoints(points, { signed: true })}</span>;
-}
-
+// En pesos nunca hay signo: "Pierde $ X" / "Detectado $ X". El signo − queda solo para los puntos de margen.
 function Row({ r }: { r: OverviewRow }) {
   const detected = r.detected.notProjected.total;
+  const tone = severityTone(r.severity);
+  const moved = r.deltaPoints !== null && Math.abs(r.deltaPoints) >= 0.05;
   return (
     <tr className="border-b border-slate-100 align-top">
       <td className="py-2.5 pr-3">
@@ -51,26 +54,35 @@ function Row({ r }: { r: OverviewRow }) {
         <span className="block text-xs text-slate-500">{Math.round(r.schedule.progress * 100)} % hecho</span>
       </td>
       <td className="py-2.5 pr-3 text-right tabular">
-        {r.overrun > 0 && <span className="block font-semibold text-red-700">−{formatCurrency(r.overrun)}</span>}
-        {detected > 0 && (
-          <span className="block text-amber-800">
-            −{formatCurrency(detected)} <span className="text-xs">detectado</span>
-          </span>
+        {r.overrun > 0 && (
+          <span className={cn("block font-semibold", tone ? TONE_TEXT[tone] : "text-slate-900")}>Pierde {formatCurrency(r.overrun)}</span>
         )}
-        {r.overrun === 0 && detected === 0 && <span className="text-slate-500">$ 0</span>}
+        {detected > 0 && <span className="block text-amber-700">Detectado {formatCurrency(detected)}</span>}
+        {r.overrun === 0 && detected === 0 && <span className="text-slate-500">Sin desvío</span>}
       </td>
       <td className="py-2.5 pr-3 text-right tabular">
-        {formatPercent(r.expectedMargin)} → <strong className={cn((r.deltaPoints ?? 0) < -0.05 && "text-red-700")}>{formatPercent(r.projectedMargin)}</strong>
-        <Delta points={r.deltaPoints} />
-        {detected > 0 && r.detected.points !== null && (
-          <span className="block text-xs text-amber-800">≈ −{formatMarginPoints(r.detected.points)} más si no se compensa</span>
+        {moved ? (
+          <>
+            {formatPercent(r.expectedMargin)} → <strong className={cn(tone && TONE_TEXT[tone])}>{formatPercent(r.projectedMargin)}</strong>
+            <span className={cn("block text-xs", tone ? TONE_TEXT[tone] : "text-emerald-700")}>{formatMarginPoints(r.deltaPoints ?? 0, { signed: true })}</span>
+          </>
+        ) : (
+          <>
+            <strong>{formatPercent(r.projectedMargin)}</strong>
+            <span className="block text-xs text-slate-500">proyectado, igual al esperado</span>
+          </>
+        )}
+        {r.possibleMargin !== null && (
+          <span className="block text-xs text-amber-700">podría quedar en ~{formatPercent(r.possibleMargin)} si no se compensa</span>
         )}
       </td>
       <td className="py-2.5 pr-3">
         {r.mainCause ? (
           <>
             {r.mainCause.label}{" "}
-            <strong className={cn("tabular", r.mainCause.kind === "detected" ? "text-amber-800" : "text-red-700")}>+{formatCurrency(r.mainCause.amount)}</strong>
+            <strong className={cn("tabular", r.mainCause.kind === "detected" ? "text-amber-700" : tone ? TONE_TEXT[tone] : "text-slate-900")}>
+              {formatCurrency(r.mainCause.amount)}
+            </strong>
             {r.mainCause.detail && <span className="block text-xs text-slate-500">{r.mainCause.detail}</span>}
           </>
         ) : (
@@ -88,12 +100,13 @@ export function Dashboard() {
   const projects = useAppStore((s) => s.projects);
   const assignments = useAppStore((s) => s.assignments);
   const dueSoonDays = useAppStore((s) => s.settings.dueSoonDays);
+  const severePoints = useAppStore((s) => s.settings.marginWarningPp);
   const today = useToday();
   const { open } = useAlerts();
-  const o = useMemo(() => profitOverview(projects, assignments, today, dueSoonDays), [projects, assignments, today, dueSoonDays]);
+  const o = useMemo(() => profitOverview(projects, assignments, today, dueSoonDays, severePoints), [projects, assignments, today, dueSoonDays, severePoints]);
   const [showAll, setShowAll] = useState(false);
   const [showClosed, setShowClosed] = useState(false);
-  const withDeviation = o.rows.filter((r) => r.impact > 0 || r.schedule.signal !== "on_time");
+  const withDeviation = o.rows.filter((r) => !r.inOrder);
   const rest = o.rows.filter((r) => !withDeviation.includes(r));
   const visible = showAll ? o.rows : withDeviation;
   const aggDelta = o.expected !== null && o.projected !== null ? o.projected - o.expected : null;
@@ -103,16 +116,16 @@ export function Dashboard() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="¿Qué proyectos se desvían y por qué?"
-        subtitle={`Hoy, ${formatDate(today)} · ${o.rows.length} proyectos en curso. Cada número se abre hasta sus registros.`}
+        title="Resumen"
+        subtitle={`¿Qué proyectos se desvían y por qué? Hoy, ${formatDate(today)} · ${o.rows.length} proyectos en curso. Cada número se abre hasta sus registros.`}
       />
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <Kpi
           href="#proyectos"
           label="Plata en riesgo (en curso)"
-          value={o.atRisk > 0 ? `−${formatCurrency(o.atRisk)}` : formatCurrency(0)}
-          tone={o.atRisk > 0 ? "red" : undefined}
+          value={formatCurrency(o.atRisk)}
+          tone={o.atRisk > 0 ? severityTone(o.severity) : undefined}
           hint="Costo final proyectado por encima del costo presupuestado."
         />
         <Kpi
@@ -120,7 +133,8 @@ export function Dashboard() {
           label="Margen esperado → Margen proyectado"
           value={
             <>
-              {formatPercent(o.expected)} → <span className={cn((aggDelta ?? 0) < -0.05 && "text-amber-700")}>{formatPercent(o.projected)}</span>
+              {formatPercent(o.expected)} →{" "}
+              <span className={cn((aggDelta ?? 0) < -0.05 && TONE_TEXT[severityTone(o.severity) ?? "amber"])}>{formatPercent(o.projected)}</span>
             </>
           }
           hint={aggDelta === null ? "Proyectos en curso." : `${formatMarginPoints(aggDelta, { signed: true })} · proyectos en curso`}
@@ -146,6 +160,17 @@ export function Dashboard() {
           <p className="text-sm text-slate-500">La plata y el plazo van en columnas separadas: &quot;Atrasado&quot; no significa &quot;pierde plata&quot;.</p>
         </CardHeader>
         <CardContent className="overflow-x-auto">
+          {o.inOrder.length > 0 && (
+            <p className="mb-3 flex items-start gap-2 rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+              <CheckCircle2 className="mt-0.5 size-4 shrink-0" aria-hidden />
+              <span>
+                <strong>
+                  {o.inOrder.length} {o.inOrder.length === 1 ? "proyecto en orden" : "proyectos en orden"}
+                </strong>
+                : sin desvío económico y en tiempo ({o.inOrder.map((r) => r.project.code).join(", ")}).
+              </span>
+            </p>
+          )}
           {o.rows.length === 0 ? (
             <p className="text-sm text-slate-500">No hay proyectos en curso.</p>
           ) : (
@@ -168,7 +193,7 @@ export function Dashboard() {
           )}
           {rest.length > 0 && (
             <button type="button" onClick={() => setShowAll(!showAll)} className="mt-3 inline-flex items-center gap-1 text-sm text-blue-700 hover:underline" aria-expanded={showAll}>
-              {showAll ? "Ver solo los que se desvían" : `+ ${rest.length} sin desvíos (${rest.map((r) => r.project.code).join(", ")}) · ver todos`}
+              {showAll ? "Ver solo los que se desvían" : `Ver también ${rest.length === 1 ? "el que está en orden" : `los ${rest.length} que están en orden`}`}
               <ChevronDown className={cn("size-4 transition-transform", showAll && "rotate-180")} aria-hidden />
             </button>
           )}
@@ -207,7 +232,7 @@ export function Dashboard() {
                         })}
                       </span>
                     </span>
-                    <strong className={cn("tabular", c.kind === "detected" ? "text-amber-800" : "text-red-700")}>{formatCurrency(c.amount)}</strong>
+                    <strong className={cn("tabular", c.kind === "detected" ? "text-amber-700" : "text-slate-900")}>{formatCurrency(c.amount)}</strong>
                   </li>
                 ))}
               </ul>
@@ -230,7 +255,7 @@ export function Dashboard() {
                       {a.projectCode} · {a.title}
                     </span>
                     {a.impactAmount !== undefined && a.impactAmount > 0 && (
-                      <span className="block text-xs text-red-700">Cuesta ≈ {costWithPoints(a.impactAmount, a.impactPoints)}</span>
+                      <span className="block text-xs text-amber-700">Cuesta ≈ {costWithPoints(a.impactAmount, a.impactPoints)}</span>
                     )}
                     {a.action && <span className="block text-xs text-slate-500">{a.action}</span>}
                   </li>

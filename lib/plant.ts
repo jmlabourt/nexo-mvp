@@ -362,7 +362,7 @@ export function plantAlerts(ctx: PlantContext): Alert[] {
             ? `Ese día puede ${formatNumber(cell.capacity.hours)} h (${cell.capacity.reason.toLowerCase()}): ${formatNumber(cell.overBy)} h de más.`
             : `${cell.capacity.reason}. Hay que reasignar esas horas.`,
           records: mine.map((a) => `${byId.get(a.projectId)?.code ?? a.projectId} · ${rubroLabel(a.rubro)} · ${formatNumber(a.plannedHours)} h`),
-          action: "Planta → Asignaciones: mover esas horas a otro día u otra persona.",
+          action: "Planta → Planificación: mover esas horas a otro día u otra persona.",
         },
       ),
     );
@@ -383,7 +383,7 @@ export function plantAlerts(ctx: PlantContext): Alert[] {
           message: `Se piden ${r.workers} ${r.workers === 1 ? "operario" : "operarios"} y hay ${r.assigned} asignado${r.assigned === 1 ? "" : "s"}. ${
             r.daysLeft < 0 ? `La entrega venció hace ${-r.daysLeft} días.` : `Faltan ${r.daysLeft} días para la entrega.`
           }`,
-          action: "Planta → Asignaciones → Pendientes de asignar.",
+          action: "Planta → Planificación → Pendientes de asignar.",
         },
       ),
     );

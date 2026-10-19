@@ -4,7 +4,7 @@ import { useCallback, useMemo } from "react";
 import type { Alert, EconomicHealth, Project } from "@/types";
 import { allAlerts, openAlertCount, projectHealth, sortAlerts, splitAlerts } from "@/lib/alerts";
 import { plantAlerts } from "@/lib/plant";
-import { materialNeeds, materialsState, purchasingAlerts, type MaterialNeed, type MaterialsState } from "@/lib/purchasing";
+import { materialNeeds, materialsState, plantMaterialAlerts, purchasingAlerts, type MaterialNeed, type MaterialsState } from "@/lib/purchasing";
 import type { RoleKey } from "@/lib/permissions";
 import { projectEconomics, type ProjectEconomics } from "@/lib/calculations";
 import { todayISO } from "@/lib/formatting";
@@ -17,7 +17,10 @@ export function useToday(): string {
   return useMemo(() => todayISO(), []);
 }
 
-/** Alertas de planta (desvío de horas, sobrecarga, rubros sin asignar): sin importes. Jefe de planta y Administrativo. */
+/**
+ * Alertas de planta (desvío de horas, sobrecarga, rubros sin asignar, obra que arranca sin material): sin importes.
+ * Jefe de planta y Administrativo (que ve la de material con detalle en las de Compras, no esta).
+ */
 export function usePlantAlerts(): Alert[] {
   const projects = useAppStore((s) => s.projects);
   const assignments = useAppStore((s) => s.assignments);
@@ -25,10 +28,15 @@ export function usePlantAlerts(): Alert[] {
   const settings = useAppStore((s) => s.settings);
   const hoursPerDay = useAppStore((s) => s.costSettings.hoursPerDay);
   const dayExceptions = useAppStore((s) => s.dayExceptions);
+  const stateOf = useMaterialsStateOf();
   const today = useToday();
   return useMemo(
-    () => sortAlerts(plantAlerts({ projects, assignments, operators, settings, hoursPerDay, today, dayExceptions })),
-    [projects, assignments, operators, settings, hoursPerDay, today, dayExceptions],
+    () =>
+      sortAlerts([
+        ...plantAlerts({ projects, assignments, operators, settings, hoursPerDay, today, dayExceptions }),
+        ...plantMaterialAlerts(projects, stateOf, today, settings.purchaseLeadDays),
+      ]),
+    [projects, assignments, operators, settings, hoursPerDay, today, dayExceptions, stateOf],
   );
 }
 
@@ -82,7 +90,9 @@ export function useAlerts(): { open: Alert[]; resolved: Alert[]; count: number }
   const today = useToday();
   return useMemo(() => {
     // El Administrativo ve cuánto cuesta cada alerta (horas de más × costo por hora, puntos de margen).
-    const all = withEconomicImpact([...allAlerts(projects, settings, today), ...plant, ...buying], projects, assignments, today);
+    // "Falta material" del Jefe es la misma situación que "material sin pedir" / "pedido y no llegó" de Compras.
+    const fromPlant = plant.filter((a) => a.kind !== "material_missing");
+    const all = withEconomicImpact([...allAlerts(projects, settings, today), ...fromPlant, ...buying], projects, assignments, today);
     const split = splitAlerts(sortAlerts(all), resolvedKeys);
     return { ...split, count: openAlertCount(split.open) };
   }, [projects, settings, resolvedKeys, today, plant, buying, assignments]);

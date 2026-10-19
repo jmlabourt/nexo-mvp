@@ -47,15 +47,19 @@ afterEach(cleanup);
 describe("Administrativo", () => {
   it("el dashboard responde primero \"¿qué proyectos se desvían y por qué?\", ordenado por pesos", () => {
     render(<Dashboard />);
-    expect(screen.getByRole("heading", { name: "¿Qué proyectos se desvían y por qué?" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Resumen" })).toBeInTheDocument();
+    expect(screen.getByText(/¿Qué proyectos se desvían y por qué\?/)).toBeInTheDocument();
     for (const k of ["Plata en riesgo (en curso)", "Margen esperado → Margen proyectado", "Desvíos detectados aún no proyectados", "Margen real final (cerrados)"]) {
       expect(screen.getByText(k)).toBeInTheDocument();
     }
     const rows = within(document.querySelector("#proyectos table")!).getAllByRole("row").slice(1);
     expect(rows[0]).toHaveTextContent("P-1042");
-    expect(rows[0]).toHaveTextContent("Materiales +$ 1.000.000");
+    expect(rows[0]).toHaveTextContent("Pierde $ 1.050.000");
+    expect(rows[0]).toHaveTextContent("Materiales $ 1.000.000");
     expect(rows[1]).toHaveTextContent("P-1058");
-    expect(rows[1]).toHaveTextContent("detectado");
+    expect(rows[1]).toHaveTextContent("Detectado $ 705.811");
+    // En pesos no hay signos: el − queda solo para los puntos de margen.
+    expect(document.querySelector("#proyectos")!.textContent).not.toMatch(/[−+-]\s?\$/);
     // Plazo aparte: "Atrasado" no aparece como pérdida.
     expect(screen.getByText("Atrasado")).toBeInTheDocument();
     expect(screen.queryByText(/Rubro que más falla/)).toBeNull();

@@ -50,7 +50,7 @@ const menuItems = () => {
 describe("menú y acceso por rol", () => {
   it("Administrativo ve su menú completo y la demo ofrece los 4 roles", () => {
     render(<AppShell>contenido</AppShell>);
-    expect(menuItems()).toEqual(["Dashboard", "Proyectos", "Alertas", "Horas", "Cotizador", "Stock", "Operarios", "Configuración"]);
+    expect(menuItems()).toEqual(["Resumen", "Proyectos", "Alertas", "Mano de obra", "Cotizador", "Stock", "Operarios", "Configuración"]);
     const group = screen.getAllByRole("radiogroup", { name: "Ver la demo como" })[0];
     expect(within(group).getAllByRole("radio").map((r) => r.textContent)).toEqual(["Administrativo", "Compras", "Jefe de planta", "Operario"]);
     expect(screen.getByText("contenido")).toBeInTheDocument();
@@ -60,7 +60,7 @@ describe("menú y acceso por rol", () => {
     useAppStore.setState({ currentMode: "compras" });
     nav.pathname = "/projects";
     render(<AppShell>contenido secreto</AppShell>);
-    expect(menuItems()).toEqual(["Dashboard", "Necesidades", "Órdenes de compra", "Alertas", "Cotizador", "Stock"]);
+    expect(menuItems()).toEqual(["Resumen", "Por comprar", "Órdenes de compra", "Alertas", "Cotizador", "Disponible en depósito"]);
     expect(screen.getAllByText("Martín Ruiz")[0]).toBeInTheDocument();
     expect(screen.getByRole("alert")).toHaveTextContent("No tenés acceso a esta sección");
     expect(screen.queryByText("contenido secreto")).toBeNull();
@@ -78,7 +78,7 @@ describe("menú y acceso por rol", () => {
     useAppStore.setState({ isDemo: false, currentMode: "compras" });
     render(<AppShell>contenido</AppShell>);
     expect(screen.queryByRole("radiogroup", { name: "Ver la demo como" })).toBeNull();
-    expect(menuItems()[0]).toBe("Dashboard");
+    expect(menuItems()[0]).toBe("Resumen");
   });
 
   it("el Operario ve su día, sin menú de gestión", () => {

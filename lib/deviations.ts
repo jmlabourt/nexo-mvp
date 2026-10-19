@@ -122,7 +122,8 @@ export function withEconomicImpact(alerts: Alert[], projects: Project[], assignm
         next = {
           ...a,
           impactAmount: h.cost,
-          message: `${a.message} Cuesta ≈ ${formatCurrency(h.cost)} (${h.over} h × ${formatCurrency(h.hourlyCost)} por hora cargada).`,
+          // El monto lo muestra la línea "Cuesta"; acá solo de dónde sale, para no repetirlo.
+          message: `${a.message} Se valoriza ${h.over} h × ${formatCurrency(h.hourlyCost)} por hora cargada.`,
         };
       }
     }

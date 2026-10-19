@@ -7,14 +7,14 @@ import { effectiveIdentity } from "@/store/use-app-store";
 const menu = (r: RoleKey) => navFor(r).map((i) => i.label);
 
 describe("cada rol ve exactamente su menú", () => {
-  it("Administrativo: todo, con Horas y Configuración (ahí están Usuarios)", () => {
-    expect(menu("admin")).toEqual(["Dashboard", "Proyectos", "Alertas", "Horas", "Cotizador", "Stock", "Operarios", "Configuración"]);
+  it("Administrativo: todo, con Mano de obra y Configuración (ahí están Usuarios)", () => {
+    expect(menu("admin")).toEqual(["Resumen", "Proyectos", "Alertas", "Mano de obra", "Cotizador", "Stock", "Operarios", "Configuración"]);
   });
-  it("Compras: Dashboard, Necesidades, Órdenes de compra, Alertas, Cotizador y Stock (Lote 6)", () => {
-    expect(menu("compras")).toEqual(["Dashboard", "Necesidades", "Órdenes de compra", "Alertas", "Cotizador", "Stock"]);
+  it("Compras: Resumen, Por comprar, Órdenes de compra, Alertas, Cotizador y Disponible en depósito", () => {
+    expect(menu("compras")).toEqual(["Resumen", "Por comprar", "Órdenes de compra", "Alertas", "Cotizador", "Disponible en depósito"]);
   });
-  it("Jefe de planta: Resumen, Proyectos, Operarios, Asignaciones y Alertas", () => {
-    expect(menu("jefe_planta")).toEqual(["Resumen", "Proyectos", "Operarios", "Asignaciones", "Alertas"]);
+  it("Jefe de planta: Resumen, Proyectos, Operarios, Planificación y Alertas", () => {
+    expect(menu("jefe_planta")).toEqual(["Resumen", "Proyectos", "Operarios", "Planificación", "Alertas"]);
   });
   it("Operario: su día", () => {
     expect(menu("operario")).toEqual(["Mi día"]);

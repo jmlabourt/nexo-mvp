@@ -32,7 +32,7 @@ export function AssignmentsPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Asignaciones"
+        title="Planificación"
         subtitle={`Quién trabaja en qué proyecto cada día. Capacidad: la jornada de ${formatNumber(hoursPerDay)} h (Configuración) en los días laborales de cada operario, o lo que diga su excepción.`}
         actions={
           <Button onClick={() => setDraft({ date: today })}>

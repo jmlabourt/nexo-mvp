@@ -68,7 +68,9 @@ describe("alertas: qué pasó, cuánto cuesta y qué revisar (P0-2)", () => {
     const h = hoursOverruns(star, seed.assignments, today)[0];
     expect(a.impactAmount).toBe(h.cost);
     expect(a.impactPoints).toBeCloseTo((h.cost / star.salesPrice) * 100, 6);
-    expect(a.message).toMatch(/Cuesta ≈ \$/);
+    // El monto va una sola vez (línea "Cuesta"); el mensaje solo explica de dónde sale.
+    expect(a.message).not.toMatch(/Cuesta/);
+    expect(a.message).toMatch(/Se valoriza 14 h × \$ [\d.]+ por hora cargada/);
     expect(a.action).toMatch(/Mesa de comedor/);
   });
   it("la misma alerta del Jefe de planta NO tiene importes", () => {
@@ -131,7 +133,7 @@ describe("\"Marcar resuelta\" dura hasta que cambie el dato (P0-4)", () => {
 });
 
 describe("resumen económico del dashboard (P0-5)", () => {
-  const o = profitOverview(seed.projects, seed.assignments, today, S.dueSoonDays);
+  const o = profitOverview(seed.projects, seed.assignments, today, S.dueSoonDays, S.marginWarningPp);
   it("proyectos ordenados por impacto en pesos, con la causa principal y su monto", () => {
     expect(o.rows.map((r) => r.project.code).slice(0, 3)).toEqual(["P-1042", "P-1058", "P-1045"]);
     expect(o.rows[0].mainCause).toMatchObject({ label: "Materiales", amount: 1_000_000, kind: "projected" });

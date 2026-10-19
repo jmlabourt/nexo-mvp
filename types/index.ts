@@ -577,7 +577,11 @@ export type AlertKind =
   | "overload"
   | "unassigned"
   | "purchase_due"
-  | "purchase_cost";
+  | "purchase_cost"
+  /** Compras/Administrativo: pedido en una orden y sin recibir, para una obra que arranca pronto o ya arrancó. */
+  | "material_arrival"
+  /** Jefe de planta (sin importes): la obra arranca pronto o ya arrancó y el material no está completo. */
+  | "material_missing";
 
 export interface Alert {
   /** Determinístico: permite marcarla como resuelta. Incluye el nivel para que un agravamiento reaparezca. */

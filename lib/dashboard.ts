@@ -191,8 +191,34 @@ export interface OverviewRow {
   detected: DetectedDeviations;
   /** Para ordenar: lo proyectado de más + lo detectado aún no proyectado. */
   impact: number;
+  /**
+   * Hipótesis, no proyección: Margen proyectado − puntos de los desvíos detectados aún no proyectados.
+   * "Podría quedar en ~X% si no se compensa". null si no hay desvíos detectados o no hay precio de venta.
+   */
+  possibleMargin: number | null;
+  /** Puntos de margen que se pierden: los ya proyectados + los detectados aún no proyectados. */
+  lostPoints: number;
+  /**
+   * grave = pierde el umbral "Atención" de Configuración o más (rojo) · menor = pierde algo (naranja) ·
+   * ok = sin desvío económico.
+   */
+  severity: Severity;
+  /** Sin desvío económico y en tiempo. */
+  inOrder: boolean;
   mainCause: OverviewCause | null;
   schedule: ScheduleView;
+}
+
+export type Severity = "grave" | "menor" | "ok";
+
+/**
+ * Gravedad de un desvío en puntos de margen. Sin precio de venta no hay puntos: si hay plata de más, es "menor"
+ * (nunca rojo sin poder decir cuántos puntos son).
+ */
+export function deviationSeverity(lostPoints: number, impact: number, severePoints: number): Severity {
+  if (lostPoints >= severePoints) return "grave";
+  if (impact > 0 || lostPoints > 0.05) return "menor";
+  return "ok";
 }
 
 export interface ProfitOverview {
@@ -203,6 +229,10 @@ export interface ProfitOverview {
   projected: number | null;
   /** Suma de los desvíos detectados aún no proyectados. */
   detected: number;
+  /** Proyectos en curso sin desvío económico y en tiempo. */
+  inOrder: OverviewRow[];
+  /** Gravedad del conjunto: puntos de margen que pierden los proyectos en curso (proyectado + detectado). */
+  severity: Severity;
   /** Margen real final de los proyectos cerrados (ponderado por precio de venta). Nunca se mezcla con los de arriba. */
   closedMargin: number | null;
   closed: Array<{ project: Project; real: number | null }>;
@@ -237,13 +267,20 @@ function projectCauses(project: Project, econ: ProjectEconomics, d: DetectedDevi
   return causes.sort((a, b) => b.amount - a.amount);
 }
 
-export function profitOverview(projects: Project[], assignments: WorkAssignment[], today: string, dueSoonDays: number): ProfitOverview {
+/**
+ * @param severePoints umbral de "grave" en puntos de margen (Configuración → aviso de Atención, 5 por defecto).
+ */
+export function profitOverview(projects: Project[], assignments: WorkAssignment[], today: string, dueSoonDays: number, severePoints: number): ProfitOverview {
   const live = liveProjects(projects);
   const rows = live.map((project): OverviewRow => {
     const econ = projectEconomics(project);
     const detected = detectedDeviations(project, assignments, today);
     const causes = projectCauses(project, econ, detected);
     const overrun = round2(Math.max(0, econ.costOverrun));
+    const impact = round2(overrun + detected.notProjected.total);
+    const lostPoints = Math.max(0, -(econ.marginDeltaPp ?? 0)) + (detected.points ?? 0);
+    const schedule = scheduleSignal(project, today, dueSoonDays);
+    const severity = deviationSeverity(lostPoints, impact, severePoints);
     return {
       project,
       expectedMargin: econ.expectedMargin,
@@ -251,9 +288,13 @@ export function profitOverview(projects: Project[], assignments: WorkAssignment[
       deltaPoints: econ.marginDeltaPp,
       overrun,
       detected,
-      impact: round2(overrun + detected.notProjected.total),
+      impact,
+      possibleMargin: detected.notProjected.total > 0 && detected.points !== null && econ.projectedMargin !== null ? econ.projectedMargin - detected.points : null,
+      lostPoints,
+      severity,
+      inOrder: severity === "ok" && schedule.signal === "on_time",
       mainCause: causes[0] ?? null,
-      schedule: scheduleSignal(project, today, dueSoonDays),
+      schedule,
     };
   });
   rows.sort((a, b) => b.impact - a.impact || (a.deltaPoints ?? 0) - (b.deltaPoints ?? 0) || a.project.dueDate.localeCompare(b.project.dueDate));
@@ -269,15 +310,21 @@ export function profitOverview(projects: Project[], assignments: WorkAssignment[
   }
 
   const agg = aggregateMargins(live.filter((p) => p.salesPrice > 0));
+  const liveSales = live.reduce((s, p) => s + Math.max(0, p.salesPrice), 0);
+  const atRisk = round2(rows.reduce((s, r) => s + r.overrun, 0));
+  const detectedTotal = round2(rows.reduce((s, r) => s + r.detected.notProjected.total, 0));
+  const aggLost = liveSales > 0 ? ((atRisk + detectedTotal) / liveSales) * 100 : 0;
   const closedList = projects.filter((p) => p.isClosed && p.salesPrice > 0);
   const closedSales = closedList.reduce((s, p) => s + p.salesPrice, 0);
   const closedProfit = closedList.reduce((s, p) => s + (p.salesPrice - actualCostToDate(p)), 0);
   return {
     rows,
-    atRisk: round2(rows.reduce((s, r) => s + r.overrun, 0)),
+    atRisk,
     expected: agg.expectedAggregateMargin,
     projected: agg.projectedAggregateMargin,
-    detected: round2(rows.reduce((s, r) => s + r.detected.notProjected.total, 0)),
+    detected: detectedTotal,
+    inOrder: rows.filter((r) => r.inOrder),
+    severity: deviationSeverity(aggLost, atRisk + detectedTotal, severePoints),
     closedMargin: closedSales > 0 ? (closedProfit / closedSales) * 100 : null,
     closed: closedList
       .map((project) => ({ project, real: marginPercent(project.salesPrice - actualCostToDate(project), project.salesPrice) }))
