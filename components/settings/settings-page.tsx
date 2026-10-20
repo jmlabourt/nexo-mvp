@@ -1,8 +1,10 @@
 "use client";
 import { useConfirmedAction } from "@/store/confirmed-action";
-// Configuración en pestañas: Alertas · Tarifas y horas · Costos · Usuarios · Datos (solo Administrativo).
-// Cada sección tiene un solo "Guardar", avisa si hay cambios sin guardar y puede volver a los valores por defecto.
-import { useState } from "react";
+// Configuración en pestañas. Gerencia: Rubros y capacidad · Costos horarios · Costos · Alertas · Indicadores y cálculos ·
+// Inflación y nomenclatura · Usuarios y permisos · Datos. Administración: solo Nomenclatura y Rubros (consulta).
+// Cada sección con guardado real tiene un solo "Guardar", avisa si hay cambios sin guardar y puede volver a los valores
+// por defecto; las que la base todavía no guarda lo dicen y dejan el botón deshabilitado.
+import { useState, useSyncExternalStore } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -35,6 +37,8 @@ import { Badge } from "@/components/ui/badge";
 import { Choice } from "@/components/ui/choice";
 import { PriceHistoryList } from "./price-history-list";
 import { UsersSection } from "./users-section";
+import { useIdentity } from "@/store/selectors";
+import { CapacitySection, IndicatorsSection, InflationSection, NomenclatureSection, PermissionsSection, RubrosSection } from "./management-sections";
 
 // ── Piezas comunes de cada sección ───────────────────────────
 
@@ -580,21 +584,71 @@ function DataSection() {
   );
 }
 
+// ── Página ───────────────────────────────────────────────────
+
+const subscribeHash = (cb: () => void) => {
+  window.addEventListener("hashchange", cb);
+  return () => window.removeEventListener("hashchange", cb);
+};
+
+/** Pestaña que corresponde a un ancla (#capacidad, #ind-…, #usuarios) para que los links del Dashboard lleguen. */
+function tabFromHash(hash: string): string | null {
+  if (hash === "#capacidad" || hash === "#rubros") return "rubros";
+  if (hash.startsWith("#ind-") || hash === "#indicadores") return "indicators";
+  if (hash === "#usuarios") return "users";
+  if (hash === "#inflacion" || hash === "#nomenclatura") return "params";
+  return null;
+}
+
 export function SettingsPage() {
   const organizationName = useAppStore((s) => s.organizationName);
+  const { session } = useIdentity();
+  const hash = useSyncExternalStore(subscribeHash, () => window.location.hash, () => "");
+  // La pestaña elegida a mano vale mientras no cambie el ancla.
+  const [picked, setPicked] = useState<{ hash: string; tab: string } | null>(null);
+  const gerencia = session === "gerencia";
+  const fallback = gerencia ? "rubros" : "nomenclature";
+  const tab = picked && picked.hash === hash ? picked.tab : (gerencia ? tabFromHash(hash) : null) ?? fallback;
+
+  if (!gerencia) {
+    // Administración / Comercial / Diseño: solo lo que necesita para cotizar, sin costos horarios ni usuarios.
+    return (
+      <div className="max-w-3xl">
+        <PageHeader title="Configuración" subtitle={`${APP_NAME} · ${organizationName}`} />
+        <Tabs value={tab} onValueChange={(t) => setPicked({ hash, tab: t })}>
+          <TabsList aria-label="Secciones de Configuración">
+            <TabsTrigger value="nomenclature">Nomenclatura</TabsTrigger>
+            <TabsTrigger value="rubros">Rubros</TabsTrigger>
+          </TabsList>
+          <TabsContent value="nomenclature">
+            <NomenclatureSection readOnly />
+          </TabsContent>
+          <TabsContent value="rubros">
+            <RubrosSection readOnly />
+          </TabsContent>
+        </Tabs>
+        <p className="mt-4 text-sm text-slate-500">Los costos horarios, las alertas y los usuarios los configura Gerencia.</p>
+      </div>
+    );
+  }
+
   return (
-    <div className="max-w-3xl">
+    <div className="max-w-4xl">
       <PageHeader title="Configuración" subtitle={`${APP_NAME} · ${APP_SUBTITLE} · ${organizationName}`} />
-      <Tabs defaultValue="alerts">
+      <Tabs value={tab} onValueChange={(t) => setPicked({ hash, tab: t })}>
         <TabsList aria-label="Secciones de Configuración">
-          <TabsTrigger value="alerts">Alertas</TabsTrigger>
-          <TabsTrigger value="rates">Tarifas y horas</TabsTrigger>
+          <TabsTrigger value="rubros">Rubros y capacidad</TabsTrigger>
+          <TabsTrigger value="rates">Costos horarios</TabsTrigger>
           <TabsTrigger value="costs">Costos</TabsTrigger>
-          <TabsTrigger value="users">Usuarios</TabsTrigger>
+          <TabsTrigger value="alerts">Alertas</TabsTrigger>
+          <TabsTrigger value="indicators">Indicadores y cálculos</TabsTrigger>
+          <TabsTrigger value="params">Inflación y nomenclatura</TabsTrigger>
+          <TabsTrigger value="users">Usuarios y permisos</TabsTrigger>
           <TabsTrigger value="data">Datos</TabsTrigger>
         </TabsList>
-        <TabsContent value="alerts">
-          <AlertsSection />
+        <TabsContent value="rubros" className="space-y-6">
+          <RubrosSection />
+          <CapacitySection />
         </TabsContent>
         <TabsContent value="rates">
           <RatesSection />
@@ -602,8 +656,19 @@ export function SettingsPage() {
         <TabsContent value="costs">
           <CostsSection />
         </TabsContent>
-        <TabsContent value="users">
+        <TabsContent value="alerts">
+          <AlertsSection />
+        </TabsContent>
+        <TabsContent value="indicators">
+          <IndicatorsSection hash={hash} />
+        </TabsContent>
+        <TabsContent value="params" className="space-y-6">
+          <div id="inflacion" className="scroll-mt-20"><InflationSection /></div>
+          <div id="nomenclatura" className="scroll-mt-20"><NomenclatureSection /></div>
+        </TabsContent>
+        <TabsContent value="users" id="usuarios" className="space-y-6">
           <UsersSection />
+          <PermissionsSection />
         </TabsContent>
         <TabsContent value="data">
           <DataSection />

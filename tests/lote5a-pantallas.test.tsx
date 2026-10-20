@@ -103,7 +103,7 @@ describe("tarifas con vigente desde", () => {
   it("un cambio con fecha futura queda programado: hoy sigue la tarifa actual y se ve en el historial", async () => {
     const user = userEvent.setup();
     render(<SettingsPage />);
-    await user.click(screen.getByRole("tab", { name: "Tarifas y horas" }));
+    await user.click(screen.getByRole("tab", { name: "Costos horarios" }));
     const labor = screen.getByLabelText("Mano de obra");
     await user.clear(labor);
     await user.type(labor, "25000");
@@ -126,7 +126,7 @@ describe("tarifas con vigente desde", () => {
   it("un cambio desde hoy se usa desde hoy", async () => {
     const user = userEvent.setup();
     render(<SettingsPage />);
-    await user.click(screen.getByRole("tab", { name: "Tarifas y horas" }));
+    await user.click(screen.getByRole("tab", { name: "Costos horarios" }));
     const labor = screen.getByLabelText("Mano de obra");
     await user.clear(labor);
     await user.type(labor, "21000");
@@ -138,8 +138,8 @@ describe("tarifas con vigente desde", () => {
   it("Configuración tiene la pestaña Usuarios y el costo real de las horas marcado como hipótesis", async () => {
     const user = userEvent.setup();
     render(<SettingsPage />);
-    expect(screen.getByRole("tab", { name: "Usuarios" })).toBeInTheDocument();
-    await user.click(screen.getByRole("tab", { name: "Tarifas y horas" }));
+    expect(screen.getByRole("tab", { name: "Usuarios y permisos" })).toBeInTheDocument();
+    await user.click(screen.getByRole("tab", { name: "Costos horarios" }));
     expect(screen.getByText("Hipótesis a confirmar con el cliente")).toBeInTheDocument();
   });
 });

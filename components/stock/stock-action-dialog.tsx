@@ -13,7 +13,8 @@ import { Input, Select } from "@/components/ui/input";
 import { Choice } from "@/components/ui/choice";
 import { LeftoverDimsFields } from "./leftover-dims-fields";
 
-export type StockAction = "assign" | "release" | "transfer" | "leftover" | "supplier";
+// La devolución al proveedor se quitó de la interfaz: el material sobrante vuelve al stock interno o queda como sobrante.
+export type StockAction = "assign" | "release" | "transfer" | "leftover";
 
 export interface StockTarget {
   materialId: string;
@@ -21,7 +22,7 @@ export interface StockTarget {
   unit: string;
   /** Máximo que se puede mover (lo libre en depósito o lo asignado al proyecto). */
   max: number;
-  /** Proyecto de origen (release / transfer / leftover / supplier). */
+  /** Proyecto de origen (release / transfer / leftover). */
   fromProjectId?: string;
   /** Proyecto de destino ya decidido (asignar desde la pestaña del proyecto). */
   toProjectId?: string;
@@ -51,11 +52,6 @@ const COPY: Record<StockAction, { title: string; verb: string; help: string }> =
     verb: "Marcar sobrante",
     help: "Conserva su valor y queda disponible para otros proyectos. No es desperdicio ni costo.",
   },
-  supplier: {
-    title: "Devolver al proveedor",
-    verb: "Devolver al proveedor",
-    help: "El material sale del stock y no es costo del proyecto.",
-  },
 };
 
 const receivers = (projects: Project[], excludeId?: string) =>
@@ -77,7 +73,6 @@ export function StockActionDialog({
   const releaseStock = useConfirmedAction("releaseStock");
   const transferStock = useConfirmedAction("transferStock");
   const markLeftover = useConfirmedAction("markLeftover");
-  const returnToSupplier = useAppStore((s) => s.returnStockToSupplier);
 
   const [qty, setQty] = useState("");
   const [toProject, setToProject] = useState(target.toProjectId ?? "");
@@ -106,7 +101,6 @@ export function StockActionDialog({
     if (action === "assign") res = await assignStock({ ...base, projectId: toProject });
     else if (action === "release") res = await releaseStock({ ...base, projectId: target.fromProjectId ?? "" });
     else if (action === "transfer") res = await transferStock({ ...base, fromProjectId: target.fromProjectId ?? "", toProjectId: toProject });
-    else if (action === "supplier") res = returnToSupplier({ ...base, projectId: target.fromProjectId ?? "" });
     else {
       const parsed = parseDims(dimFieldsForUnit(target.unit), dims);
       if (parsed.error) return setError(parsed.error);

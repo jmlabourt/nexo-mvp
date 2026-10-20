@@ -14,6 +14,9 @@ import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { AttachButton, AttachmentList } from "@/components/shared/attachments";
 import { OriginTag, PendingAction } from "@/components/shared/data-origin";
 import { cn } from "@/lib/utils";
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { ItemsTab } from "./items-tab";
 
 export const DESIGN_STATUS_LABELS: Record<DesignStatus, string> = {
   preparing: "Preparando planos",
@@ -32,15 +35,30 @@ export const FURNITURE_STAGES: Array<{ id: FurnitureStage; label: string }> = [
 
 export function FurniturePanel({ project, canEdit }: { project: Project; canEdit: boolean }) {
   const design = useFurnitureDesign(project);
+  const [editing, setEditing] = useState(false);
+  if (editing) {
+    return (
+      <div className="space-y-3">
+        <Button variant="outline" onClick={() => setEditing(false)}>Volver a los muebles</Button>
+        <ItemsTab project={project} />
+      </div>
+    );
+  }
   const of = (itemId: string): FurnitureDesign | undefined => design.data.find((d) => d.itemId === itemId);
 
   if (project.items.length === 0) {
-    return <p className="text-sm text-slate-500">El proyecto todavía no tiene muebles: se cargan al cotizar.</p>;
+    return (
+      <div className="space-y-2">
+        <p className="text-sm text-slate-500">El proyecto todavía no tiene muebles: se cargan al cotizar.</p>
+        {canEdit && !project.isClosed && <Button variant="outline" size="sm" onClick={() => setEditing(true)}>Agregar mueble</Button>}
+      </div>
+    );
   }
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-2 text-sm text-slate-500">
-        Diseño, etapas y lista de materiales de cada mueble. <OriginTag origin={design.origin} />
+      <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-slate-500">
+        <span className="flex flex-wrap items-center gap-2">Diseño, etapas y lista de materiales de cada mueble. <OriginTag origin={design.origin} /></span>
+        {canEdit && !project.isClosed && <Button variant="outline" size="sm" onClick={() => setEditing(true)}>Agregar o editar muebles</Button>}
       </div>
       {project.items.map((item) => {
         const d = of(item.id);

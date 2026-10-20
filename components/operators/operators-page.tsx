@@ -9,6 +9,8 @@ import { activeOperators, operatorHasRecords, visibleOperators } from "@/lib/ope
 import { useAppStore, type Result } from "@/store/use-app-store";
 import { useIdentity } from "@/store/selectors";
 import { PageHeader } from "@/components/shared/page-header";
+import Link from "next/link";
+import { useManagementParams } from "@/store/session-data";
 import { EmptyState } from "@/components/shared/empty-state";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -145,26 +147,38 @@ export function OperatorsPage({ op }: { op?: string }) {
   const shown = visibleOperators(operators, showDeactivated);
   const deactivatedCount = operators.length - activeOperators(operators).length;
 
+  // Horas reales del período: el mes elegido (por defecto, el actual).
+  const [month, setMonth] = useState(todayISO().slice(0, 7));
+  const params = useManagementParams();
   const stats = useMemo(() => {
     const m = new Map<string, { hours: number; cost: number; projects: number }>();
     for (const o of operators) m.set(o.id, { hours: 0, cost: 0, projects: projects.filter((p) => !p.isClosed && p.assignedOperatorIds.includes(o.id)).length });
     for (const p of projects)
       for (const e of p.actualEntries) {
-        if (e.type !== "labor" || !e.operatorId) continue;
+        if (e.type !== "labor" || !e.operatorId || !e.date.startsWith(month)) continue;
         const s = m.get(e.operatorId);
         if (s) { s.hours += e.labor?.hours ?? 0; s.cost += e.amount; }
       }
     return m;
-  }, [operators, projects]);
+  }, [operators, projects, month]);
 
   return (
     <div>
       <PageHeader
         back
-        title="Operarios"
-        subtitle="Quién trabaja, a qué costo por hora y en qué proyectos. Las horas se cargan siempre a nombre de un operario."
-        actions={isManager ? <Button onClick={() => setEditing("new")}><Plus /> Nuevo operario</Button> : undefined}
+        title="Personal"
+        subtitle="Quién trabaja, en qué rubro, a qué costo por hora y cuántas horas reales cargó. Los costos son privados de Gerencia."
+        actions={isManager ? <Button onClick={() => setEditing("new")}><Plus /> Agregar empleado</Button> : undefined}
       />
+      <div className="mb-3 flex flex-wrap items-end gap-4">
+        <label className="text-xs font-medium text-slate-600">
+          Horas del mes
+          <Input type="month" className="mt-1 w-40" value={month} onChange={(e) => e.target.value && setMonth(e.target.value)} />
+        </label>
+        <p className="text-xs text-slate-500">
+          Los roles del sistema (Gerencia, Compras, Jefe de planta…) se asignan en <Link href="/settings#usuarios" className="text-blue-700 hover:underline">Configuración → Usuarios</Link>.
+        </p>
+      </div>
       {operators.length > 0 && (
         <label className="mb-3 flex items-center gap-2 text-sm text-slate-700">
           <input type="checkbox" className="size-4" checked={showDeactivated} onChange={(e) => setShowDeactivated(e.target.checked)} />
@@ -181,12 +195,12 @@ export function OperatorsPage({ op }: { op?: string }) {
             <THead>
               <TR>
                 <TH>Nombre</TH>
-                <TH>Rol</TH>
-                <TH className="text-right">Costo por hora</TH>
-                <TH className="text-right">Proyectos activos</TH>
-                <TH className="text-right">Horas cargadas</TH>
-                <TH>Acceso</TH>
-                <TH>Situación</TH>
+                <TH>Rubro principal</TH>
+                <TH>Rol del sistema</TH>
+                <TH>Estado</TH>
+                <TH>Remuneración</TH>
+                <TH className="text-right">Costo horario</TH>
+                <TH className="text-right">Horas reales del mes</TH>
                 <TH><span className="sr-only">Acciones</span></TH>
               </TR>
             </THead>
@@ -195,17 +209,20 @@ export function OperatorsPage({ op }: { op?: string }) {
                 const s = stats.get(o.id);
                 return (
                   <TR key={o.id} className={o.id === op ? "bg-amber-50" : undefined}>
-                    <TD className="font-medium text-slate-900">{o.name}</TD>
-                    <TD>{o.role}</TD>
-                    <TD className="text-right tabular">{formatCurrency(o.hourlyCost)}</TD>
-                    <TD className="text-right tabular">{s?.projects ?? 0}</TD>
-                    <TD className="text-right tabular">{formatNumber(s?.hours ?? 0)} h · {formatCurrency(s?.cost ?? 0)}</TD>
-                    <TD className="text-xs text-slate-600">{o.userId ? "Vinculado" : o.email ? `Invitado: ${o.email}` : "Sin acceso"}</TD>
+                    <TD className="font-medium text-slate-900">
+                      {o.name}
+                      <span className="block text-xs font-normal text-slate-500">{o.role} · {s?.projects ?? 0} proyectos activos</span>
+                    </TD>
+                    <TD>{params.roleToRubro[o.role] ?? o.role}</TD>
+                    <TD className="text-xs text-slate-600">Operario{o.userId ? " · con acceso" : o.email ? ` · invitado (${o.email})` : " · sin acceso"}</TD>
                     <TD>
                       <Badge tone={o.active ? "green" : "gray"}>
-                        {o.active ? "Activo" : `Dado de baja${o.deactivatedAt ? ` el ${formatDate(o.deactivatedAt)}` : ""}`}
+                        {o.active ? "Activo" : `Inactivo${o.deactivatedAt ? ` desde el ${formatDate(o.deactivatedAt)}` : ""}`}
                       </Badge>
                     </TD>
+                    <TD className="text-xs text-slate-600">Por hora</TD>
+                    <TD className="text-right tabular">{formatCurrency(o.hourlyCost)}</TD>
+                    <TD className="text-right tabular">{formatNumber(s?.hours ?? 0)} h<span className="block text-xs text-slate-500">{formatCurrency(s?.cost ?? 0)}</span></TD>
                     <TD>
                       {isManager && (
                         <div className="flex justify-end gap-2">

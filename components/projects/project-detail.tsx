@@ -1,15 +1,24 @@
 "use client";
 import Link from "next/link";
 import { useState } from "react";
-import { ArrowRightLeft, ClipboardPen, FolderX, Lock, ShoppingCart } from "lucide-react";
+import { ArrowRightLeft, ClipboardPen, Clock, FolderX, Lock, Pencil } from "lucide-react";
 import { formatDate, formatDays, daysBetween, todayISO } from "@/lib/formatting";
 import { useAppStore } from "@/store/use-app-store";
-import { useMaterialsStateOf, useProjectAlerts, useProjectView } from "@/store/selectors";
+import { useIdentity, useMaterialsStateOf, useProjectAlerts, useProjectView } from "@/store/selectors";
+import { can } from "@/lib/permissions";
+import { generalState } from "@/lib/gerencia";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { HealthBadge, StatusBadge } from "@/components/shared/badges";
+import { HealthBadge } from "@/components/shared/badges";
+import { GeneralStateBadge } from "./projects-table";
+import { FurniturePanel } from "./furniture-panel";
+import { HoursTab } from "./hours-tab";
+import { BillingTab } from "./billing-tab";
+import { EditProjectDialog } from "./edit-project-dialog";
+import { HoursForm } from "@/components/actual-costs/hours-form";
+import { PendingAction } from "@/components/shared/data-origin";
 import { MaterialsBadge } from "@/components/purchasing/purchasing-projects";
 import { EmptyState } from "@/components/shared/empty-state";
 import { StatusTimeline } from "./status-timeline";
@@ -20,28 +29,34 @@ import { ActivityTab } from "./activity-tab";
 import { ScheduleCard } from "./schedule-card";
 import { TeamCard } from "./team-card";
 import { StagesTab } from "./stages-tab";
-import { ItemsTab } from "./items-tab";
 import { StatusDialog } from "./status-dialog";
 import { CloseDialog } from "./close-dialog";
 import { BudgetTab } from "@/components/budget/budget-tab";
 import { MaterialsTab } from "@/components/materials/materials-tab";
 import { ActualCostsTab } from "@/components/actual-costs/actual-costs-tab";
 import { RecordDialog } from "@/components/actual-costs/record-dialog";
-import { PurchaseForm } from "@/components/materials/purchase-form";
 import { AlertItem } from "@/components/alerts/alert-item";
 import { BackButton } from "@/components/layout/back-button";
 
-type DialogName = "record" | "purchase" | "status" | "close" | null;
+type DialogName = "record" | "hours" | "status" | "close" | "edit" | null;
 
-const TABS = ["summary", "budget", "materials", "costs", "stages", "items", "activity"] as const;
+/**
+ * Pestañas por sesión. Gerencia: la economía completa y su explicación. Administración / Comercial / Diseño: los
+ * muebles (Diseño, etapas, BOM, archivos) y las etapas, sin importes gerenciales.
+ */
+const GERENCIA_TABS = ["summary", "items", "budget", "materials", "hours", "costs", "billing", "activity"] as const;
+const ADMIN_TABS = ["items", "stages"] as const;
 
 export function ProjectDetail({ id, tab: initialTab, purchase }: { id: string; tab?: string; purchase?: string }) {
   const view = useProjectView(id);
   const settings = useAppStore((s) => s.settings);
   const alerts = useProjectAlerts(view?.project);
   const materialsOf = useMaterialsStateOf();
+  const { session } = useIdentity();
+  const gerencia = session === "gerencia";
+  const tabs: readonly string[] = gerencia ? GERENCIA_TABS : ADMIN_TABS;
   const [dialog, setDialog] = useState<DialogName>(null);
-  const [tab, setTab] = useState<string>(TABS.includes(initialTab as (typeof TABS)[number]) ? (initialTab as string) : purchase ? "materials" : "summary");
+  const [tab, setTab] = useState<string>(tabs.includes(initialTab ?? "") ? (initialTab as string) : purchase && gerencia ? "materials" : tabs[0]);
 
   if (!view) {
     return (
@@ -71,8 +86,8 @@ export function ProjectDetail({ id, tab: initialTab, purchase }: { id: string; t
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2 text-sm text-slate-500">
               <span className="font-medium">{p.code}</span>
-              <StatusBadge status={p.status} />
-              {health && <HealthBadge health={health} />}
+              <GeneralStateBadge state={generalState(p)} />
+              {gerencia && health && <HealthBadge health={health} />}
               <MaterialsBadge state={materialsOf(p)} />
             </div>
             <h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-900">{p.name}</h1>
@@ -89,18 +104,27 @@ export function ProjectDetail({ id, tab: initialTab, purchase }: { id: string; t
           </div>
           {!closed ? (
             <div className="flex flex-wrap gap-2 xl:justify-end">
-              <Button onClick={openDialog("record")} size="lg">
-                <ClipboardPen /> Registrar lo que pasó
-              </Button>
-              <Button variant="outline" onClick={openDialog("purchase")} size="lg">
-                <ShoppingCart /> Registrar compra
+              {gerencia ? (
+                <Button onClick={openDialog("record")} size="lg">
+                  <ClipboardPen /> Registrar otro costo
+                </Button>
+              ) : (
+                <Button onClick={openDialog("hours")} size="lg">
+                  <Clock /> Registrar horas
+                </Button>
+              )}
+              <Button variant="outline" onClick={openDialog("edit")} size="lg">
+                <Pencil /> Editar información
               </Button>
               <Button variant="outline" onClick={openDialog("status")} size="lg">
                 <ArrowRightLeft /> Cambiar etapa
               </Button>
-              <Button variant="outline" onClick={openDialog("close")} size="lg" className="text-slate-700">
-                <Lock /> Cerrar proyecto
-              </Button>
+              {can(session, "closeProjects") && (
+                <Button variant="outline" onClick={openDialog("close")} size="lg" className="text-slate-700">
+                  <Lock /> Cerrar proyecto
+                </Button>
+              )}
+              {!gerencia && p.status === "quotation" && <PendingAction label="Registrar rechazo" reason="El motivo del rechazo se guarda cuando el backend lo habilite." />}
             </div>
           ) : (
             <div className="rounded-md bg-slate-100 px-3 py-2 text-sm text-slate-600">Proyecto cerrado · solo lectura</div>
@@ -111,13 +135,23 @@ export function ProjectDetail({ id, tab: initialTab, purchase }: { id: string; t
 
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList>
-          <TabsTrigger value="summary">Resumen</TabsTrigger>
-          <TabsTrigger value="budget">Costo presupuestado</TabsTrigger>
-          <TabsTrigger value="materials">Materiales</TabsTrigger>
-          <TabsTrigger value="costs">Costos reales</TabsTrigger>
-          <TabsTrigger value="stages">Etapas</TabsTrigger>
-          <TabsTrigger value="items">Productos y archivos</TabsTrigger>
-          <TabsTrigger value="activity">Actividad</TabsTrigger>
+          {gerencia ? (
+            <>
+              <TabsTrigger value="summary">Resumen</TabsTrigger>
+              <TabsTrigger value="items">Muebles</TabsTrigger>
+              <TabsTrigger value="budget">Presupuesto original</TabsTrigger>
+              <TabsTrigger value="materials">Materiales</TabsTrigger>
+              <TabsTrigger value="hours">Horas</TabsTrigger>
+              <TabsTrigger value="costs">Otros costos</TabsTrigger>
+              <TabsTrigger value="billing">Facturación</TabsTrigger>
+              <TabsTrigger value="activity">Historial</TabsTrigger>
+            </>
+          ) : (
+            <>
+              <TabsTrigger value="items">Muebles</TabsTrigger>
+              <TabsTrigger value="stages">Etapas y notas</TabsTrigger>
+            </>
+          )}
         </TabsList>
 
         <TabsContent value="summary" className="space-y-6">
@@ -159,7 +193,13 @@ export function ProjectDetail({ id, tab: initialTab, purchase }: { id: string; t
           <StagesTab project={p} />
         </TabsContent>
         <TabsContent value="items">
-          <ItemsTab project={p} />
+          <FurniturePanel project={p} canEdit />
+        </TabsContent>
+        <TabsContent value="hours">
+          <HoursTab project={p} />
+        </TabsContent>
+        <TabsContent value="billing">
+          <BillingTab project={p} />
         </TabsContent>
         <TabsContent value="activity">
           <ActivityTab project={p} />
@@ -169,17 +209,18 @@ export function ProjectDetail({ id, tab: initialTab, purchase }: { id: string; t
       {!closed && (
         <>
           <RecordDialog project={p} open={dialog === "record"} onOpenChange={onOpenChange} />
-          <Dialog open={dialog === "purchase"} onOpenChange={onOpenChange}>
+          <Dialog open={dialog === "hours"} onOpenChange={onOpenChange}>
             <DialogContent side="right">
               <DialogHeader>
-                <DialogTitle>Registrar compra</DialogTitle>
+                <DialogTitle>Registrar horas</DialogTitle>
                 <DialogDescription>
-                  {p.code} · {p.name}
+                  {p.code} · Diseño, Administración u otros trabajos: persona, mueble, rubro y horas reales.
                 </DialogDescription>
               </DialogHeader>
-              <PurchaseForm project={p} onDone={() => setDialog(null)} />
+              <HoursForm project={p} onDone={() => setDialog(null)} showCost={false} />
             </DialogContent>
           </Dialog>
+          <EditProjectDialog project={p} open={dialog === "edit"} onOpenChange={onOpenChange} />
           <StatusDialog project={p} open={dialog === "status"} onOpenChange={onOpenChange} />
           <CloseDialog project={p} open={dialog === "close"} onOpenChange={onOpenChange} />
         </>

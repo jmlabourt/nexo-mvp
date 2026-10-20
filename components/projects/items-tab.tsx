@@ -16,13 +16,15 @@ import { Input, Select } from "@/components/ui/input";
 import { AttachButton, AttachmentList } from "@/components/shared/attachments";
 
 /**
- * Productos del proyecto (ej. "Mesa × 10"): el Administrativo define, para cada uno, los rubros que necesita con sus
+ * Muebles del proyecto (ej. "Mesa × 10"): el Administrativo define, para cada uno, los rubros que necesita con sus
  * horas estimadas y cuántos operarios pide cada rubro. Las unidades terminadas las carga el Jefe de planta.
- * Los materiales, horas, archivos y costos se pueden asociar a cada producto.
+ * Los materiales, horas, archivos y costos se pueden asociar a cada mueble.
  */
 export function ItemsTab({ project }: { project: Project }) {
   const removeItem = useConfirmedAction("removeItem");
-  const { isManager } = useIdentity();
+  const { isManager, session } = useIdentity();
+  // El costo asociado a cada mueble lo ve solo Gerencia.
+  const showCost = session === "gerencia";
   const [editing, setEditing] = useState<string | null>(null);
   const editable = isManager && !project.isClosed;
 
@@ -32,7 +34,7 @@ export function ItemsTab({ project }: { project: Project }) {
     return { mats, other, total: mats + other };
   };
   const general = project.attachments.filter((a) => !a.itemId && !a.stage);
-  // Solo si hay productos: un proyecto anterior sin productos se explica en docs/PRODUCCION.md (migración propuesta).
+  // Solo si hay muebles: un proyecto anterior sin muebles se explica en docs/PRODUCCION.md (migración propuesta).
   const gaps = project.items.length > 0 ? laborHoursGaps(project) : [];
   const generalCost = costOf(undefined);
 
@@ -40,15 +42,15 @@ export function ItemsTab({ project }: { project: Project }) {
     <div className="space-y-6">
       {isManager && gaps.length > 0 && (
         <p role="status" className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-          Las horas de los productos no coinciden con la mano de obra presupuestada:{" "}
-          {gaps.map((g) => `${rubroLabel(g.rubro)} ${formatNumber(g.products)} h en productos y ${formatNumber(g.budget)} h presupuestadas`).join(" · ")}. El costo
-          presupuestado no cambia solo: la planta usa las horas de los productos.
+          Las horas de los muebles no coinciden con la mano de obra presupuestada:{" "}
+          {gaps.map((g) => `${rubroLabel(g.rubro)} ${formatNumber(g.products)} h en muebles y ${formatNumber(g.budget)} h presupuestadas`).join(" · ")}. El costo
+          presupuestado no cambia solo: la planta usa las horas de los muebles.
         </p>
       )}
       {editable && (
         <Card>
           <CardHeader>
-            <CardTitle>Agregar producto</CardTitle>
+            <CardTitle>Agregar mueble</CardTitle>
             <CardDescription>
               Nombre y cantidad (ej. “Silla × 100”) y, por cada rubro que necesita, las horas estimadas para toda la cantidad y cuántos operarios pide.
             </CardDescription>
@@ -98,7 +100,7 @@ export function ItemsTab({ project }: { project: Project }) {
                   ))}
                 </ul>
               )}
-              {isManager && (
+              {showCost && (
                 <p className="text-sm text-slate-600">
                   Costo real asociado: <strong className="tabular">{formatCurrency(c.total)}</strong>
                   <span className="text-slate-400"> · materiales {formatCurrency(c.mats)} · otros {formatCurrency(c.other)}</span>
@@ -114,11 +116,11 @@ export function ItemsTab({ project }: { project: Project }) {
       <Card>
         <CardHeader>
           <CardTitle>General del proyecto</CardTitle>
-          <CardDescription>Planos, fotos y documentos que no son de un producto en particular.</CardDescription>
+          <CardDescription>Planos, fotos y documentos que no son de un mueble en particular.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
-          {isManager && project.items.length > 0 && (
-            <p className="text-sm text-slate-600">Costo real sin producto asignado: <strong className="tabular">{formatCurrency(generalCost.total)}</strong></p>
+          {showCost && project.items.length > 0 && (
+            <p className="text-sm text-slate-600">Costo real sin mueble asignado: <strong className="tabular">{formatCurrency(generalCost.total)}</strong></p>
           )}
           <AttachmentList attachments={general} projectId={project.id} canRemove={editable} />
           {!project.isClosed && <AttachButton projectId={project.id} />}
@@ -138,7 +140,7 @@ interface RubroDraft {
 
 const draftOf = (r: ProductRubro): RubroDraft => ({ rubro: r.rubro, hours: String(r.hours).replace(".", ","), workers: String(r.workers) });
 
-/** Alta o edición de un producto con sus rubros (horas estimadas y operarios pedidos). */
+/** Alta o edición de un mueble con sus rubros (horas estimadas y operarios pedidos). */
 function ProductForm({ project, item, onDone }: { project: Project; item?: ProjectItem; onDone: () => void }) {
   const addItem = useConfirmedAction("addItem");
   const updateItem = useConfirmedAction("updateItem");
@@ -201,7 +203,7 @@ function ProductForm({ project, item, onDone }: { project: Project; item?: Proje
       </fieldset>
       {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
       <div className="flex gap-2">
-        <Button type="submit">{item ? "Guardar cambios" : "Agregar producto"}</Button>
+        <Button type="submit">{item ? "Guardar cambios" : "Agregar mueble"}</Button>
         {item && <Button type="button" variant="outline" onClick={onDone}>Cancelar</Button>}
       </div>
     </form>
