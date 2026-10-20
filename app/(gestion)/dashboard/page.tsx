@@ -1,5 +1,5 @@
-import { Dashboard } from "@/components/dashboard/dashboard";
+import { GerenciaDashboard } from "@/components/gerencia/gerencia-dashboard";
 
 export default function Page() {
-  return <Dashboard />;
+  return <GerenciaDashboard />;
 }

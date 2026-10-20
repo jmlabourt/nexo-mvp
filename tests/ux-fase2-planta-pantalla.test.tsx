@@ -92,7 +92,7 @@ describe("Administrativo", () => {
     const star = seed.projects.find((p) => p.id === STAR_PROJECT_ID)!;
     const today = todayISO();
     const r = deliverMaterial(star, seed.stock, [], { projectId: star.id, itemId: "itm-mesas", materialId: "mel-blanca-18", quantity: 2, source: "warehouse", date: addDays(today, -1) }, { actor: "Carla", now: new Date().toISOString(), today });
-    useAppStore.setState({ currentMode: "admin", stock: r.stock, deliveries: [r.delivery] });
+    useAppStore.setState({ currentMode: "gerencia", stock: r.stock, deliveries: [r.delivery] });
     render(<AlertsPage />);
     const text = document.body.textContent ?? "";
     expect(text).toMatch(/Material entregado sin cierre del día desde el/);

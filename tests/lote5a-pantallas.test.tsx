@@ -29,7 +29,7 @@ beforeEach(() => {
     stock: seed.stock,
     role: "owner",
     isDemo: true,
-    currentMode: "admin",
+    currentMode: "gerencia",
     organizationId: null,
     userName: "Laura Gómez",
     hourRates: DEFAULT_HOUR_RATES.map((r) => ({ ...r })),
@@ -47,12 +47,12 @@ const menuItems = () => {
     .map((el) => el.querySelector("span")?.textContent?.trim()); // solo el nombre (sin el contador de alertas)
 };
 
-describe("menú y acceso por rol", () => {
-  it("Administrativo ve su menú completo y la demo ofrece los 4 roles", () => {
+describe("menú y acceso por sesión", () => {
+  it("Gerencia ve sus 5 pestañas y la demo ofrece las 5 sesiones", () => {
     render(<AppShell>contenido</AppShell>);
-    expect(menuItems()).toEqual(["Resumen", "Proyectos", "Alertas", "Mano de obra", "Cotizador", "Stock", "Operarios", "Configuración"]);
+    expect(menuItems()).toEqual(["Dashboard", "Proyectos", "Personal", "Stock", "Configuración"]);
     const group = screen.getAllByRole("radiogroup", { name: "Ver la demo como" })[0];
-    expect(within(group).getAllByRole("radio").map((r) => r.textContent)).toEqual(["Administrativo", "Compras", "Jefe de planta", "Operario"]);
+    expect(within(group).getAllByRole("radio").map((r) => r.textContent)).toEqual(["Gerencia", "Administración", "Compras", "Jefe de planta", "Operario"]);
     expect(screen.getByText("contenido")).toBeInTheDocument();
   });
 
@@ -60,7 +60,7 @@ describe("menú y acceso por rol", () => {
     useAppStore.setState({ currentMode: "compras" });
     nav.pathname = "/projects";
     render(<AppShell>contenido secreto</AppShell>);
-    expect(menuItems()).toEqual(["Resumen", "Por comprar", "Órdenes de compra", "Alertas", "Cotizador", "Disponible en depósito"]);
+    expect(menuItems()).toEqual(["Dashboard", "Necesidades", "Órdenes de compra", "Stock", "Alertas", "Proveedores"]);
     expect(screen.getAllByText("Martín Ruiz")[0]).toBeInTheDocument();
     expect(screen.getByRole("alert")).toHaveTextContent("No tenés acceso a esta sección");
     expect(screen.queryByText("contenido secreto")).toBeNull();
@@ -70,15 +70,24 @@ describe("menú y acceso por rol", () => {
   it("Jefe de planta que entra al dashboard va a su inicio", () => {
     useAppStore.setState({ role: "jefe_planta", isDemo: false });
     render(<AppShell>x</AppShell>);
-    expect(menuItems()[0]).toBe("Resumen");
+    expect(menuItems()).toEqual(["Dashboard", "Proyectos", "Operarios", "Alertas"]);
     expect(nav.replace).toHaveBeenCalledWith("/planta");
   });
 
-  it("en una empresa real no aparece el selector de la demo", () => {
+  it("en una empresa real no aparece el selector de la demo: un Administrativo elige Gerencia o Administración", () => {
     useAppStore.setState({ isDemo: false, currentMode: "compras" });
     render(<AppShell>contenido</AppShell>);
     expect(screen.queryByRole("radiogroup", { name: "Ver la demo como" })).toBeNull();
-    expect(menuItems()[0]).toBe("Resumen");
+    const group = screen.getAllByRole("radiogroup", { name: "Sesión" })[0];
+    expect(within(group).getAllByRole("radio").map((r) => r.textContent)).toEqual(["Gerencia", "Administración"]);
+    expect(menuItems()[0]).toBe("Dashboard");
+  });
+
+  it("Administración: 7 pestañas, sin el Dashboard gerencial", () => {
+    useAppStore.setState({ currentMode: "administracion" });
+    render(<AppShell>contenido</AppShell>);
+    expect(menuItems()).toEqual(["Dashboard", "Proyectos", "Cotizador", "Stock", "Clientes", "Proveedores", "Configuración"]);
+    expect(nav.replace).toHaveBeenCalledWith("/administracion");
   });
 
   it("el Operario ve su día, sin menú de gestión", () => {

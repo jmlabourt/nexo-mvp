@@ -90,7 +90,7 @@ describe("de la necesidad a la orden de compra, la factura y la recepción", () 
     expect(pending.length).toBeGreaterThan(0);
     expect(pending.every((n) => n.fromStock > 0 && n.toBuy === 0)).toBe(true);
     expect(materialsState(needs, p.id)).toBe("on_the_way");
-    useAppStore.setState({ role: "owner", currentMode: "admin" });
+    useAppStore.setState({ role: "owner", currentMode: "gerencia" });
     for (const n of pending) {
       expect(s.assignStock({ projectId: p.id, materialId: n.materialId!, materialName: n.description, unit: n.unit, quantity: n.fromStock }).ok).toBe(true);
     }

@@ -37,7 +37,7 @@ beforeEach(() => {
     settings: { ...DEFAULT_SETTINGS },
     role: "owner",
     isDemo: true,
-    currentMode: "admin",
+    currentMode: "gerencia",
     actingOperatorId: null,
     organizationId: null,
   });

@@ -29,7 +29,7 @@ import type {
   WorkAssignment,
 } from "@/types";
 import { DEFAULT_HOUR_RATES, DEFAULT_SETTINGS, DEMO_USERS } from "@/lib/constants";
-import { roleKeyOf, type RoleKey } from "@/lib/permissions";
+import { resolveSession, roleKeyOf, sessionRole, type RoleKey, type SessionKey } from "@/lib/permissions";
 import { costSettingsError, hourRatesError } from "@/lib/cost-settings";
 import { buildSeed } from "@/lib/seed-data";
 import * as ops from "@/lib/project-operations";
@@ -94,8 +94,11 @@ interface AppState {
   corrections: ValueCorrection[];
   /** La empresa tiene los datos de demostración (solo entonces se ofrece "Restaurar datos demo"). */
   isDemo: boolean;
-  /** Solo en una empresa demo y para Administrativo: con qué rol se está mirando la app. */
-  currentMode: RoleKey;
+  /**
+   * Sesión elegida (Gerencia, Administración, Compras, Jefe de planta, Operario). En la demo, un Administrativo mira
+   * cualquiera de las cinco; en una empresa real, un Administrativo elige entre Gerencia y Administración.
+   */
+  currentMode: SessionKey;
   resolvedAlertIds: string[];
 
   /** Empresa y usuario de la sesión (null hasta que carga el workspace). */
@@ -114,7 +117,7 @@ interface AppState {
   loadWorkspace: (ws: Workspace) => void;
   refreshWorkspace: () => Promise<void>;
   confirmOperation: <T>(operation: () => Result<T> | Promise<Result<T>>) => Promise<Result<T>>;
-  setMode: (mode: RoleKey) => void;
+  setMode: (mode: SessionKey) => void;
   setActingOperator: (id: string | null) => void;
 
   createProject: (input: ops.NewProjectInput) => Result<string>;
@@ -280,25 +283,29 @@ export function effectiveIdentity(
   s: Pick<AppState, "role" | "currentMode" | "isDemo" | "operators" | "userId" | "userEmail" | "actingOperatorId" | "userName">,
 ): {
   role: AppRole;
+  /** Rol de la base con el que se escribe. */
   roleKey: RoleKey;
+  /** Sesión de pantalla (qué pestañas y qué datos se muestran). */
+  session: SessionKey;
   operator: Operator | undefined;
   actor: string;
 } {
   if (s.role === "operator") {
     const operator = people.operatorForUser(s.operators, s.userId, s.userEmail);
-    return { role: "operator", roleKey: "operario", operator, actor: operator?.name ?? s.userName };
+    return { role: "operator", roleKey: "operario", session: "operario", operator, actor: operator?.name ?? s.userName };
   }
   const real = roleKeyOf(s.role);
-  const view = real === "admin" && s.isDemo ? s.currentMode : real;
+  // Demo: un Administrativo mira cualquiera de las cinco sesiones. Empresa real: las de su rol (Gerencia / Administración).
+  const view: SessionKey = real === "admin" && s.isDemo && s.currentMode ? s.currentMode : resolveSession(real, s.currentMode);
   if (view === "operario") {
     // En la demo siempre hay un operario elegido: el que se eligió o, si no, el primero activo.
     const operator = s.operators.find((o) => o.id === s.actingOperatorId && o.active) ?? s.operators.find((o) => o.active);
-    return { role: "operator", roleKey: "operario", operator, actor: operator?.name ?? s.userName };
+    return { role: "operator", roleKey: "operario", session: "operario", operator, actor: operator?.name ?? s.userName };
   }
   if (view === "compras" || view === "jefe_planta") {
-    return { role: view, roleKey: view, operator: undefined, actor: real === "admin" ? DEMO_USERS[view].name : s.userName };
+    return { role: view, roleKey: view, session: view, operator: undefined, actor: real === "admin" ? DEMO_USERS[view].name : s.userName };
   }
-  return { role: s.role, roleKey: "admin", operator: undefined, actor: s.userName };
+  return { role: s.role, roleKey: sessionRole(view), session: view, operator: undefined, actor: s.userName };
 }
 
 export const useAppStore = create<AppState>()(
@@ -424,7 +431,7 @@ export const useAppStore = create<AppState>()(
         const run2 = queue.then(async (): Promise<Result> => {
           try {
             await remote.replaceWorkspace(createClient(), org, isDemo ? data : null);
-            set({ ...data, dayExceptions: data.dayExceptions ?? [], deliveries: data.deliveries ?? [], isDemo, currentMode: "admin", actingOperatorId: null, syncStatus: "idle", syncError: null });
+            set({ ...data, dayExceptions: data.dayExceptions ?? [], deliveries: data.deliveries ?? [], isDemo, currentMode: "gerencia", actingOperatorId: null, syncStatus: "idle", syncError: null });
             return { ok: true, value: undefined };
           } catch (e) {
             set({ syncStatus: "error", syncError: `No se pudo guardar: ${errorMessage(e)}` });
@@ -456,7 +463,7 @@ export const useAppStore = create<AppState>()(
         priceHistory: [],
         corrections: [],
         isDemo: false,
-        currentMode: "admin",
+        currentMode: "gerencia",
         organizationId: null,
         organizationName: "",
         userId: null,
@@ -518,7 +525,7 @@ export const useAppStore = create<AppState>()(
             userEmail: ws.userEmail,
             role: ws.role,
             // El rol elegido para mirar la demo solo vale en una empresa demo.
-            currentMode: ws.isDemo ? get().currentMode : roleKeyOf(ws.role),
+            currentMode: ws.isDemo ? get().currentMode : resolveSession(roleKeyOf(ws.role), get().currentMode),
             syncStatus: "idle",
             syncError: null,
           });
@@ -1047,13 +1054,14 @@ export const useAppStore = create<AppState>()(
     },
     {
       name: "nexo-ui-v2",
-      version: 4,
+      version: 5,
       storage: createJSONStorage(() => localStorage),
       // v3 guardaba "management" / "workshop" (Gestión / Taller).
       migrate: (persisted, version) => {
         const s = (persisted ?? {}) as { currentMode?: string; actingOperatorId?: string | null };
-        const mode = version < 4 ? (s.currentMode === "workshop" ? "operario" : "admin") : s.currentMode;
-        return { currentMode: mode as RoleKey, actingOperatorId: s.actingOperatorId ?? null } as Partial<AppState>;
+        // v4 guardaba el rol ("admin"); desde v5 es la sesión ("admin" → Gerencia).
+        const mode = version < 4 ? (s.currentMode === "workshop" ? "operario" : "gerencia") : s.currentMode === "admin" ? "gerencia" : s.currentMode;
+        return { currentMode: (mode ?? "gerencia") as SessionKey, actingOperatorId: s.actingOperatorId ?? null } as Partial<AppState>;
       },
       skipHydration: true,
       partialize: (s) => ({ currentMode: s.currentMode, actingOperatorId: s.actingOperatorId }),

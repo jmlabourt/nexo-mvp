@@ -4,7 +4,10 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
   Boxes,
+  Building2,
   Calculator,
+  ClipboardList,
+  Contact,
   CalendarDays,
   Clock,
   FolderKanban,
@@ -16,6 +19,7 @@ import {
   Plus,
   Settings,
   TriangleAlert,
+  Truck,
   UsersRound,
   X,
   type LucideIcon,
@@ -31,7 +35,7 @@ import { WorkshopHome } from "@/components/workshop/workshop-home";
 import { GlobalSearch } from "./global-search";
 import { useTrackNavigation } from "./back-button";
 import { breadcrumbTrail, type Crumb } from "@/lib/navigation";
-import { can, canAccess, homeFor, navFor, ROLE_LABELS, type NavIcon } from "@/lib/permissions";
+import { can, canAccess, homeFor, navFor, SESSION_LABELS, type NavIcon } from "@/lib/permissions";
 import { useIdentity } from "@/store/selectors";
 
 const ICONS: Record<NavIcon, LucideIcon> = {
@@ -46,6 +50,10 @@ const ICONS: Record<NavIcon, LucideIcon> = {
   hours: Clock,
   assign: UsersRound,
   day: CalendarDays,
+  needs: ClipboardList,
+  clients: Contact,
+  suppliers: Truck,
+  people: Building2,
 };
 
 function isActive(pathname: string, href: string) {
@@ -65,7 +73,7 @@ function useBreadcrumb(): Crumb[] {
 
 function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
-  const { roleKey, actor } = useIdentity();
+  const { roleKey, session, actor } = useIdentity();
   const count = useAlertCount(roleKey);
   const userEmail = useAppStore((s) => s.userEmail);
   const organizationName = useAppStore((s) => s.organizationName);
@@ -77,7 +85,7 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
         <div className="text-xs text-slate-500">{APP_SUBTITLE}</div>
       </Link>
       <nav aria-label="Principal" className="min-h-0 flex-1 space-y-0.5 overflow-y-auto overflow-x-hidden px-3">
-        {navFor(roleKey).map((item, _i, items) => {
+        {navFor(session).map((item, _i, items) => {
           const Icon = ICONS[item.icon];
           const active = activeHref(pathname, items.map((x) => x.href)) === item.href;
           return (
@@ -109,7 +117,7 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
           <div className="min-w-0">
             <div className="break-words text-sm font-medium text-slate-900">{actor}</div>
             <div className="break-words text-xs text-slate-500" title={userEmail}>
-              {ROLE_LABELS[roleKey]} · {organizationName}
+              {SESSION_LABELS[session]} · {organizationName}
             </div>
           </div>
         </div>
@@ -125,7 +133,7 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
 
 function Header({ onMenu }: { onMenu: () => void }) {
   const crumbs = useBreadcrumb();
-  const { roleKey } = useIdentity();
+  const { session } = useIdentity();
   return (
     <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-slate-200 bg-white/95 px-4 backdrop-blur lg:px-8">
       <Button variant="ghost" size="icon" className="lg:hidden" onClick={onMenu} aria-label="Abrir menú">
@@ -145,8 +153,8 @@ function Header({ onMenu }: { onMenu: () => void }) {
           </span>
         ))}
       </nav>
-      {roleKey === "admin" ? <GlobalSearch /> : <div className="flex-1" />}
-      {can(roleKey, "editProjects") && (
+      {session === "gerencia" || session === "administracion" ? <GlobalSearch /> : <div className="flex-1" />}
+      {can(session, "createProjects") && (
         <Button asChild className="hidden sm:inline-flex">
           <Link href="/projects/new">
             <Plus /> Nuevo proyecto
@@ -177,14 +185,14 @@ function NoAccess({ home }: { home: string }) {
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const { roleKey } = useIdentity();
+  const { session } = useIdentity();
   const isDemo = useAppStore((s) => s.isDemo);
   const realRole = useAppStore((s) => s.role);
   const [menuOpen, setMenuOpen] = useState(false);
   useTrackNavigation();
 
-  if (roleKey === "operario") return <WorkshopHome />;
-  const allowed = canAccess(roleKey, pathname);
+  if (session === "operario") return <WorkshopHome />;
+  const allowed = canAccess(session, pathname);
 
   return (
     <div className="min-h-screen">
@@ -206,7 +214,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <Header onMenu={() => setMenuOpen(true)} />
         <main className="mx-auto max-w-7xl px-4 py-6 lg:px-8 lg:py-8">
           {isDemo && (realRole === "owner" || realRole === "member") && <DemoBanner />}
-          {allowed ? children : <NoAccess home={homeFor(roleKey)} />}
+          {allowed ? children : <NoAccess home={homeFor(session)} />}
         </main>
       </div>
     </div>
