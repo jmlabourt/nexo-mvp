@@ -4,19 +4,19 @@
 import { formatCurrency, formatCurrencyOrDash, formatNumber } from "@/lib/formatting";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { Section } from "./fields";
-import { furnitureSubtotals, type CalcState, type CalculatorResult } from "./calculator-state";
+import { furnitureSubtotals, type CalculatorResult } from "./calculator-state";
 
-export function FurnitureSubtotalsTable({ state, result, salesPrice }: { state: CalcState; result: CalculatorResult; salesPrice: number }) {
-  const { rows, shared, total } = furnitureSubtotals(state, result, salesPrice);
+export function FurnitureSubtotalsTable({ result, salesPrice }: { result: CalculatorResult; salesPrice: number }) {
+  const { rows, shared, total } = furnitureSubtotals(result, salesPrice);
   if (rows.length === 0) return null;
   return (
     <Section
       title="Subtotal por mueble"
       help={
         <>
-          <span className="block">Costo directo = mano de obra del mueble + materiales, diseño y administración de los rubros asignados a ese mueble.</span>
+          <span className="block">Costo directo = mano de obra, materiales, diseño y administración de los rubros del mueble.</span>
           <span className="block">
-            Los costos compartidos (rubros generales, márgenes de seguridad y gasto financiero) no se reparten en el costo: el precio de venta se reparte entre los
+            Los costos compartidos (transporte, imprevistos, márgenes de seguridad y gasto financiero) no se reparten en el costo: el precio de venta se reparte entre los
             muebles en proporción a su costo directo, y la suma da el precio total.
           </span>
         </>

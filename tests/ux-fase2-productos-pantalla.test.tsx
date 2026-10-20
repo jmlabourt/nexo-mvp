@@ -31,8 +31,9 @@ describe("productos en Nuevo proyecto", () => {
   it("cada producto es un grupo con campos etiquetados; sin productos no se puede continuar", () => {
     view(initialCalcState(5));
     const group = screen.getByRole("group", { name: "Mueble 1" });
-    expect(within(group).getByLabelText("Nombre")).toBeInTheDocument();
-    expect(within(group).getByLabelText("Cantidad")).toBeInTheDocument();
+    // El nombre se edita en el título de la tarjeta.
+    expect(within(group).getByLabelText("Nombre del mueble 1")).toHaveAttribute("placeholder", "Mueble 1");
+    expect(within(group).getAllByLabelText("Cantidad")[0]).toHaveAttribute("id", expect.stringMatching(/^prod-qty-/));
     expect(within(group).getByLabelText("Horas")).toBeInTheDocument();
     expect(within(group).getByLabelText("Operarios")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Continuar" })).toBeDisabled();
@@ -43,7 +44,7 @@ describe("productos en Nuevo proyecto", () => {
   it("un producto a medio cargar muestra el error al lado y no deja seguir", () => {
     const p = { ...newProductRow("Mesa"), quantity: "10" };
     view({ ...initialCalcState(5), products: [p] });
-    const group = screen.getByRole("group", { name: "Mueble 1" });
+    const group = screen.getByRole("group", { name: "Mesa" });
     expect(within(group).getByRole("alert")).toHaveTextContent("Indicá las horas estimadas de Carpintería madera.");
     expect(screen.getByRole("button", { name: "Continuar" })).toBeDisabled();
   });
@@ -51,7 +52,8 @@ describe("productos en Nuevo proyecto", () => {
     const p = { ...newProductRow("Mesa"), quantity: "10" };
     p.rubros = [{ ...p.rubros[0], hours: "60", workers: "1" }];
     view({ ...initialCalcState(5), products: [p] });
-    expect(screen.getByText(/Mano de obra presupuestada:/)).toHaveTextContent("(60 h, suma de 1 mueble)");
+    expect(screen.getByText(/Costo de los muebles:/)).toHaveTextContent("(suma de 1 mueble)");
+    expect(within(screen.getByRole("group", { name: "Mesa" })).getByText(/^60 h ×/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Continuar" })).toBeEnabled();
   });
 });

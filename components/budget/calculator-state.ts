@@ -15,7 +15,6 @@ import {
   type QuoteBreakdown,
   type QuoteInput,
   type QuoteMaterial,
-  type QuoteProduct,
   type QuoteRubro,
   type RatesByCategory,
   type RubroLabor,
@@ -40,8 +39,9 @@ export interface MaterialRow {
 }
 
 /**
- * Un rubro en edición: materiales, horas de diseño y de administración (o un importe). La mano de obra NO va acá:
- * sale de los productos (Auditoría UX · P0-7), así las horas se cargan una sola vez.
+ * Un rubro del proyecto que no es de un mueble: Transporte / Fletes e Imprevistos (solo un importe). Las cotizaciones
+ * anteriores también podían tener acá materiales y horas de diseño o administración "generales": se siguen calculando
+ * igual, pero la pantalla ya no los crea (todo se carga dentro de cada mueble).
  */
 export interface RubroRow {
   key: string;
@@ -51,22 +51,23 @@ export interface RubroRow {
   adminHours: string;
   /** Solo rubros de importe (Transporte / Fletes, Imprevistos). */
   amount: string;
-  /**
-   * Mueble al que pertenece (ProductRow.key). Sin mueble = costo general del proyecto. Solo agrupa: el costo total y
-   * las líneas del presupuesto son las mismas con o sin mueble.
-   */
-  productKey?: string;
 }
 
-/** Un rubro de un producto: horas estimadas para toda la cantidad y cuántos operarios pide. */
+/**
+ * Un rubro de un mueble, con todo junto: horas de operarios para toda la cantidad y cuántos operarios pide, materiales
+ * y horas de diseño y de administración de ese rubro en ese mueble.
+ */
 export interface ProductRubroRow {
   key: string;
   rubro: RubroId;
   hours: string;
   workers: string;
+  materials?: MaterialRow[];
+  designHours?: string;
+  adminHours?: string;
 }
 
-/** Un producto en edición ("Mesa de comedor × 10"). De sus horas sale la mano de obra presupuestada. */
+/** Un mueble en edición ("Mesa de comedor × 10"). Su nombre se edita en el título de la tarjeta. */
 export interface ProductRow {
   key: string;
   name: string;
@@ -75,8 +76,9 @@ export interface ProductRow {
 }
 
 export interface CalcState {
-  /** Productos: la mano de obra presupuestada es la suma de sus horas por rubro. */
+  /** Muebles: cada uno con sus rubros (horas, operarios, materiales, diseño y administración). */
   products: ProductRow[];
+  /** Rubros del proyecto que no son de un mueble (Transporte / Fletes, Imprevistos). */
   rubros: RubroRow[];
   /** Plazo en días hábiles (opcional). Sin plazo no hay horas extra. */
   deadlineDays: string;
@@ -107,19 +109,27 @@ const rowKey = () => `r${Date.now()}${(seq += 1)}`;
 /** Lo más simple: cantidad 1 y el costo total alcanza para algo que se compra hecho. */
 export const newMaterialRow = (): MaterialRow => ({ key: rowKey(), name: "", unit: "u", quantity: "1", unitCost: "", wastePct: "0" });
 
-export function newRubroRow(rubro: RubroId, productKey?: string): RubroRow {
+export function newRubroRow(rubro: RubroId): RubroRow {
   const full = rubroDef(rubro).kind === "full";
-  return { key: rowKey(), rubro, materials: full ? [newMaterialRow()] : [], designHours: "", adminHours: "", amount: "", ...(productKey ? { productKey } : {}) };
+  return { key: rowKey(), rubro, materials: full ? [newMaterialRow()] : [], designHours: "", adminHours: "", amount: "" };
 }
 
-export const newProductRubroRow = (rubro: RubroId): ProductRubroRow => ({ key: rowKey(), rubro, hours: "", workers: "1" });
+export const newProductRubroRow = (rubro: RubroId): ProductRubroRow => ({
+  key: rowKey(),
+  rubro,
+  hours: "",
+  workers: "1",
+  materials: [newMaterialRow()],
+  designHours: "",
+  adminHours: "",
+});
 
 export const newProductRow = (name = ""): ProductRow => ({ key: rowKey(), name, quantity: "1", rubros: [newProductRubroRow("carpinteria_madera")] });
 
 export function initialCalcState(financialPct = DEFAULT_FINANCIAL_PCT): CalcState {
   return {
     products: [newProductRow()],
-    rubros: [newRubroRow("carpinteria_madera")],
+    rubros: [],
     deadlineDays: "",
     materialsTargetPct: "30",
     laborTargetPct: "30",
@@ -162,30 +172,46 @@ export function materialRowToQuote(m: MaterialRow): QuoteMaterial {
   };
 }
 
-/** Un producto vacío (sin nombre ni horas) no cuenta: es la fila que la pantalla ofrece para empezar. */
-const isBlankProduct = (p: ProductRow) => !p.name.trim() && p.rubros.every((r) => !r.hours.trim());
+/** Nombre que se muestra del mueble: el escrito en el título o "Mueble N". */
+export const productLabel = (p: Pick<ProductRow, "name">, index: number) => p.name.trim() || `Mueble ${index + 1}`;
 
-/** Fila de producto → lo que se valida y se guarda. Cantidad y operarios vacíos quedan en NaN (no válidos). */
-const toProductInput = (p: ProductRow): ProductInput => ({
-  name: p.name.trim(),
+/** ¿El rubro del mueble tiene algo cargado además de las horas? (materiales, diseño o administración) */
+const rubroHasExtras = (r: ProductRubroRow) =>
+  (r.materials ?? []).some((m) => m.name.trim() && n(m.quantity) > 0) || n(r.designHours ?? "") > 0 || n(r.adminHours ?? "") > 0;
+
+/** Rubro con horas de operarios escritas: es mano de obra del mueble (y lo que el Jefe de planta asigna). */
+const hasLaborHours = (r: ProductRubroRow) => r.hours.trim() !== "";
+
+/** Un mueble vacío (sin nombre ni nada cargado) no cuenta: es la tarjeta que la pantalla ofrece para empezar. */
+const isBlankProduct = (p: ProductRow) => !p.name.trim() && p.rubros.every((r) => !hasLaborHours(r) && !rubroHasExtras(r));
+
+/**
+ * Fila de mueble → lo que se valida y se guarda (project_items). Solo van los rubros con horas de operarios; un rubro
+ * con solo materiales (o diseño / administración) no lleva horas de planta. Cantidad y operarios vacíos quedan en NaN.
+ */
+const toProductInput = (p: ProductRow, index: number): ProductInput => ({
+  name: productLabel(p, index),
   quantity: p.quantity.trim() ? Number(p.quantity.trim().replace(",", ".")) : NaN,
-  rubros: p.rubros.map((r) => ({ rubro: r.rubro, hours: n(r.hours), workers: r.workers.trim() ? Number(r.workers.trim()) : NaN })),
+  rubros: p.rubros.filter(hasLaborHours).map((r) => ({ rubro: r.rubro, hours: n(r.hours), workers: r.workers.trim() ? Number(r.workers.trim()) : NaN })),
 });
 
-/** Problema de una fila de producto (null = bien o vacía). La pantalla lo muestra al lado del producto. */
-export function productRowError(p: ProductRow): string | null {
-  return isBlankProduct(p) ? null : productInputError(toProductInput(p));
+/** Problema de una fila de mueble (null = bien o vacía). La pantalla lo muestra al lado del mueble. */
+export function productRowError(p: ProductRow, index = 0): string | null {
+  if (isBlankProduct(p)) return null;
+  const empty = p.rubros.find((r) => !hasLaborHours(r) && !rubroHasExtras(r));
+  if (empty) return `Indicá las horas estimadas de ${rubroDef(empty.rubro).label}.`;
+  return productInputError(toProductInput(p, index));
 }
 
-/** Productos cargados → lo que guarda el proyecto (project_items) y lo que valoriza la calculadora. */
+/** Muebles cargados → lo que guarda el proyecto (project_items) y lo que valoriza la calculadora. */
 export function productInputs(s: Pick<CalcState, "products">): ProductInput[] {
-  return s.products.filter((p) => !isBlankProduct(p)).map(toProductInput);
+  return s.products.flatMap((p, i) => (isBlankProduct(p) ? [] : [toProductInput(p, i)]));
 }
 
-/** Primer problema de los productos ("Producto 2 (Silla): …"), o null si están bien. */
+/** Primer problema de los muebles ("Mueble 2 (Silla): …"), o null si están bien. */
 export function productsError(s: Pick<CalcState, "products">): string | null {
   for (const [i, p] of s.products.entries()) {
-    const error = productRowError(p);
+    const error = productRowError(p, i);
     if (error) return `Mueble ${i + 1}${p.name.trim() ? ` (${p.name.trim()})` : ""}: ${error}`;
   }
   return null;
@@ -203,13 +229,43 @@ function rubroRowToQuote(r: RubroRow): QuoteRubro {
   };
 }
 
-/** Solo los productos válidos suman mano de obra: uno a medio cargar no se valoriza a medias. */
-const validRows = (s: Pick<CalcState, "products">) => s.products.filter((p) => !isBlankProduct(p) && productRowError(p) === null);
-const validProducts = (s: CalcState): QuoteProduct[] => validRows(s).map(toProductInput);
+/** Solo los muebles válidos se valorizan: uno a medio cargar no se valoriza a medias. */
+const validRows = (s: Pick<CalcState, "products">) =>
+  s.products.flatMap((p, index) => (!isBlankProduct(p) && productRowError(p, index) === null ? [{ row: p, index }] : []));
+
+/**
+ * Cada rubro de un mueble válido → una entrada de la cotización con todo junto: mano de obra (horas para toda la
+ * cantidad y operarios, como productLaborRubros), materiales y horas de diseño y de administración. Valoriza lo mismo
+ * que tenerlos por separado: la mano de obra sigue siendo la suma de los muebles.
+ */
+function productQuoteRubros(s: Pick<CalcState, "products">): Array<{ productKey: string; rubroKey: string; quote: QuoteRubro }> {
+  return validRows(s).flatMap(({ row, index }) => {
+    const input = toProductInput(row, index);
+    // Mismo rótulo que productLaborRubros: "Mesa de comedor × 10".
+    const product = `${input.name.trim()} × ${input.quantity}`;
+    return row.rubros
+      .filter((r) => hasLaborHours(r) || rubroHasExtras(r))
+      .map((r) => {
+        const [labor] = hasLaborHours(r) ? productLaborRubros([{ ...input, rubros: input.rubros.filter((x) => x.rubro === r.rubro) }]) : [];
+        const quote: QuoteRubro = {
+          rubro: r.rubro,
+          product,
+          materials: (r.materials ?? []).map(materialRowToQuote),
+          workers: labor?.workers ?? 0,
+          hoursPerWorker: labor?.hoursPerWorker ?? 0,
+          ...(labor ? { totalHours: labor.totalHours } : {}),
+          designHours: n(r.designHours ?? ""),
+          adminHours: n(r.adminHours ?? ""),
+          amount: 0,
+        };
+        return { productKey: row.key, rubroKey: r.key, quote };
+      });
+  });
+}
 
 function calcStateToInput(s: CalcState, ctx: Pick<CalculatorContext, "rates" | "overtimeMultiplier" | "hoursPerDay">): QuoteInput {
   return {
-    rubros: [...s.rubros.map(rubroRowToQuote), ...productLaborRubros(validProducts(s))],
+    rubros: [...s.rubros.map(rubroRowToQuote), ...productQuoteRubros(s).map((x) => x.quote)],
     hoursPerDay: ctx.hoursPerDay,
     deadlineDays: n(s.deadlineDays) || null,
     rates: ctx.rates,
@@ -238,20 +294,21 @@ export interface RubroResult {
   total: number;
 }
 
-/** Mano de obra de un producto: una entrada por rubro, con sus líneas. */
+/** Costo de un mueble: una entrada por rubro (mano de obra, materiales, diseño y administración), con sus líneas. */
 export interface ProductResult {
   /** Fila de la pantalla (ProductRow.key). */
   key: string;
   name: string;
   quantity: number;
-  rubros: Array<{ rubro: RubroId; labor: RubroLabor; lines: BudgetLineInput[]; total: number }>;
+  /** key = ProductRubroRow.key */
+  rubros: Array<{ key: string; rubro: RubroId; labor: RubroLabor; lines: BudgetLineInput[]; total: number }>;
   total: number;
 }
 
 export interface CalculatorResult {
   input: QuoteInput;
   rubros: RubroResult[];
-  /** Productos válidos con su mano de obra (la mano de obra presupuestada es la suma de estos). */
+  /** Muebles válidos con su costo (la mano de obra presupuestada es la suma de estos). */
   products: ProductResult[];
   /** Primer problema de los productos cargados (null = bien). */
   productsError: string | null;
@@ -293,16 +350,17 @@ export function computeCalculator(state: CalcState, projectType: string, ctx: Ca
     const lines = rubroLines(r, labor, { rates, overtimeMultiplier: input.overtimeMultiplier, hoursPerDay: input.hoursPerDay });
     return { rubro: r.rubro, labor, lines, total: totalOfLines(lines) };
   });
-  // Primero los rubros de la pantalla (materiales, diseño, administración, importes); después la mano de obra por producto.
+  // Primero los rubros del proyecto (importes); después cada rubro de cada mueble, en el mismo orden que la cotización.
   const rubros: RubroResult[] = state.rubros.map((row, i) => ({ key: row.key, ...quoted[i] }));
-  let next = state.rubros.length;
-  const rows = validRows(state);
-  const products: ProductResult[] = validProducts(state).map((p, i) => {
-    const mine = p.rubros.map((r) => {
-      const q = quoted[next++];
-      return { rubro: r.rubro, labor: q.labor as RubroLabor, lines: q.lines, total: q.total };
+  const parts = productQuoteRubros(state);
+  const products: ProductResult[] = validRows(state).map(({ row, index }) => {
+    const mine = parts.flatMap((x, j) => {
+      if (x.productKey !== row.key) return [];
+      const q = quoted[state.rubros.length + j];
+      return [{ key: x.rubroKey, rubro: x.quote.rubro, labor: q.labor as RubroLabor, lines: q.lines, total: q.total }];
     });
-    return { key: rows[i].key, name: p.name, quantity: p.quantity, rubros: mine, total: round2(mine.reduce((s, r) => s + r.total, 0)) };
+    const input = toProductInput(row, index);
+    return { key: row.key, name: input.name, quantity: input.quantity, rubros: mine, total: round2(mine.reduce((s, r) => s + r.total, 0)) };
   });
   const rubroLinesAll = quoted.flatMap((r) => r.lines);
   const withAdjustments = [...rubroLinesAll, ...adjustmentLines(rubroLinesAll, toAdjustments(state.safetyMargins))];
@@ -346,11 +404,7 @@ export interface FurnitureSubtotal {
   key: string;
   name: string;
   quantity: number;
-  /** Mano de obra del mueble (sus horas por rubro). */
-  labor: number;
-  /** Materiales, diseño y administración de los rubros asignados a este mueble. */
-  rubros: number;
-  /** labor + rubros: lo que se le puede atribuir directamente. */
+  /** Costo directo del mueble: mano de obra, materiales, diseño y administración de sus rubros. */
   direct: number;
   /** Parte del precio de venta, proporcional al costo directo (null sin precio o sin costo directo). */
   price: number | null;
@@ -360,7 +414,7 @@ export interface FurnitureSubtotal {
 
 export interface FurnitureSubtotals {
   rows: FurnitureSubtotal[];
-  /** Costos que no son de un mueble: rubros generales, márgenes de seguridad y gasto financiero. */
+  /** Costos que no son de un mueble: transporte, imprevistos, márgenes de seguridad y gasto financiero. */
   shared: number;
   /** Igual al costo total de la cotización (Σ directos + compartidos). */
   total: number;
@@ -371,14 +425,8 @@ export interface FurnitureSubtotals {
  * costos compartidos, y reparte el precio de venta en proporción al costo directo de cada mueble (la suma da el precio
  * exacto: el redondeo se ajusta en el último).
  */
-export function furnitureSubtotals(state: CalcState, result: CalculatorResult, salesPrice: number): FurnitureSubtotals {
-  const furniture = state.products.filter((p) => !isBlankProduct(p));
-  const base = furniture.map((p) => {
-    const labor = result.products.find((x) => x.key === p.key)?.total ?? 0;
-    const rubros = round2(result.rubros.filter((r) => state.rubros.find((x) => x.key === r.key)?.productKey === p.key).reduce((s, r) => s + r.total, 0));
-    const qty = Number(p.quantity.trim().replace(",", "."));
-    return { key: p.key, name: p.name.trim(), quantity: Number.isFinite(qty) && qty > 0 ? qty : 0, labor, rubros, direct: round2(labor + rubros) };
-  });
+export function furnitureSubtotals(result: CalculatorResult, salesPrice: number): FurnitureSubtotals {
+  const base = result.products.map((p) => ({ key: p.key, name: p.name, quantity: p.quantity, direct: p.total }));
   const direct = round2(base.reduce((s, r) => s + r.direct, 0));
   const canSplit = salesPrice > 0 && direct > 0;
   let assigned = 0;
@@ -390,7 +438,6 @@ export function furnitureSubtotals(state: CalcState, result: CalculatorResult, s
     }
     return { ...r, price, unitPrice: price !== null && r.quantity > 0 ? round2(price / r.quantity) : null };
   });
-  // Un rubro de un mueble que ya no está queda en los compartidos (no coincide con ninguna fila).
   return { rows, shared: round2(result.total - direct), total: result.total };
 }
 

@@ -112,11 +112,6 @@ export function QuoteWorkspace({ state, onState, result, projectType, salesPrice
             </div>
 
             <div className="space-y-2 border-t border-slate-100 pt-3">
-              <Row
-                label="Días de trabajo estimados"
-                value={schedule.workDays > 0 ? formatWorkingDays(schedule.workDays) : "—"}
-                help="Horas por operario / jornada, sumando los rubros uno detrás de otro. Supuesto conservador, a confirmar."
-              />
               <Row label="Plazo" value={schedule.availableDays !== null ? formatWorkingDays(schedule.availableDays) : "Sin plazo"} />
               {schedule.fits === false && (
                 <p role="alert" className="flex items-start gap-1.5 text-xs text-amber-800">
