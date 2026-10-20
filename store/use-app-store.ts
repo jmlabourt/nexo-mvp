@@ -33,6 +33,8 @@ import { resolveSession, roleKeyOf, sessionRole, type RoleKey, type SessionKey }
 import { costSettingsError, hourRatesError } from "@/lib/cost-settings";
 import { buildSeed } from "@/lib/seed-data";
 import * as ops from "@/lib/project-operations";
+import * as circuit from "@/lib/circuit";
+import type { DeliveryChoice } from "@/lib/circuit";
 import * as people from "@/lib/operators";
 import { createId } from "@/lib/activity";
 import { checkHours, isBuyer, isManager } from "@/lib/project-rules";
@@ -126,6 +128,12 @@ interface AppState {
     patch: Partial<Pick<Project, "name" | "client" | "projectType" | "description" | "dueDate" | "owner" | "salesPrice">>,
   ) => Result;
   changeProjectStatus: (id: string, status: ProjectStatus, opts?: { confirmBack?: boolean }) => Result;
+  /** Circuito: el cliente no aprobó (queda el motivo). */
+  rejectQuote: (id: string, reason: string) => Result;
+  /** Circuito: renegociación de precio (el anterior queda en el historial). */
+  renegotiatePrice: (id: string, newPrice: number, reason: string) => Result;
+  /** Circuito: Administración define la entrega de un proyecto listo. */
+  defineDelivery: (id: string, choice: DeliveryChoice, note?: string) => Result;
   addBudgetLine: (id: string, input: ops.BudgetLineInput) => Result;
   updateBudgetLine: (id: string, lineId: string, input: ops.BudgetLineInput) => Result;
   removeBudgetLine: (id: string, lineId: string) => Result;
@@ -556,6 +564,22 @@ export const useAppStore = create<AppState>()(
           }),
 
         changeProjectStatus: (id, status, opts) => mutate(id, (p) => ops.changeStatus(p, status, ctx(), opts)),
+        rejectQuote: (id, reason) =>
+          isManager(effectiveIdentity(get()).role)
+            ? mutate(id, (p) => circuit.recordRejection(p, reason, ctx()))
+            : { ok: false, error: "Lo registra Administración." },
+        renegotiatePrice: (id, newPrice, reason) =>
+          isManager(effectiveIdentity(get()).role)
+            ? mutate(id, (p) => circuit.recordRenegotiation(p, newPrice, reason, ctx()))
+            : { ok: false, error: "Lo registra Administración." },
+        defineDelivery: (id, choice, note) =>
+          isManager(effectiveIdentity(get()).role)
+            ? mutate(id, (p) => {
+                const decided = circuit.recordDeliveryDecision(p, choice, ctx(), note);
+                // Flete e instalación: además pasa a la etapa Instalación (de a una, como siempre).
+                return choice === "freight" && p.status === "production" ? ops.changeStatus(decided, "installation", ctx()) : decided;
+              })
+            : { ok: false, error: "Lo define Administración." },
 
         addBudgetLine: (id, input) =>
           mutate(id, (p) => {

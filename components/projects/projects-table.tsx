@@ -9,6 +9,7 @@ import { GENERAL_STATE_LABELS, generalState, type GeneralState } from "@/lib/ger
 import { projectProduction } from "@/lib/production";
 import { formatCurrency, formatCurrencyOrDash, formatDate, formatPercent } from "@/lib/formatting";
 import { cn } from "@/lib/utils";
+import { CircuitBadge } from "./circuit-actions";
 
 const STATE_TONE: Record<GeneralState, "gray" | "blue" | "yellow" | "green"> = { quotation: "gray", approved: "blue", in_progress: "yellow", closed: "green" };
 
@@ -41,6 +42,7 @@ export function ProjectsTable({ views, economic }: { views: ProjectView[]; econo
             </>
           ) : (
             <>
+              <TH>Etapa</TH>
               <TH>Muebles</TH>
               <TH>Avance</TH>
             </>
@@ -78,6 +80,7 @@ export function ProjectsTable({ views, economic }: { views: ProjectView[]; econo
                 </>
               ) : (
                 <>
+                  <TD><CircuitBadge project={p} /></TD>
                   <TD className="max-w-56 text-xs text-slate-600">{p.items.length ? p.items.map((i) => `${i.name} × ${i.quantity}`).join(" · ") : "—"}</TD>
                   <TD className="min-w-32">
                     <div className="flex items-center gap-2">

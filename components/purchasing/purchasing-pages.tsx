@@ -22,6 +22,7 @@ import { useAppStore } from "@/store/use-app-store";
 import { useMaterialNeeds, usePurchasingAlerts, useToday } from "@/store/selectors";
 import { AlertItem } from "@/components/alerts/alert-item";
 import { PageHeader } from "@/components/shared/page-header";
+import { CircuitPending } from "@/components/shared/pending-list";
 import { EmptyState } from "@/components/shared/empty-state";
 import { StatLink } from "@/components/shared/stat";
 import { Badge } from "@/components/ui/badge";
@@ -62,6 +63,7 @@ export function PurchasingDashboard() {
   return (
     <div className="space-y-6">
       <PageHeader title="Dashboard" subtitle={`Hoy, ${formatDate(today)}. Qué pedir, qué órdenes siguen abiertas y qué costó más de lo estimado.`} />
+      <CircuitPending session="compras" />
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <StatLink icon={CalendarClock} label="Para pedir esta semana" value={String(week.length)} href="#esta-semana" tone={week.length ? "warn" : undefined} />
         <StatLink icon={FileText} label="Órdenes abiertas" value={String(open.length)} href="/compras/ordenes" />

@@ -11,6 +11,8 @@ import { MATERIALS_STATE_LABELS, materialsState, NEED_STATUS_LABELS, purchaseHis
 import { parseDecimal } from "@/lib/schemas";
 import { useAppStore } from "@/store/use-app-store";
 import { useMaterialNeeds } from "@/store/selectors";
+import { changeText, materialChanges } from "@/lib/circuit";
+import { rubroLabel } from "@/lib/rubros";
 import { PageHeader } from "@/components/shared/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
 import { Badge } from "@/components/ui/badge";
@@ -40,6 +42,7 @@ type Filter = "to_buy" | "all";
 export function PurchasingProjectsPage({ projectId }: { projectId?: string }) {
   const projects = useAppStore((s) => s.projects);
   const needs = useMaterialNeeds();
+  const corrections = useAppStore((s) => s.corrections);
   const [filter, setFilter] = useState<Filter>("to_buy");
   const [selected, setSelected] = useState<string[]>([]);
   const [ordering, setOrdering] = useState<MaterialNeed[] | null>(null);
@@ -78,6 +81,13 @@ export function PurchasingProjectsPage({ projectId }: { projectId?: string }) {
         groups.map((pid) => {
           const p = projects.find((x) => x.id === pid);
           const mine = visible.filter((n) => n.projectId === pid);
+          // Cambios de Diseño (cotizado → real): la necesidad ya usa la cantidad real; acá se marca y se muestra lo presupuestado.
+          const changes = new Map(p ? materialChanges(p, corrections).map((c) => [c.lineId, c]) : []);
+          const rubroBudget = (lineId: string) => {
+            const line = p?.budgetLines.find((l) => l.id === lineId);
+            const lines = (p?.baseline?.lines ?? p?.budgetLines ?? []).filter((l) => l.category === "materials" && l.rubro && l.rubro === line?.rubro);
+            return line?.rubro ? { label: rubroLabel(line.rubro), total: lines.reduce((s, l) => s + l.total, 0) } : null;
+          };
           return (
             <Card key={pid}>
               <CardHeader>
@@ -102,7 +112,22 @@ export function PurchasingProjectsPage({ projectId }: { projectId?: string }) {
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="break-words font-medium text-slate-900">{n.description}</span>
                           <NeedPill status={n.status} />
+                          {changes.get(n.lineId) && (
+                            <Badge tone="yellow">
+                              {changes.get(n.lineId)!.diff > 0 ? "Aumentó" : "Disminuyó"} por Diseño ({changes.get(n.lineId)!.diff > 0 ? "+" : ""}
+                              {formatNumber(changes.get(n.lineId)!.diff)})
+                            </Badge>
+                          )}
                         </div>
+                        {changes.get(n.lineId) && (
+                          <p className="text-xs text-amber-900">
+                            {changeText(changes.get(n.lineId)!)} {n.unit}
+                            {changes.get(n.lineId)!.reason ? ` · ${changes.get(n.lineId)!.reason}` : ""} · presupuesto original:{" "}
+                            {formatQty(changes.get(n.lineId)!.quotedQty, n.unit)} × {formatCurrency(n.estimatedUnitCost)} ={" "}
+                            {formatCurrency(changes.get(n.lineId)!.quotedQty * n.estimatedUnitCost)}
+                            {rubroBudget(n.lineId) && ` (materiales de ${rubroBudget(n.lineId)!.label}: ${formatCurrency(rubroBudget(n.lineId)!.total)})`}
+                          </p>
+                        )}
                         <p className="text-slate-600">
                           Necesario {formatQty(n.needed, n.unit)} · costo unitario estimado {formatCurrency(n.estimatedUnitCost)}
                           <span className="text-xs text-slate-400"> (estimado, de memoria)</span>

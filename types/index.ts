@@ -301,7 +301,12 @@ export type ActivityKind =
   | "progress"
   | "stock"
   | "stage"
-  | "closed";
+  | "closed"
+  /** Circuito comercial (subestados de En cotización): renegociación de precio y no aprobado, con su motivo. */
+  | "negotiation"
+  | "rejected"
+  /** Administración define la entrega de un proyecto listo (retiro, flete e instalación o finalizar). */
+  | "delivery";
 
 export interface ActivityEvent {
   id: string;
@@ -611,7 +616,9 @@ export type AlertKind =
   /** Administrativo: material entregado en planta y sin cierre del día (no se sabe cuánto se consumió). */
   | "delivery_open"
   /** Administrativo: resumen con costo de un cierre del día del Jefe de planta. */
-  | "day_close";
+  | "day_close"
+  /** Compras y Gerencia: Diseño cambió la cantidad de materiales respecto de la cotización. */
+  | "design_change";
 
 export interface Alert {
   /** Determinístico: permite marcarla como resuelta. Incluye el nivel para que un agravamiento reaparezca. */

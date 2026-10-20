@@ -203,7 +203,8 @@ export const INDICATORS: Indicator[] = [
     source: "Presupuesto, facturas de compra y consumos.",
     params: "Umbrales de aviso.",
     period: "Desde el inicio del proyecto.",
-    limits: "Una compra cara se ve como desvío detectado antes de consumirse.",
+    limits:
+      "Una compra cara se ve como desvío detectado antes de consumirse. En la ficha se separa en dos partes que suman el total: por cantidad ((cantidad real de Diseño − cotizada) × costo cotizado) y por precio ((costo unitario comprado − cotizado) × cantidad real).",
     updates: ON_RECORD,
   },
   {

@@ -263,7 +263,11 @@ export function rubroLines(r: QuoteRubro, labor: RubroLabor | null, { rates, ove
       quantity: materialBudgetQuantity(m),
       unit: m.unit.trim() || "u",
       unitCost: positive(m.unitCost),
-      notes: m.wastePct > 0 ? `Incluye ${num(m.wastePct)}% de desperdicio esperado sobre ${num(m.quantity)} ${m.unit}.` : undefined,
+      // El mueble queda en las notas ("Mueble: Mesa × 10"): así se sabe de qué mueble es el material (lineFurniture).
+      notes:
+        [r.product ? `Mueble: ${r.product}` : "", m.wastePct > 0 ? `Incluye ${num(m.wastePct)}% de desperdicio esperado sobre ${num(m.quantity)} ${m.unit}.` : ""]
+          .filter(Boolean)
+          .join(" · ") || undefined,
     });
   }
   const who = r.product ? `${r.product} · ${def.label}` : def.label;

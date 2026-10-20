@@ -18,7 +18,8 @@ import { HoursTab } from "./hours-tab";
 import { BillingTab } from "./billing-tab";
 import { EditProjectDialog } from "./edit-project-dialog";
 import { HoursForm } from "@/components/actual-costs/hours-form";
-import { PendingAction } from "@/components/shared/data-origin";
+import { CircuitActions, CircuitBadge } from "./circuit-actions";
+import { MaterialSplitCard } from "./material-changes";
 import { MaterialsBadge } from "@/components/purchasing/purchasing-projects";
 import { EmptyState } from "@/components/shared/empty-state";
 import { StatusTimeline } from "./status-timeline";
@@ -87,6 +88,7 @@ export function ProjectDetail({ id, tab: initialTab, purchase }: { id: string; t
             <div className="flex flex-wrap items-center gap-2 text-sm text-slate-500">
               <span className="font-medium">{p.code}</span>
               <GeneralStateBadge state={generalState(p)} />
+              <CircuitBadge project={p} />
               {gerencia && health && <HealthBadge health={health} />}
               <MaterialsBadge state={materialsOf(p)} />
             </div>
@@ -124,12 +126,12 @@ export function ProjectDetail({ id, tab: initialTab, purchase }: { id: string; t
                   <Lock /> Cerrar proyecto
                 </Button>
               )}
-              {!gerencia && p.status === "quotation" && <PendingAction label="Registrar rechazo" reason="El motivo del rechazo se guarda cuando el backend lo habilite." />}
             </div>
           ) : (
             <div className="rounded-md bg-slate-100 px-3 py-2 text-sm text-slate-600">Proyecto cerrado · solo lectura</div>
           )}
         </div>
+        {!closed && <CircuitActions project={p} canClose={can(session, "closeProjects")} />}
         <StatusTimeline status={p.status} />
       </header>
 
@@ -157,6 +159,7 @@ export function ProjectDetail({ id, tab: initialTab, purchase }: { id: string; t
         <TabsContent value="summary" className="space-y-6">
           <EconomicSummary project={p} econ={econ} />
           <DetectedDeviationsCard project={p} />
+          <MaterialSplitCard project={p} />
           <div className="grid gap-4 lg:grid-cols-2">
             <ScheduleCard project={p} />
             <TeamCard project={p} />

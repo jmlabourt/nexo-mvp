@@ -17,6 +17,9 @@ const ICONS: Record<ActivityKind, typeof CircleDot> = {
   stock: Boxes,
   stage: NotebookPen,
   closed: Flag,
+  negotiation: ArrowRightLeft,
+  rejected: TriangleAlert,
+  delivery: Package,
 };
 
 export function ActivityTab({ project }: { project: Project }) {

@@ -3,6 +3,7 @@
 import { useCallback, useMemo } from "react";
 import type { Alert, EconomicHealth, HourRate, Project } from "@/types";
 import { allAlerts, openAlertCount, projectHealth, sortAlerts, splitAlerts } from "@/lib/alerts";
+import { designChangeAlerts } from "@/lib/circuit";
 import { plantAlerts } from "@/lib/plant";
 import { materialNeeds, materialsState, plantMaterialAlerts, purchasingAlerts, type MaterialNeed, type MaterialsState } from "@/lib/purchasing";
 import type { RoleKey } from "@/lib/permissions";
@@ -47,8 +48,13 @@ export function usePurchasingAlerts(): Alert[] {
   const orders = useAppStore((s) => s.orders);
   const stock = useAppStore((s) => s.stock);
   const settings = useAppStore((s) => s.settings);
+  const corrections = useAppStore((s) => s.corrections);
   const today = useToday();
-  return useMemo(() => purchasingAlerts({ projects, orders, stock, settings, today }), [projects, orders, stock, settings, today]);
+  // "Diseño cambió materiales" es una sola alerta: la ven Compras y (por estas alertas) Gerencia, con su impacto.
+  return useMemo(
+    () => sortAlerts([...purchasingAlerts({ projects, orders, stock, settings, today }), ...designChangeAlerts(projects, corrections)]),
+    [projects, orders, stock, settings, today, corrections],
+  );
 }
 
 /**

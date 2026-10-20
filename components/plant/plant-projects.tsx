@@ -23,6 +23,10 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { AssignmentDialog, type AssignmentDraft } from "./assignment-dialog";
 import { ProjectMaterials } from "./plant-materials";
+import { allUnitsDone, deliveryDecision } from "@/lib/circuit";
+import { MaterialChangesCard } from "@/components/projects/material-changes";
+import { AttachmentList } from "@/components/shared/attachments";
+import { PendingAction } from "@/components/shared/data-origin";
 
 export function PlantProjectsPage() {
   const projects = useAppStore((s) => s.projects);
@@ -78,6 +82,12 @@ function ProjectCard({ project: p, onAssign }: { project: Project; onAssign: (d:
                 </h3>
                 <UnitsCounter project={p} item={item} />
               </div>
+              {p.attachments.some((a) => a.itemId === item.id) && (
+                <div className="mt-2 text-sm">
+                  <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Planos y archivos</span>
+                  <AttachmentList attachments={p.attachments.filter((a) => a.itemId === item.id)} projectId={p.id} canRemove={false} />
+                </div>
+              )}
               <ul className="mt-2 divide-y divide-slate-100">
                 {rows
                   .filter((r) => r.itemId === item.id)
@@ -115,6 +125,18 @@ function ProjectCard({ project: p, onAssign }: { project: Project; onAssign: (d:
             </section>
           ))
         )}
+        {p.status === "production" && allUnitsDone(p) && !deliveryDecision(p) && (
+          <section aria-label="¿Se terminó este proyecto?" className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm">
+            <p className="font-medium text-emerald-900">Todas las unidades están terminadas. ¿Se terminó este proyecto?</p>
+            <div className="mt-2">
+              <PendingAction
+                label="Sí, avisar a Administración"
+                reason="La respuesta del Jefe se guarda cuando el backend lo habilite. Administración ya lo ve como listo porque todas las unidades están terminadas."
+              />
+            </div>
+          </section>
+        )}
+        <MaterialChangesCard project={p} amounts={false} canCorrect={false} />
         <ProjectMaterials project={p} />
       </CardContent>
     </Card>

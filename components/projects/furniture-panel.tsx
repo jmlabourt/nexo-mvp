@@ -17,6 +17,7 @@ import { cn } from "@/lib/utils";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { ItemsTab } from "./items-tab";
+import { MaterialChangesCard } from "./material-changes";
 
 export const DESIGN_STATUS_LABELS: Record<DesignStatus, string> = {
   preparing: "Preparando planos",
@@ -45,17 +46,21 @@ export function FurniturePanel({ project, canEdit }: { project: Project; canEdit
     );
   }
   const of = (itemId: string): FurnitureDesign | undefined => design.data.find((d) => d.itemId === itemId);
+  // Materiales reales del proyecto (cotizado → real, con el motivo de Diseño): datos guardados, no de ejemplo.
+  const realMaterials = <MaterialChangesCard project={project} amounts canCorrect={canEdit} />;
 
   if (project.items.length === 0) {
     return (
       <div className="space-y-2">
         <p className="text-sm text-slate-500">El proyecto todavía no tiene muebles: se cargan al cotizar.</p>
         {canEdit && !project.isClosed && <Button variant="outline" size="sm" onClick={() => setEditing(true)}>Agregar mueble</Button>}
+        {realMaterials}
       </div>
     );
   }
   return (
     <div className="space-y-4">
+      {realMaterials}
       <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-slate-500">
         <span className="flex flex-wrap items-center gap-2">Diseño, etapas y lista de materiales de cada mueble. <OriginTag origin={design.origin} /></span>
         {canEdit && !project.isClosed && <Button variant="outline" size="sm" onClick={() => setEditing(true)}>Agregar o editar muebles</Button>}

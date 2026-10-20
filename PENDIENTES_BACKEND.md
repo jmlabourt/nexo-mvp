@@ -77,3 +77,17 @@ Para que una empresa nueva vea las pantallas nuevas con contenido de ejemplo, `r
 - clientes y proveedores en sus tablas.
 
 Hoy esos ejemplos viven solo en el frontend (`lib/demo/ejemplos.ts`).
+
+## 6. Cotizador, tarifas y circuito entre sesiones (rama siguiente)
+
+Detalle del circuito y resultado de la prueba de punta a punta: `docs/CIRCUITO.md`.
+
+| Qué falta | Dato | Operación | Regla de permisos |
+| --- | --- | --- | --- |
+| Compras ve el cambio de Diseño ("Aumentó por Diseño", cantidad cotizada y motivo) | Cantidad del presupuesto base de cada línea de materiales y sus `value_corrections` de cantidad (anterior, nueva, motivo, quién, cuándo) | Lectura: sumarlos a `compras_workspace` | Rol `compras`: solo líneas de materiales; sin precio de venta |
+| El Jefe ve la cantidad real de materiales por mueble y los planos | Cantidad (sin costo) de las líneas de materiales, su mueble, y `attachments` de los muebles | Lectura: sumarlos a `planta_workspace` | Rol `jefe_planta`: sin `unit_cost` ni `total` |
+| El Jefe responde "¿Se terminó este proyecto?" | Confirmación del Jefe (quién y cuándo) | Escritura: una RPC tipo `planta_confirm_finished(project_id)` que deje un evento en el historial | Rol `jefe_planta`, solo en Producción |
+| Mueble de cada línea del presupuesto | `budget_lines.item_id` (opcional) | Al crear el proyecto desde el cotizador por mueble | Igual que `budget_lines` |
+| Subestados comerciales y decisión de entrega | Hoy van en `activity_events.kind` (`negotiation`, `rejected`, `delivery`) y en el mensaje | Conviene una columna (`commercial_state`, `delivery_choice`) para filtrar y validar | Administración escribe; Gerencia lee |
+| Objetivos de rentabilidad por defecto en Configuración | `cost_settings.materials_target_pct` y `labor_target_pct` | Hoy el cotizador arranca en 30 % y 30 % fijos (se ajustan en la cotización); el gasto financiero sí sale de Configuración | Gerencia escribe |
+| Un solo costo por hora | `operators.hourly_cost` y el historial `operator_cost` siguen en la base; `cost_settings.labor_valuation` vale `operator` por defecto | La app ya no los edita (un alta toma la tarifa de Mano de obra). Para que todos cobren lo mismo, elegir "tarifa general" en Configuración o cambiar el valor por defecto | Gerencia |

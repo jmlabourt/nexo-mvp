@@ -38,6 +38,8 @@ import { useAppStore } from "@/store/use-app-store";
 import { useAlerts, useToday } from "@/store/selectors";
 import { useInvoices, useManagementParams, useOpportunityInfo } from "@/store/session-data";
 import { PageHeader } from "@/components/shared/page-header";
+import { CircuitPending } from "@/components/shared/pending-list";
+import { MaterialSplitSummary } from "@/components/projects/material-changes";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input, Select } from "@/components/ui/input";
@@ -141,6 +143,8 @@ export function GerenciaDashboard() {
   return (
     <div className="space-y-6">
       <PageHeader title="Dashboard" subtitle={`Resultados y actividad de la empresa · ${period.label}. Datos históricos y proyecciones, siempre separados.`} />
+      <CircuitPending session="gerencia" />
+      <MaterialSplitSummary />
 
       <div className="flex flex-wrap items-end gap-3 rounded-lg border border-slate-200 bg-white p-3" role="group" aria-label="Filtros del dashboard">
         <Choice<PeriodKind> name="Período" value={kind} onChange={setKind} options={PERIODS} size="sm" className="min-w-72" />

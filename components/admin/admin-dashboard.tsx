@@ -11,6 +11,7 @@ import { useAppStore } from "@/store/use-app-store";
 import { useMaterialsStateOf, useToday } from "@/store/selectors";
 import { useExampleData } from "@/store/session-data";
 import { PageHeader } from "@/components/shared/page-header";
+import { CircuitPending } from "@/components/shared/pending-list";
 import { Stat } from "@/components/shared/stat";
 import { OriginTag } from "@/components/shared/data-origin";
 import { ScheduleBadge } from "@/components/shared/badges";
@@ -43,6 +44,7 @@ export function AdminDashboard() {
   return (
     <div className="space-y-6">
       <PageHeader title="Dashboard" subtitle={`Hoy, ${formatDate(today)}. Proyectos, diseños y entregas que necesitan seguimiento.`} />
+      <CircuitPending session="administracion" />
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
         <Stat label="En cotización" value={String(count("quotation"))} />
         <Stat label="Aprobados" value={String(count("approved"))} />
