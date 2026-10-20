@@ -51,6 +51,11 @@ export interface RubroRow {
   adminHours: string;
   /** Solo rubros de importe (Transporte / Fletes, Imprevistos). */
   amount: string;
+  /**
+   * Mueble al que pertenece (ProductRow.key). Sin mueble = costo general del proyecto. Solo agrupa: el costo total y
+   * las líneas del presupuesto son las mismas con o sin mueble.
+   */
+  productKey?: string;
 }
 
 /** Un rubro de un producto: horas estimadas para toda la cantidad y cuántos operarios pide. */
@@ -102,9 +107,9 @@ const rowKey = () => `r${Date.now()}${(seq += 1)}`;
 /** Lo más simple: cantidad 1 y el costo total alcanza para algo que se compra hecho. */
 export const newMaterialRow = (): MaterialRow => ({ key: rowKey(), name: "", unit: "u", quantity: "1", unitCost: "", wastePct: "0" });
 
-export function newRubroRow(rubro: RubroId): RubroRow {
+export function newRubroRow(rubro: RubroId, productKey?: string): RubroRow {
   const full = rubroDef(rubro).kind === "full";
-  return { key: rowKey(), rubro, materials: full ? [newMaterialRow()] : [], designHours: "", adminHours: "", amount: "" };
+  return { key: rowKey(), rubro, materials: full ? [newMaterialRow()] : [], designHours: "", adminHours: "", amount: "", ...(productKey ? { productKey } : {}) };
 }
 
 export const newProductRubroRow = (rubro: RubroId): ProductRubroRow => ({ key: rowKey(), rubro, hours: "", workers: "1" });
@@ -181,7 +186,7 @@ export function productInputs(s: Pick<CalcState, "products">): ProductInput[] {
 export function productsError(s: Pick<CalcState, "products">): string | null {
   for (const [i, p] of s.products.entries()) {
     const error = productRowError(p);
-    if (error) return `Producto ${i + 1}${p.name.trim() ? ` (${p.name.trim()})` : ""}: ${error}`;
+    if (error) return `Mueble ${i + 1}${p.name.trim() ? ` (${p.name.trim()})` : ""}: ${error}`;
   }
   return null;
 }
@@ -336,6 +341,59 @@ export function computeCalculator(state: CalcState, projectType: string, ctx: Ca
   };
 }
 
+export interface FurnitureSubtotal {
+  /** ProductRow.key */
+  key: string;
+  name: string;
+  quantity: number;
+  /** Mano de obra del mueble (sus horas por rubro). */
+  labor: number;
+  /** Materiales, diseño y administración de los rubros asignados a este mueble. */
+  rubros: number;
+  /** labor + rubros: lo que se le puede atribuir directamente. */
+  direct: number;
+  /** Parte del precio de venta, proporcional al costo directo (null sin precio o sin costo directo). */
+  price: number | null;
+  /** price / cantidad. */
+  unitPrice: number | null;
+}
+
+export interface FurnitureSubtotals {
+  rows: FurnitureSubtotal[];
+  /** Costos que no son de un mueble: rubros generales, márgenes de seguridad y gasto financiero. */
+  shared: number;
+  /** Igual al costo total de la cotización (Σ directos + compartidos). */
+  total: number;
+}
+
+/**
+ * Subtotales por mueble de una cotización. No cambia ningún cálculo: reparte el mismo costo total entre muebles y
+ * costos compartidos, y reparte el precio de venta en proporción al costo directo de cada mueble (la suma da el precio
+ * exacto: el redondeo se ajusta en el último).
+ */
+export function furnitureSubtotals(state: CalcState, result: CalculatorResult, salesPrice: number): FurnitureSubtotals {
+  const furniture = state.products.filter((p) => !isBlankProduct(p));
+  const base = furniture.map((p) => {
+    const labor = result.products.find((x) => x.key === p.key)?.total ?? 0;
+    const rubros = round2(result.rubros.filter((r) => state.rubros.find((x) => x.key === r.key)?.productKey === p.key).reduce((s, r) => s + r.total, 0));
+    const qty = Number(p.quantity.trim().replace(",", "."));
+    return { key: p.key, name: p.name.trim(), quantity: Number.isFinite(qty) && qty > 0 ? qty : 0, labor, rubros, direct: round2(labor + rubros) };
+  });
+  const direct = round2(base.reduce((s, r) => s + r.direct, 0));
+  const canSplit = salesPrice > 0 && direct > 0;
+  let assigned = 0;
+  const rows = base.map((r, i) => {
+    let price: number | null = null;
+    if (canSplit) {
+      price = i === base.length - 1 ? round2(salesPrice - assigned) : round2((salesPrice * r.direct) / direct);
+      assigned = round2(assigned + price);
+    }
+    return { ...r, price, unitPrice: price !== null && r.quantity > 0 ? round2(price / r.quantity) : null };
+  });
+  // Un rubro de un mueble que ya no está queda en los compartidos (no coincide con ninguna fila).
+  return { rows, shared: round2(result.total - direct), total: result.total };
+}
+
 /** "Mano de obra $ 19.000/h · Diseño $ 27.000/h · Administración $ 27.000/h": las tarifas que usa la cotización. */
 export function ratesText(rates: RatesByCategory): string {
   return HOUR_CATEGORIES.map((c) => `${rates[c]?.name ?? CATEGORY_LABELS[c]} ${formatCurrency(rates[c]?.hourlyRate ?? 0)}/h`).join(" · ");
@@ -356,7 +414,7 @@ export function reviewWarnings(calc: CalculatorResult, salesPrice: number): stri
     );
   }
   if (breakdown.priceSource === "chosen" && breakdown.suggestedPrice !== null && !breakdown.usesSuggested) {
-    out.push(`El precio fue escrito a mano (el sugerido es ${formatCurrency(breakdown.suggestedPrice)}): el desglose de rentabilidad por materiales y mano de obra solo aplica al precio sugerido.`);
+    out.push(`El precio fue escrito a mano (el sugerido es ${formatCurrency(breakdown.suggestedPrice)}): la venta por materiales y mano de obra solo aplica al precio sugerido.`);
   }
   return out;
 }
@@ -367,7 +425,7 @@ export function reviewWarnings(calc: CalculatorResult, salesPrice: number): stri
  */
 export function quoteActionBlocker(calc: CalculatorResult, salesPrice: number, opts: { requireProducts?: boolean } = {}): string | null {
   if (calc.productsError) return calc.productsError;
-  if (opts.requireProducts && calc.products.length === 0) return "Cargá al menos un producto con sus horas por rubro.";
+  if (opts.requireProducts && calc.products.length === 0) return "Cargá al menos un mueble con sus horas por rubro.";
   if (!calc.hasContent) return "Cargá al menos un costo.";
   if (!(salesPrice > 0)) return "Definí el precio de venta (podés usar el sugerido).";
   return null;

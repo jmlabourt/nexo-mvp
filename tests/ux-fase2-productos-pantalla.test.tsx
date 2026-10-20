@@ -30,20 +30,20 @@ const view = (state: CalcState) =>
 describe("productos en Nuevo proyecto", () => {
   it("cada producto es un grupo con campos etiquetados; sin productos no se puede continuar", () => {
     view(initialCalcState(5));
-    const group = screen.getByRole("group", { name: "Producto 1" });
+    const group = screen.getByRole("group", { name: "Mueble 1" });
     expect(within(group).getByLabelText("Nombre")).toBeInTheDocument();
     expect(within(group).getByLabelText("Cantidad")).toBeInTheDocument();
     expect(within(group).getByLabelText("Horas")).toBeInTheDocument();
     expect(within(group).getByLabelText("Operarios")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Continuar" })).toBeDisabled();
-    expect(screen.getByText("Cargá al menos un producto con sus horas por rubro.")).toBeInTheDocument();
+    expect(screen.getByText("Cargá al menos un mueble con sus horas por rubro.")).toBeInTheDocument();
     // El rubro ya no pide operarios × horas: la mano de obra va en los productos.
     expect(screen.queryByLabelText("Horas por operario")).toBeNull();
   });
   it("un producto a medio cargar muestra el error al lado y no deja seguir", () => {
     const p = { ...newProductRow("Mesa"), quantity: "10" };
     view({ ...initialCalcState(5), products: [p] });
-    const group = screen.getByRole("group", { name: "Producto 1" });
+    const group = screen.getByRole("group", { name: "Mueble 1" });
     expect(within(group).getByRole("alert")).toHaveTextContent("Indicá las horas estimadas de Carpintería madera.");
     expect(screen.getByRole("button", { name: "Continuar" })).toBeDisabled();
   });
@@ -51,7 +51,7 @@ describe("productos en Nuevo proyecto", () => {
     const p = { ...newProductRow("Mesa"), quantity: "10" };
     p.rubros = [{ ...p.rubros[0], hours: "60", workers: "1" }];
     view({ ...initialCalcState(5), products: [p] });
-    expect(screen.getByText(/Mano de obra presupuestada:/)).toHaveTextContent("(60 h, suma de 1 producto)");
+    expect(screen.getByText(/Mano de obra presupuestada:/)).toHaveTextContent("(60 h, suma de 1 mueble)");
     expect(screen.getByRole("button", { name: "Continuar" })).toBeEnabled();
   });
 });

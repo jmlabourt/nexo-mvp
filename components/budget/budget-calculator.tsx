@@ -15,7 +15,8 @@ import { ProductsSection } from "./products-section";
 import { MaterialCatalogList } from "./material-rows";
 import { ResultSection } from "./result-section";
 import { DelaySection } from "./delay-section";
-import { newRubroRow, ratesText, type CalcState, type CalculatorResult, type RubroRow } from "./calculator-state";
+import { FurnitureSubtotalsTable } from "./furniture-subtotals";
+import { newProductRow, newRubroRow, ratesText, type CalcState, type CalculatorResult, type RubroRow } from "./calculator-state";
 
 export interface ProjectTypeControl {
   value: string;
@@ -32,39 +33,76 @@ interface Props {
   salesPrice: number;
   priceError?: string;
   onSalesPrice: (n: number) => void;
+  /** false = sin ganancia ni rentabilidad (Administración / Comercial / Diseño). */
+  showMargin?: boolean;
 }
 
-export function BudgetCalculator({ state, onState, result, projectType, salesPrice, priceError, onSalesPrice }: Props) {
+/** Qué rubros se ven: todos, los generales del proyecto o los de un mueble (ProductRow.key). */
+type Scope = "all" | "general" | string;
+
+export function BudgetCalculator({ state, onState, result, projectType, salesPrice, priceError, onSalesPrice, showMargin = true }: Props) {
   const set = (patch: Partial<CalcState>) => onState({ ...state, ...patch });
   const setRubro = (key: string, patch: Partial<RubroRow>) => set({ rubros: state.rubros.map((r) => (r.key === key ? { ...r, ...patch } : r)) });
-  const available = RUBROS.filter((r) => !state.rubros.some((x) => x.rubro === r.id));
+  const furniture = state.products.map((p, i) => ({ key: p.key, label: p.name.trim() || `Mueble ${i + 1}` }));
+  const furnitureOf = (r: RubroRow) => (r.productKey && furniture.some((f) => f.key === r.productKey) ? r.productKey : null);
+  const [picked, setScope] = useState<Scope>("all");
+  // Si el mueble elegido se quitó, se vuelve a ver todo.
+  const scope: Scope = picked === "all" || picked === "general" || furniture.some((f) => f.key === picked) ? picked : "all";
+  const visible = state.rubros.filter((r) => (scope === "all" ? true : scope === "general" ? furnitureOf(r) === null : furnitureOf(r) === scope));
+  const target = scope === "all" || scope === "general" ? null : scope;
+  const available = RUBROS.filter((r) => !state.rubros.some((x) => x.rubro === r.id && furnitureOf(x) === target));
   const [toAdd, setToAdd] = useState<RubroId | "">("");
   const { rates, input } = result;
+  const addFurniture = () => {
+    const row = newProductRow();
+    set({ products: [...state.products, row] });
+    setScope(row.key);
+  };
 
   return (
     <div className="space-y-4">
       <MaterialCatalogList />
 
-      <ProductsSection state={state} onState={set} result={result} />
+      <ProductsSection state={state} onState={set} result={result} onAdd={addFurniture} />
 
       <div className="flex items-center gap-1 text-sm font-semibold text-slate-900">
         Cotización por rubros
         <HelpTip label="Cómo se arma la cotización">
           <span className="block">
-            Cada rubro tiene materiales, horas de diseño y horas de administración. La mano de obra se carga en los productos. Transporte / Fletes e
-            Imprevistos son solo un importe.
+            Cada rubro tiene materiales, horas de diseño y horas de administración, de un mueble o generales del proyecto. La mano de obra se carga en los
+            muebles. Transporte / Fletes e Imprevistos son solo un importe.
           </span>
           <span className="block">Las horas se valorizan con las tarifas de Configuración: {ratesText(rates)}. La tarifa y la jornada vigentes quedan guardadas en la cotización.</span>
         </HelpTip>
       </div>
 
-      {state.rubros.map((row) => (
+      <div className="flex flex-wrap items-end gap-2 rounded-lg bg-slate-50 p-3">
+        <div className="flex min-w-48 flex-col gap-1">
+          <label htmlFor="rubro-scope" className="text-xs font-medium text-slate-600">Mueble</label>
+          <Select id="rubro-scope" value={scope} onChange={(e) => setScope(e.target.value)}>
+            <option value="all">Todos los rubros</option>
+            <option value="general">Generales del proyecto</option>
+            {furniture.map((f) => (
+              <option key={f.key} value={f.key}>{f.label}</option>
+            ))}
+          </Select>
+        </div>
+        <p className="basis-full text-xs text-slate-500">
+          Los materiales, el diseño y la administración se pueden cargar por mueble o como generales del proyecto. El costo total es el mismo: solo cambia cómo se
+          agrupa.
+        </p>
+      </div>
+
+      {visible.length === 0 && <p className="text-sm text-slate-500">Todavía no hay rubros {target ? "en este mueble" : "generales"}.</p>}
+      {visible.map((row) => (
         <RubroSection
           key={row.key}
           row={row}
           result={result.rubros.find((r) => r.key === row.key)}
           onChange={(patch) => setRubro(row.key, patch)}
           onRemove={() => set({ rubros: state.rubros.filter((r) => r.key !== row.key) })}
+          furniture={furniture}
+          furnitureKey={furnitureOf(row)}
         />
       ))}
 
@@ -84,14 +122,16 @@ export function BudgetCalculator({ state, onState, result, projectType, salesPri
             disabled={!toAdd}
             onClick={() => {
               if (!toAdd) return;
-              set({ rubros: [...state.rubros, newRubroRow(toAdd)] });
+              set({ rubros: [...state.rubros, newRubroRow(toAdd, target ?? undefined)] });
               setToAdd("");
             }}
           >
-            <Plus /> Agregar
+            <Plus /> Agregar{target ? ` a ${furniture.find((f) => f.key === target)?.label}` : ""}
           </Button>
         </div>
       )}
+
+      <FurnitureSubtotalsTable state={state} result={result} salesPrice={salesPrice} />
 
       <Section
         title="Días de trabajo"
@@ -112,9 +152,9 @@ export function BudgetCalculator({ state, onState, result, projectType, salesPri
         </div>
       </Section>
 
-      <ResultSection state={state} onState={set} result={result} projectType={projectType} salesPrice={salesPrice} onSalesPrice={onSalesPrice} priceError={priceError} />
+      <ResultSection state={state} onState={set} result={result} projectType={projectType} salesPrice={salesPrice} onSalesPrice={onSalesPrice} priceError={priceError} showMargin={showMargin} />
 
-      {result.delay && <DelaySection result={result} state={state} onState={set} />}
+      {showMargin && result.delay && <DelaySection result={result} state={state} onState={set} />}
     </div>
   );
 }

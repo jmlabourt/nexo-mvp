@@ -14,20 +14,31 @@ import { newProductRow, newProductRubroRow, productRowError, type CalcState, typ
 const FULL_RUBROS = RUBROS.filter((r) => r.kind === "full");
 const h = (n: number) => `${formatNumber(n, 2)} h`;
 
-export function ProductsSection({ state, onState, result }: { state: CalcState; onState: (patch: Partial<CalcState>) => void; result: CalculatorResult }) {
+export function ProductsSection({
+  state,
+  onState,
+  result,
+  onAdd,
+}: {
+  state: CalcState;
+  onState: (patch: Partial<CalcState>) => void;
+  result: CalculatorResult;
+  /** Agrega un mueble (y lo elige en los rubros). Sin esto, solo lo agrega. */
+  onAdd?: () => void;
+}) {
   const setProduct = (key: string, patch: Partial<ProductRow>) => onState({ products: state.products.map((p) => (p.key === key ? { ...p, ...patch } : p)) });
   const laborTotal = result.products.reduce((s, p) => s + p.total, 0);
   const laborHours = result.products.reduce((s, p) => s + p.rubros.reduce((x, r) => x + r.labor.normalHours + r.labor.overtimeHours, 0), 0);
 
   return (
     <Section
-      title="Productos"
+      title="Muebles"
       help={
         <>
           <span className="block">
-            Presupuestá por producto (ej. “Mesa × 10”): por cada rubro que necesita, las horas estimadas para toda la cantidad y cuántos operarios pide.
+            Presupuestá por mueble (ej. “Mesa × 10”): por cada rubro que necesita, las horas estimadas para toda la cantidad y cuántos operarios pide.
           </span>
-          <span className="block">La mano de obra presupuestada es la suma de los productos. Las horas se valorizan con la tarifa de Mano de obra de Configuración.</span>
+          <span className="block">La mano de obra presupuestada es la suma de los muebles. Las horas se valorizan con la tarifa de Mano de obra de Configuración.</span>
         </>
       }
     >
@@ -38,7 +49,7 @@ export function ProductsSection({ state, onState, result }: { state: CalcState; 
           const errId = `prod-err-${p.key}`;
           return (
             <fieldset key={p.key} className="space-y-3 rounded-md border border-slate-200 p-3" aria-describedby={error ? errId : undefined}>
-              <legend className="px-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Producto {i + 1}</legend>
+              <legend className="px-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Mueble {i + 1}</legend>
               <div className="grid grid-cols-[1fr_5.5rem_auto] items-end gap-2">
                 <div className="flex min-w-0 flex-col gap-1">
                   <label htmlFor={`prod-name-${p.key}`} className="text-xs font-medium text-slate-600">Nombre</label>
@@ -54,10 +65,10 @@ export function ProductsSection({ state, onState, result }: { state: CalcState; 
                   <label htmlFor={`prod-qty-${p.key}`} className="text-xs font-medium text-slate-600">Cantidad</label>
                   <Input id={`prod-qty-${p.key}`} inputMode="numeric" className="text-right" value={p.quantity} onChange={(e) => setProduct(p.key, { quantity: e.target.value })} />
                 </div>
-                <RemoveButton label={`Quitar producto ${i + 1}${p.name ? ` (${p.name})` : ""}`} onClick={() => onState({ products: state.products.filter((x) => x.key !== p.key) })} />
+                <RemoveButton label={`Quitar mueble ${i + 1}${p.name ? ` (${p.name})` : ""}`} onClick={() => onState({ products: state.products.filter((x) => x.key !== p.key) })} />
               </div>
 
-              <ul className="space-y-2" aria-label={`Rubros de ${p.name || `producto ${i + 1}`}`}>
+              <ul className="space-y-2" aria-label={`Rubros de ${p.name || `mueble ${i + 1}`}`}>
                 {p.rubros.map((r, j) => {
                   const labor = res?.rubros[j]?.labor;
                   const setRubro = (patch: Partial<typeof r>) => setProduct(p.key, { rubros: p.rubros.map((x) => (x.key === r.key ? { ...x, ...patch } : x)) });
@@ -84,7 +95,7 @@ export function ProductsSection({ state, onState, result }: { state: CalcState; 
                           variant="ghost"
                           size="icon"
                           className="self-end"
-                          aria-label={`Quitar rubro ${rubroLabel(r.rubro)} de ${p.name || `producto ${i + 1}`}`}
+                          aria-label={`Quitar rubro ${rubroLabel(r.rubro)} de ${p.name || `mueble ${i + 1}`}`}
                           disabled={p.rubros.length === 1}
                           onClick={() => setProduct(p.key, { rubros: p.rubros.filter((x) => x.key !== r.key) })}
                         >
@@ -127,13 +138,13 @@ export function ProductsSection({ state, onState, result }: { state: CalcState; 
           );
         })}
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <Button variant="outline" onClick={() => onState({ products: [...state.products, newProductRow()] })}>
-            <Plus /> Agregar producto
+          <Button variant="outline" onClick={() => (onAdd ? onAdd() : onState({ products: [...state.products, newProductRow()] }))}>
+            <Plus /> Agregar mueble
           </Button>
           {result.products.length > 0 && (
             <span className="text-sm text-slate-600 tabular">
               Mano de obra presupuestada: <strong className="text-slate-900">{formatCurrency(laborTotal)}</strong> ({h(laborHours)}, suma de{" "}
-              {result.products.length} {result.products.length === 1 ? "producto" : "productos"})
+              {result.products.length} {result.products.length === 1 ? "mueble" : "muebles"})
             </span>
           )}
         </div>

@@ -82,7 +82,7 @@ describe("validación del formulario de productos", () => {
   it("un producto vacío no cuenta; uno a medio cargar bloquea con un mensaje claro y no se valoriza", () => {
     expect(calc(state([newProductRow()])).productsError).toBeNull();
     const half = calc(state([prod("Mesa", "10", [["carpinteria_madera", "", "1"]])]));
-    expect(half.productsError).toBe("Producto 1 (Mesa): Indicá las horas estimadas de Carpintería madera.");
+    expect(half.productsError).toBe("Mueble 1 (Mesa): Indicá las horas estimadas de Carpintería madera.");
     expect(half.products).toHaveLength(0);
     expect(quoteActionBlocker(half, 1)).toBe(half.productsError);
     expect(calc(state([prod("Mesa", "0", [["carpinteria_madera", "5", "1"]])])).productsError).toMatch(/cantidad/);
@@ -97,7 +97,7 @@ describe("validación del formulario de productos", () => {
     );
     const withProduct = calc(state([prod("Mesa", "1", [["carpinteria_madera", "5", "1"]])]));
     expect(quoteActionBlocker(withProduct, 1, { requireProducts: true })).toBeNull();
-    expect(quoteActionBlocker({ ...onlyMaterials, hasContent: true }, 1, { requireProducts: true })).toBe("Cargá al menos un producto con sus horas por rubro.");
+    expect(quoteActionBlocker({ ...onlyMaterials, hasContent: true }, 1, { requireProducts: true })).toBe("Cargá al menos un mueble con sus horas por rubro.");
   });
 });
 
