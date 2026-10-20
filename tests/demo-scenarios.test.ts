@@ -120,12 +120,12 @@ describe("escenario 6 — horas (siempre contra una asignación)", () => {
   });
 });
 
-describe("escenario 7 — registro de taller sin precio", () => {
+describe("escenario 7 — registro de material sin precio (lo carga el Administrativo)", () => {
   it("2 placas + 0,2 desperdicio + 0,3 reutilizable: valoriza sola y el sobrante queda en stock con su valor", () => {
     const { p, stock } = seed();
     const before = projectEconomics(p);
     const bought = ops.addPurchase(p, stock, { ...PLATE, quantity: 2.5, unitCost: 50_000, date: today }, ctx);
-    const planta: ops.Ctx = { actor: "María Ruiz", now: new Date().toISOString(), role: "operator", operatorId: "op-juan" };
+    const planta: ops.Ctx = { actor: "Laura Gómez", now: new Date().toISOString(), role: "owner" };
     const res = ops.registerUsage(
       bought.project, bought.stock,
       { ...PLATE, consumed: 2, waste: 0.2, leftover: { quantity: 0.3, dims: { lengthMm: 800, widthMm: 600 } }, date: today },

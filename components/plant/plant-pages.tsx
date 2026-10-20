@@ -1,5 +1,6 @@
 "use client";
-// Jefe de planta: Resumen, Proyectos, Operarios y Alertas. Sin importes: ni costos, ni precios, ni rentabilidad.
+// Jefe de planta: Dashboard, Proyectos, Operarios (con asignaciones y correcciones de horas) y Alertas. Sin importes:
+// ni costos, ni precios, ni rentabilidad.
 import { HoursReviews } from "./hours-review";
 import Link from "next/link";
 import { useMemo, useState } from "react";
@@ -21,7 +22,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { PendingAction } from "@/components/shared/data-origin";
 import { ScheduleDialog } from "./schedule-dialog";
+import { AssignmentsPage } from "./assignments-page";
 
 export function PlantSummaryPage() {
   const today = useToday();
@@ -42,11 +46,11 @@ export function PlantSummaryPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Resumen de planta" subtitle={`Hoy, ${formatDate(today)}. Jornada: ${formatNumber(hoursPerDay)} h.`} />
+      <PageHeader title="Dashboard" subtitle={`Hoy, ${formatDate(today)}. Jornada: ${formatNumber(hoursPerDay)} h.`} />
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <StatLink icon={CalendarClock} label="Asignaciones de hoy" value={String(todays.length)} href="/planta/asignaciones" />
-        <StatLink icon={UsersRound} label="Operarios pasados de su capacidad hoy" value={String(loads.filter((l) => l.load.over).length)} href="/planta/asignaciones" tone={loads.some((l) => l.load.over) ? "warn" : undefined} />
-        <StatLink icon={ClipboardList} label="Pendientes de asignar" value={String(pending.length)} href="/planta/asignaciones" tone={pending.length ? "warn" : undefined} />
+        <StatLink icon={CalendarClock} label="Asignaciones de hoy" value={String(todays.length)} href="/planta/operarios" />
+        <StatLink icon={UsersRound} label="Operarios pasados de su capacidad hoy" value={String(loads.filter((l) => l.load.over).length)} href="/planta/operarios" tone={loads.some((l) => l.load.over) ? "warn" : undefined} />
+        <StatLink icon={ClipboardList} label="Pendientes de asignar" value={String(pending.length)} href="/planta/operarios" tone={pending.length ? "warn" : undefined} />
         <StatLink icon={AlertTriangle} label="Alertas de planta" value={String(alerts.length)} href="/planta/alertas" tone={alerts.length ? "warn" : undefined} />
       </div>
 
@@ -90,7 +94,7 @@ export function PlantSummaryPage() {
   );
 }
 
-export function PlantOperatorsPage() {
+export function PlantOperatorsPage({ tab = "asignaciones" }: { tab?: string } = {}) {
   const today = useToday();
   const projects = useAppStore((s) => s.projects);
   const allOperators = useAppStore((s) => s.operators);
@@ -104,10 +108,24 @@ export function PlantOperatorsPage() {
 
   return (
     <div className="space-y-4">
-      <PageHeader
-        title="Operarios"
-        subtitle={`Especialidad, días laborales (con sus excepciones) y disponibilidad. La capacidad de un día laboral es la jornada de ${formatNumber(hoursPerDay)} h (Configuración). Sin costos.`}
-      />
+      <PageHeader title="Operarios" subtitle="Asignaciones, disponibilidad y revisión de las horas cargadas. Sin costos." />
+      <Tabs defaultValue={["asignaciones", "disponibilidad", "horas"].includes(tab) ? tab : "asignaciones"}>
+        <TabsList aria-label="Secciones de Operarios">
+          <TabsTrigger value="asignaciones">Asignaciones</TabsTrigger>
+          <TabsTrigger value="disponibilidad">Disponibilidad</TabsTrigger>
+          <TabsTrigger value="horas">Correcciones de horas</TabsTrigger>
+        </TabsList>
+        <TabsContent value="asignaciones">
+          <AssignmentsPage embedded />
+        </TabsContent>
+        <TabsContent value="horas">
+          <HoursReviews />
+        </TabsContent>
+        <TabsContent value="disponibilidad" className="space-y-4">
+      <p className="text-sm text-slate-500">
+        Especialidad, días laborales (con sus excepciones) y disponibilidad. La capacidad de un día laboral es la jornada de {formatNumber(hoursPerDay)} h
+        (Configuración).
+      </p>
       <label className="flex items-center gap-2 text-sm text-slate-700">
         <input type="checkbox" className="size-4" checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)} /> Ver también los dados de baja
       </label>
@@ -168,6 +186,8 @@ export function PlantOperatorsPage() {
           </Table>
         </CardContent>
       </Card>
+        </TabsContent>
+      </Tabs>
       <ScheduleDialog operatorId={editing} onClose={() => setEditing(null)} />
     </div>
   );
@@ -177,8 +197,8 @@ export function PlantAlertsPage() {
   const alerts = usePlantAlerts();
   return (
     <div className="space-y-4">
-      <HoursReviews />
-      <PageHeader title="Alertas de planta" subtitle="Desvío de horas, operarios sobrecargados y rubros sin asignar a pocos días de la entrega." />
+      <PageHeader title="Alertas de planta" subtitle="Desvío de horas, operarios sobrecargados, rubros sin asignar a pocos días de la entrega y obras que arrancan sin material." />
+      <PendingAction label="Registrar incidencia" reason="Las incidencias de planta (máquina parada, falta de material, retrabajo) se guardan cuando el backend lo habilite." />
       {alerts.length === 0 ? (
         <EmptyState icon={AlertTriangle} title="Sin alertas de planta" description="Cuando haya desvíos de horas o falte asignar a alguien, aparece acá." />
       ) : (

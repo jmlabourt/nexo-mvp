@@ -136,9 +136,7 @@ function PositionCard({ project, canManage }: { project: Project; canManage: boo
                         <>
                           <Button size="sm" variant="ghost" onClick={() => setAct({ action: "release", target: toTarget(r, r.assigned, true) })}>Devolver</Button>
                           <Button size="sm" variant="ghost" onClick={() => setAct({ action: "transfer", target: toTarget(r, r.assigned, true) })}>Transferir</Button>
-                          <Button size="sm" variant="ghost" onClick={() => setAct({ action: "leftover", target: toTarget(r, r.assigned, true) })}>Sobrante</Button>
-                          <Button size="sm" variant="ghost" onClick={() => setAct({ action: "supplier", target: toTarget(r, r.assigned, true) })}>A proveedor</Button>
-                        </>
+                          <Button size="sm" variant="ghost" onClick={() => setAct({ action: "leftover", target: toTarget(r, r.assigned, true) })}>Sobrante</Button>                        </>
                       )}
                     </div>
                   </TD>

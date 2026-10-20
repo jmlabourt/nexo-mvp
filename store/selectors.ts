@@ -4,19 +4,24 @@ import { useCallback, useMemo } from "react";
 import type { Alert, EconomicHealth, Project } from "@/types";
 import { allAlerts, openAlertCount, projectHealth, sortAlerts, splitAlerts } from "@/lib/alerts";
 import { plantAlerts } from "@/lib/plant";
-import { materialNeeds, materialsState, purchasingAlerts, type MaterialNeed, type MaterialsState } from "@/lib/purchasing";
+import { materialNeeds, materialsState, plantMaterialAlerts, purchasingAlerts, type MaterialNeed, type MaterialsState } from "@/lib/purchasing";
 import type { RoleKey } from "@/lib/permissions";
 import { projectEconomics, type ProjectEconomics } from "@/lib/calculations";
 import { todayISO } from "@/lib/formatting";
 import { isBuyer, isManager } from "@/lib/project-rules";
 import { catalogPriceAt } from "@/lib/material-options";
+import { withEconomicImpact } from "@/lib/deviations";
+import { deliveryReviewAlerts } from "@/lib/plant-materials";
 import { effectiveIdentity, useAppStore } from "./use-app-store";
 
 export function useToday(): string {
   return useMemo(() => todayISO(), []);
 }
 
-/** Alertas de planta (desvío de horas, sobrecarga, rubros sin asignar): sin importes. Jefe de planta y Administrativo. */
+/**
+ * Alertas de planta (desvío de horas, sobrecarga, rubros sin asignar, obra que arranca sin material): sin importes.
+ * Jefe de planta y Administrativo (que ve la de material con detalle en las de Compras, no esta).
+ */
 export function usePlantAlerts(): Alert[] {
   const projects = useAppStore((s) => s.projects);
   const assignments = useAppStore((s) => s.assignments);
@@ -24,10 +29,15 @@ export function usePlantAlerts(): Alert[] {
   const settings = useAppStore((s) => s.settings);
   const hoursPerDay = useAppStore((s) => s.costSettings.hoursPerDay);
   const dayExceptions = useAppStore((s) => s.dayExceptions);
+  const stateOf = useMaterialsStateOf();
   const today = useToday();
   return useMemo(
-    () => sortAlerts(plantAlerts({ projects, assignments, operators, settings, hoursPerDay, today, dayExceptions })),
-    [projects, assignments, operators, settings, hoursPerDay, today, dayExceptions],
+    () =>
+      sortAlerts([
+        ...plantAlerts({ projects, assignments, operators, settings, hoursPerDay, today, dayExceptions }),
+        ...plantMaterialAlerts(projects, stateOf, today, settings.purchaseLeadDays),
+      ]),
+    [projects, assignments, operators, settings, hoursPerDay, today, dayExceptions, stateOf],
   );
 }
 
@@ -75,14 +85,22 @@ export function useAlerts(): { open: Alert[]; resolved: Alert[]; count: number }
   const projects = useAppStore((s) => s.projects);
   const settings = useAppStore((s) => s.settings);
   const resolvedKeys = useAppStore((s) => s.resolvedAlertIds);
-  const stock = useAppStore((s) => s.stock);
+  const assignments = useAppStore((s) => s.assignments);
   const plant = usePlantAlerts();
   const buying = usePurchasingAlerts();
+  const stock = useAppStore((s) => s.stock);
+  const deliveries = useAppStore((s) => s.deliveries);
   const today = useToday();
   return useMemo(() => {
-    const split = splitAlerts(sortAlerts([...allAlerts(projects, settings, today, stock), ...plant, ...buying]), resolvedKeys);
+    // El Administrativo ve cuánto cuesta cada alerta (horas de más × costo por hora, puntos de margen).
+    // "Falta material" del Jefe es la misma situación que "material sin pedir" / "pedido y no llegó" de Compras.
+    const fromPlant = plant.filter((a) => a.kind !== "material_missing");
+    // Entregas y cierres del Jefe de planta, con su costo (solo el Administrativo lo ve).
+    const planta = deliveryReviewAlerts(projects, stock, deliveries, today);
+    const all = withEconomicImpact([...allAlerts(projects, settings, today), ...fromPlant, ...buying, ...planta], projects, assignments, today);
+    const split = splitAlerts(sortAlerts(all), resolvedKeys);
     return { ...split, count: openAlertCount(split.open) };
-  }, [projects, settings, resolvedKeys, today, stock, plant, buying]);
+  }, [projects, settings, resolvedKeys, today, plant, buying, assignments, stock, deliveries]);
 }
 
 export function useProjectAlerts(project: Project | undefined): Alert[] {

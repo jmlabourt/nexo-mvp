@@ -19,7 +19,7 @@ vi.mock("next/navigation", () => ({
 
 const { PurchasingProjectsPage } = await import("@/components/purchasing/purchasing-projects");
 const { PurchasingDashboard, PurchasingAlertsPage, OrdersPage } = await import("@/components/purchasing/purchasing-pages");
-const { MaterialsQuotePage } = await import("@/components/purchasing/materials-quote-page");
+const { SuppliersPage } = await import("@/components/directory/suppliers-page");
 const { StockPage } = await import("@/components/stock/stock-page");
 
 const seed = buildSeed(new Date());
@@ -90,7 +90,7 @@ describe("de la necesidad a la orden de compra, la factura y la recepción", () 
     expect(pending.length).toBeGreaterThan(0);
     expect(pending.every((n) => n.fromStock > 0 && n.toBuy === 0)).toBe(true);
     expect(materialsState(needs, p.id)).toBe("on_the_way");
-    useAppStore.setState({ role: "owner", currentMode: "admin" });
+    useAppStore.setState({ role: "owner", currentMode: "gerencia" });
     for (const n of pending) {
       expect(s.assignStock({ projectId: p.id, materialId: n.materialId!, materialName: n.description, unit: n.unit, quantity: n.fromStock }).ok).toBe(true);
     }
@@ -105,7 +105,7 @@ describe("ninguna pantalla de Compras muestra venta, rentabilidad ni mano de obr
     ["Necesidades", () => <PurchasingProjectsPage />],
     ["Órdenes de compra", () => <OrdersPage />],
     ["Alertas", () => <PurchasingAlertsPage />],
-    ["Cotizador", () => <MaterialsQuotePage />],
+    ["Proveedores", () => <SuppliersPage prices />],
   ])("%s", (_name, page) => {
     render(page());
     expect(document.body.textContent).not.toMatch(FORBIDDEN);

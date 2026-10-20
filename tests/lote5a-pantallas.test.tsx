@@ -29,7 +29,7 @@ beforeEach(() => {
     stock: seed.stock,
     role: "owner",
     isDemo: true,
-    currentMode: "admin",
+    currentMode: "gerencia",
     organizationId: null,
     userName: "Laura Gómez",
     hourRates: DEFAULT_HOUR_RATES.map((r) => ({ ...r })),
@@ -47,12 +47,12 @@ const menuItems = () => {
     .map((el) => el.querySelector("span")?.textContent?.trim()); // solo el nombre (sin el contador de alertas)
 };
 
-describe("menú y acceso por rol", () => {
-  it("Administrativo ve su menú completo y la demo ofrece los 4 roles", () => {
+describe("menú y acceso por sesión", () => {
+  it("Gerencia ve sus 5 pestañas y la demo ofrece las 5 sesiones", () => {
     render(<AppShell>contenido</AppShell>);
-    expect(menuItems()).toEqual(["Dashboard", "Proyectos", "Alertas", "Horas", "Cotizador", "Stock", "Operarios", "Configuración"]);
+    expect(menuItems()).toEqual(["Dashboard", "Proyectos", "Personal", "Stock", "Configuración"]);
     const group = screen.getAllByRole("radiogroup", { name: "Ver la demo como" })[0];
-    expect(within(group).getAllByRole("radio").map((r) => r.textContent)).toEqual(["Administrativo", "Compras", "Jefe de planta", "Operario"]);
+    expect(within(group).getAllByRole("radio").map((r) => r.textContent)).toEqual(["Gerencia", "Administración", "Compras", "Jefe de planta", "Operario"]);
     expect(screen.getByText("contenido")).toBeInTheDocument();
   });
 
@@ -60,7 +60,7 @@ describe("menú y acceso por rol", () => {
     useAppStore.setState({ currentMode: "compras" });
     nav.pathname = "/projects";
     render(<AppShell>contenido secreto</AppShell>);
-    expect(menuItems()).toEqual(["Dashboard", "Necesidades", "Órdenes de compra", "Alertas", "Cotizador", "Stock"]);
+    expect(menuItems()).toEqual(["Dashboard", "Necesidades", "Órdenes de compra", "Stock", "Alertas", "Proveedores"]);
     expect(screen.getAllByText("Martín Ruiz")[0]).toBeInTheDocument();
     expect(screen.getByRole("alert")).toHaveTextContent("No tenés acceso a esta sección");
     expect(screen.queryByText("contenido secreto")).toBeNull();
@@ -70,15 +70,24 @@ describe("menú y acceso por rol", () => {
   it("Jefe de planta que entra al dashboard va a su inicio", () => {
     useAppStore.setState({ role: "jefe_planta", isDemo: false });
     render(<AppShell>x</AppShell>);
-    expect(menuItems()[0]).toBe("Resumen");
+    expect(menuItems()).toEqual(["Dashboard", "Proyectos", "Operarios", "Alertas"]);
     expect(nav.replace).toHaveBeenCalledWith("/planta");
   });
 
-  it("en una empresa real no aparece el selector de la demo", () => {
+  it("en una empresa real no aparece el selector de la demo: un Administrativo elige Gerencia o Administración", () => {
     useAppStore.setState({ isDemo: false, currentMode: "compras" });
     render(<AppShell>contenido</AppShell>);
     expect(screen.queryByRole("radiogroup", { name: "Ver la demo como" })).toBeNull();
+    const group = screen.getAllByRole("radiogroup", { name: "Sesión" })[0];
+    expect(within(group).getAllByRole("radio").map((r) => r.textContent)).toEqual(["Gerencia", "Administración"]);
     expect(menuItems()[0]).toBe("Dashboard");
+  });
+
+  it("Administración: 7 pestañas, sin el Dashboard gerencial", () => {
+    useAppStore.setState({ currentMode: "administracion" });
+    render(<AppShell>contenido</AppShell>);
+    expect(menuItems()).toEqual(["Dashboard", "Proyectos", "Cotizador", "Stock", "Clientes", "Proveedores", "Configuración"]);
+    expect(nav.replace).toHaveBeenCalledWith("/administracion");
   });
 
   it("el Operario ve su día, sin menú de gestión", () => {
@@ -94,7 +103,7 @@ describe("tarifas con vigente desde", () => {
   it("un cambio con fecha futura queda programado: hoy sigue la tarifa actual y se ve en el historial", async () => {
     const user = userEvent.setup();
     render(<SettingsPage />);
-    await user.click(screen.getByRole("tab", { name: "Tarifas y horas" }));
+    await user.click(screen.getByRole("tab", { name: "Costos horarios" }));
     const labor = screen.getByLabelText("Mano de obra");
     await user.clear(labor);
     await user.type(labor, "25000");
@@ -117,7 +126,7 @@ describe("tarifas con vigente desde", () => {
   it("un cambio desde hoy se usa desde hoy", async () => {
     const user = userEvent.setup();
     render(<SettingsPage />);
-    await user.click(screen.getByRole("tab", { name: "Tarifas y horas" }));
+    await user.click(screen.getByRole("tab", { name: "Costos horarios" }));
     const labor = screen.getByLabelText("Mano de obra");
     await user.clear(labor);
     await user.type(labor, "21000");
@@ -129,8 +138,8 @@ describe("tarifas con vigente desde", () => {
   it("Configuración tiene la pestaña Usuarios y el costo real de las horas marcado como hipótesis", async () => {
     const user = userEvent.setup();
     render(<SettingsPage />);
-    expect(screen.getByRole("tab", { name: "Usuarios" })).toBeInTheDocument();
-    await user.click(screen.getByRole("tab", { name: "Tarifas y horas" }));
+    expect(screen.getByRole("tab", { name: "Usuarios y permisos" })).toBeInTheDocument();
+    await user.click(screen.getByRole("tab", { name: "Costos horarios" }));
     expect(screen.getByText("Hipótesis a confirmar con el cliente")).toBeInTheDocument();
   });
 });
@@ -149,7 +158,8 @@ describe("horas con el costo vigente ese día (store)", () => {
     expect(s.updateOperator("op-juan", { name: "Juan Pérez", role: "Carpintería", hourlyCost: 20_000 }, daysAgo(5)).ok).toBe(true);
     expect(useAppStore.getState().operators.find((o) => o.id === "op-juan")?.hourlyCost).toBe(20_000);
     // Carga manual del Administrativo: crea la asignación del día y carga contra ella.
-    const manual = (date: string) => ({ operatorId: "op-juan", itemId: project.items[0].id, rubro: project.items[0].rubros[0].rubro, date, hours: 1 });
+    // confirmHighHours: según la fecha de hoy, la demo ya puede tener la jornada completa ese día (el test es sobre el costo).
+    const manual = (date: string) => ({ operatorId: "op-juan", itemId: project.items[0].id, rubro: project.items[0].rubros[0].rubro, date, hours: 1, confirmHighHours: true });
     expect(s.logHoursManual(project.id, manual(daysAgo(8)))).toMatchObject({ ok: true });
     expect(s.logHoursManual(project.id, manual(daysAgo(2)))).toMatchObject({ ok: true });
     expect(useAppStore.getState().assignments.filter((a) => a.projectId === project.id && a.plannedHours === 1)).toHaveLength(2);

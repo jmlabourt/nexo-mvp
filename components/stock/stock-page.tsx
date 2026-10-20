@@ -20,10 +20,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { StockActionDialog, type StockAction, type StockTarget } from "./stock-action-dialog";
 import { AddStockDialog } from "./add-stock-dialog";
-
-type Act = { action: StockAction; target: StockTarget };
 
 function LotTrailDialog({ lotId, onClose }: { lotId: string | null; onClose: () => void }) {
   const stock = useAppStore((s) => s.stock);
@@ -64,19 +61,20 @@ function lotLabel(l: StockLot) {
   return `${l.kind === "leftover" ? "Sobrante" : l.kind === "opening" ? "Inventario inicial" : "Compra"}${d ? ` · ${d}` : ""}`;
 }
 
-/** El mismo módulo para Administrativo (/stock, lo edita) y Compras (/compras/stock, solo consulta). */
+/**
+ * Stock (Gerencia, Administración y Compras). Gerencia solo ingresa stock: las operaciones de rutina (asignar, liberar,
+ * transferir, sobrantes) se hacen desde el proyecto o en Planta. Administración y Compras lo consultan.
+ */
 export function StockPage({ material, lot, tab, basePath = "/stock" }: { material?: string; lot?: string; tab?: string; basePath?: string }) {
   const stock = useAppStore((s) => s.stock);
   const projects = useAppStore((s) => s.projects);
   const requests = useAppStore((s) => s.requests);
   const setRequestStatus = useConfirmedAction("setRequestStatus");
-  const updateLotLocation = useConfirmedAction("updateLotLocation");
-  // Compras ve el stock en modo solo consulta (también en la base): solo el Administrativo lo edita.
-  const { isManager: canManage, roleKey } = useIdentity();
+  const { session, roleKey } = useIdentity();
+  const canIngest = session === "gerencia";
   const projectLink = (id: string, tabName?: string) => projectHref(roleKey, id, tabName);
   const [query, setQuery] = useState("");
   const [add, setAdd] = useState(false);
-  const [act, setAct] = useState<Act | null>(null);
   const [trailLot, setTrailLot] = useState<string | null>(lot ?? null);
   const [expanded, setExpanded] = useState<string | null>(material ?? null);
 
@@ -94,18 +92,18 @@ export function StockPage({ material, lot, tab, basePath = "/stock" }: { materia
       .map((l) => ({ lot: l, bal: balances.get(l.id) }))
       .filter((x) => x.bal && x.bal.warehouse + Object.values(x.bal.held).reduce((s, q) => s + q, 0) > EPS);
 
-  const editLocation = async (l: StockLot) => {
-    const next = window.prompt("Ubicación del material", l.location ?? "");
-    if (next !== null) await updateLotLocation(l.id, next.trim());
-  };
 
   return (
     <div>
       <PageHeader
         back={material || lot || tab ? basePath : undefined}
         title="Stock"
-        subtitle="Todo el material físico: libre en el depósito y asignado a proyectos. Cada lote conserva su costo original."
-        actions={canManage ? <Button onClick={() => setAdd(true)}><Plus /> Ingresar stock</Button> : undefined}
+        subtitle={
+          canIngest
+            ? "Todo el material físico: libre en el depósito y asignado a proyectos. Cada lote conserva su costo original."
+            : "Solo consulta: material libre en el depósito y asignado a proyectos, con su costo original."
+        }
+        actions={canIngest ? <Button onClick={() => setAdd(true)}><Plus /> Ingresar stock</Button> : undefined}
       />
       <div className="mb-5 grid grid-cols-2 gap-3 md:grid-cols-4">
         <Card><CardContent className="p-4"><div className="text-xs text-slate-500">Valor total en stock</div><div className="text-lg font-semibold tabular">{formatCurrency(total)}</div></CardContent></Card>
@@ -192,24 +190,6 @@ export function StockPage({ material, lot, tab, basePath = "/stock" }: { materia
                                     </span>
                                     <span className="ml-auto flex gap-1.5">
                                       <Button size="sm" variant="outline" onClick={() => setTrailLot(l.id)}>Recorrido</Button>
-                                      {canManage && (
-                                        <>
-                                          <Button size="sm" variant="ghost" onClick={() => editLocation(l)}>Ubicación</Button>
-                                          {(bal?.warehouse ?? 0) > EPS && (
-                                            <Button
-                                              size="sm"
-                                              onClick={() =>
-                                                setAct({
-                                                  action: "assign",
-                                                  target: { materialId: l.materialId, materialName: l.materialName, unit: l.unit, max: bal?.warehouse ?? 0, lotId: l.id, lotLabel: lotLabel(l) },
-                                                })
-                                              }
-                                            >
-                                              Asignar a proyecto
-                                            </Button>
-                                          )}
-                                        </>
-                                      )}
                                     </span>
                                   </li>
                                 ))}
@@ -263,22 +243,7 @@ export function StockPage({ material, lot, tab, basePath = "/stock" }: { materia
                         {l.assignedProjectId ? `Asignado a ${projectCode(projects, l.assignedProjectId)}` : `Libre${l.lot.location ? ` · ${l.lot.location}` : ""}`}
                       </TD>
                       <TD>
-                        <div className="flex gap-1.5">
-                          <Button size="sm" variant="outline" onClick={() => setTrailLot(l.lot.id)}>Recorrido</Button>
-                          {canManage && !l.assignedProjectId && (
-                            <Button
-                              size="sm"
-                              onClick={() =>
-                                setAct({
-                                  action: "assign",
-                                  target: { materialId: l.lot.materialId, materialName: l.lot.materialName, unit: l.lot.unit, max: l.quantity, lotId: l.lot.id, lotLabel: lotLabel(l.lot) },
-                                })
-                              }
-                            >
-                              Asignar
-                            </Button>
-                          )}
-                        </div>
+                        <Button size="sm" variant="outline" onClick={() => setTrailLot(l.lot.id)}>Recorrido</Button>
                       </TD>
                     </TR>
                   ))}
@@ -315,7 +280,7 @@ export function StockPage({ material, lot, tab, basePath = "/stock" }: { materia
                       <TD>{r.requestedBy}</TD>
                       <TD><Badge tone={r.status === "open" ? "yellow" : r.status === "resolved" ? "green" : "gray"}>{r.status === "open" ? "Abierto" : r.status === "resolved" ? "Resuelto" : "Cancelado"}</Badge></TD>
                       <TD>
-                        {canManage && r.status === "open" && (
+                        {canIngest && r.status === "open" && (
                           <div className="flex gap-1.5">
                             <Button size="sm" variant="outline" onClick={async () => await setRequestStatus(r.id, "resolved")}>Resuelto</Button>
                             <Button size="sm" variant="ghost" onClick={async () => await setRequestStatus(r.id, "cancelled")}>Cancelar</Button>
@@ -332,7 +297,6 @@ export function StockPage({ material, lot, tab, basePath = "/stock" }: { materia
       </Tabs>
 
       <AddStockDialog open={add} onOpenChange={setAdd} />
-      {act && <StockActionDialog action={act.action} target={act.target} open onOpenChange={(o) => { if (!o) setAct(null); }} />}
       <LotTrailDialog lotId={trailLot} onClose={() => setTrailLot(null)} />
     </div>
   );

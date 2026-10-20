@@ -11,7 +11,6 @@ import { buildSeed, MAIN_DEMO_PROJECT_ID } from "@/lib/seed-data";
 import { projectHoldings, type StockState } from "@/lib/stock";
 import * as ops from "@/lib/project-operations";
 import { workspacePayload } from "@/lib/supabase/workspace";
-import { tallerCalls } from "@/lib/supabase/taller";
 import { asUser, assignFor, createDb, errorAs, signUp } from "./harness";
 
 let db: PGlite;
@@ -206,58 +205,33 @@ describe("Operario activo (Juan)", () => {
     const diegos = await assignFor(db, laura, "op-diego", daysAgo(3));
     expect(await errorAs(db, juan, (tx) => tx.query("select taller_log_hours($1::jsonb)", [JSON.stringify({ assignment_id: diegos, hours: 1 })]))).toMatch(/no es tuya/);
   });
-  it("registra consumo: el costo sale del lote, no del navegador", async () => {
+  it("ya no carga material usado, desperdicio ni sobrante: la app y la base lo rechazan (Auditoría UX · P0-6)", async () => {
     const project = seed.projects.find((p) => p.id === MAIN_DEMO_PROJECT_ID)!;
     const holding = projectHoldings(seed.stock, project.id)[0];
     const ctx: ops.Ctx = { actor: "Juan Pérez", now: new Date().toISOString(), role: "operator", operatorId: "op-juan" };
-    const res = ops.registerUsage(
-      project,
-      seed.stock,
-      { materialId: holding.lot.materialId, materialName: holding.lot.materialName, unit: holding.lot.unit, consumed: 0.5, waste: 0.1, date: daysAgo(1), leftover: { quantity: 0.2 } },
-      DEFAULT_SETTINGS,
-      ctx,
-    );
-    const calls = tallerCalls(
-      { projects: seed.projects, stock: seed.stock, requests: [] },
-      { projects: seed.projects.map((p) => (p.id === project.id ? res.project : p)), stock: res.stock, requests: [] },
-      org,
-    );
-    expect(calls.map((c) => c.fn)).toEqual(["taller_register_usage"]);
-    // Aunque el navegador mandara un costo, el servidor usa el del lote.
-    await asUser(db, juan, (tx) => tx.query("select taller_register_usage($1::jsonb)", [JSON.stringify(calls[0].p)]));
-    const usages = (await db.query<{ unit_cost: string; quantity_consumed: string }>(
-      "select unit_cost, quantity_consumed from material_usages where organization_id = $1 and created_by = 'Juan Pérez'",
-      [org],
-    )).rows;
-    expect(usages.length).toBeGreaterThan(0);
-    expect(Number(usages[0].unit_cost)).toBe(holding.lot.unitCost);
-    const [leftover] = (await db.query<{ unit_cost: string }>(
-      "select unit_cost from stock_lots where organization_id = $1 and kind = 'leftover' and created_by = 'Juan Pérez'",
-      [org],
-    )).rows;
-    expect(Number(leftover.unit_cost)).toBe(holding.lot.unitCost);
-  });
-  it("no puede usar más material del asignado", async () => {
-    const holding = projectHoldings(seed.stock, MAIN_DEMO_PROJECT_ID)[0];
+    expect(() =>
+      ops.registerUsage(
+        project,
+        seed.stock,
+        { materialId: holding.lot.materialId, materialName: holding.lot.materialName, unit: holding.lot.unit, consumed: 0.5, waste: 0.1, date: daysAgo(1) },
+        DEFAULT_SETTINGS,
+        ctx,
+      ),
+    ).toThrow(/Administrativo/);
     const place = { type: "project", projectId: MAIN_DEMO_PROJECT_ID };
     const p = {
       project_id: MAIN_DEMO_PROJECT_ID,
       date: daysAgo(1),
-      movements: [{ id: "mov-big", lot_id: holding.lot.id, kind: "consume", quantity: 9999, from_place: place, to_place: { type: "consumed", projectId: MAIN_DEMO_PROJECT_ID }, project_id: MAIN_DEMO_PROJECT_ID }],
-      usages: [{ id: "use-big", lot_id: holding.lot.id, material_id: holding.lot.materialId, quantity_consumed: 9999, waste_quantity: 0 }],
+      movements: [{ id: "mov-x", lot_id: holding.lot.id, kind: "consume", quantity: 0.1, from_place: place, to_place: { type: "consumed", projectId: MAIN_DEMO_PROJECT_ID }, project_id: MAIN_DEMO_PROJECT_ID }],
+      usages: [{ id: "use-x", lot_id: holding.lot.id, material_id: holding.lot.materialId, quantity_consumed: 0.1, waste_quantity: 0 }],
     };
-    expect(await errorAs(db, juan, (tx) => tx.query("select taller_register_usage($1::jsonb)", [JSON.stringify(p)]))).toMatch(/No alcanza/);
-  });
-  it("no puede sacar material de otro proyecto", async () => {
-    const other = seed.projects.find((x) => x.id !== MAIN_DEMO_PROJECT_ID && projectHoldings(seed.stock, x.id).length > 0)!;
-    const holding = projectHoldings(seed.stock, other.id)[0];
-    const p = {
-      project_id: MAIN_DEMO_PROJECT_ID,
-      date: daysAgo(1),
-      movements: [{ id: "mov-steal", lot_id: holding.lot.id, kind: "consume", quantity: 0.1, from_place: { type: "project", projectId: other.id }, to_place: { type: "consumed", projectId: MAIN_DEMO_PROJECT_ID } }],
-      usages: [{ id: "use-steal", lot_id: holding.lot.id, material_id: holding.lot.materialId, quantity_consumed: 0.1, waste_quantity: 0 }],
-    };
-    expect(await errorAs(db, juan, (tx) => tx.query("select taller_register_usage($1::jsonb)", [JSON.stringify(p)]))).toMatch(/asignado a este proyecto/);
+    expect(await errorAs(db, juan, (tx) => tx.query("select taller_register_usage($1::jsonb)", [JSON.stringify(p)]))).toMatch(/permission denied/);
+    // Tampoco escribe directo en las tablas de consumo.
+    expect(
+      await errorAs(db, juan, (tx) =>
+        tx.query("insert into material_usages (organization_id, id, project_id, material_name, unit, quantity_consumed, unit_cost, date, created_by) values ($1, 'use-y', $2, 'X', 'u', 1, 1, current_date, 'Juan')", [org, MAIN_DEMO_PROJECT_ID]),
+      ),
+    ).not.toBeNull();
   });
   it("pide material y deja una nota; Gestión los ve", async () => {
     await asUser(db, juan, async (tx) => {

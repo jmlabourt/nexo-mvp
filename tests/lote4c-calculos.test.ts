@@ -6,6 +6,7 @@ import { delayAnalysis, scenarioDays, type DelayInput } from "@/lib/delay";
 import { costSettingsError, hourRatesError } from "@/lib/cost-settings";
 import { DEFAULT_HOUR_RATES, DEFAULT_HOURS_PER_DAY } from "@/lib/constants";
 import { computeCalculator, initialCalcState, newRubroRow, quoteActionBlocker, type CalcState } from "@/components/budget/calculator-state";
+import { laborProduct } from "./helpers";
 
 describe("si el trabajo se alarga", () => {
   const known: DelayInput = { price: 1_000_000, cost: 700_000, workers: 2, hoursPerDay: 9.5, laborRate: 19_000, dailyPenalty: 0, floorPct: 30, workDays: 8 };
@@ -76,7 +77,8 @@ describe("si el trabajo se alarga", () => {
 describe("jornada de Configuración y plazo en días hábiles", () => {
   const state = (patch: Partial<CalcState> = {}): CalcState => ({
     ...initialCalcState(5),
-    rubros: [{ ...newRubroRow("carpinteria_madera"), materials: [], workers: "2", hoursPerWorker: "38" }],
+    rubros: [{ ...newRubroRow("carpinteria_madera"), materials: [] }],
+    products: [laborProduct("carpinteria_madera", 2, 38)],
     ...patch,
   });
   const ctx = { projects: [], rates: DEFAULT_HOUR_RATES, overtimeMultiplier: 2, hoursPerDay: DEFAULT_HOURS_PER_DAY, salesPrice: 0, isDemo: false };

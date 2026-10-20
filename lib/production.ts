@@ -43,6 +43,69 @@ export function productInputError(input: ProductInput, completedUnits = 0): stri
   return null;
 }
 
+/** Unidades terminadas de un producto: entero entre 0 y la cantidad (la carga el Jefe de planta). */
+export function completedUnitsError(item: Pick<ProjectItem, "quantity">, units: number): string | null {
+  return Number.isInteger(units) && units >= 0 && units <= item.quantity ? null : `Las unidades terminadas van de 0 a ${item.quantity}.`;
+}
+
+// ── Mano de obra presupuestada vs horas de los productos (P0-7) ──
+
+/** Horas de mano de obra del costo presupuestado, por rubro (líneas con cantidad en horas, normales y extra). */
+export function budgetLaborHours(project: Pick<Project, "budgetLines">): Partial<Record<RubroId, number>> {
+  const out: Partial<Record<RubroId, number>> = {};
+  for (const l of project.budgetLines) {
+    if (l.category !== "labor" || l.unit !== "h" || l.quantity === null || !l.rubro) continue;
+    out[l.rubro] = round2((out[l.rubro] ?? 0) + l.quantity);
+  }
+  return out;
+}
+
+/** Horas estimadas de los productos, por rubro. */
+export function productHoursByRubro(project: Pick<Project, "items">): Partial<Record<RubroId, number>> {
+  const out: Partial<Record<RubroId, number>> = {};
+  for (const i of project.items) for (const r of i.rubros) out[r.rubro] = round2((out[r.rubro] ?? 0) + r.hours);
+  return out;
+}
+
+export interface LaborHoursGap {
+  rubro: RubroId;
+  /** Horas en el costo presupuestado. */
+  budget: number;
+  /** Horas en los productos. */
+  products: number;
+}
+
+/**
+ * Rubros donde las horas de los productos no coinciden con las horas de mano de obra presupuestadas. En un proyecto
+ * creado por producto da vacío; si después se editan las horas de un producto, avisa: el costo presupuestado no cambia
+ * solo (queda congelado al aprobar) y la diferencia se explica acá.
+ */
+export function laborHoursGaps(project: Pick<Project, "budgetLines" | "items">): LaborHoursGap[] {
+  const budget = budgetLaborHours(project);
+  const products = productHoursByRubro(project);
+  const rubros = [...new Set([...Object.keys(budget), ...Object.keys(products)])] as RubroId[];
+  return rubros
+    .map((rubro) => ({ rubro, budget: budget[rubro] ?? 0, products: products[rubro] ?? 0 }))
+    .filter((g) => Math.abs(g.budget - g.products) > 0.01);
+}
+
+/**
+ * Propuesta para un proyecto anterior SIN productos (no se aplica sola): un producto "Trabajo general × 1" con las
+ * horas y los operarios de sus líneas de mano de obra por rubro. Así la planta puede asignarlo y las horas siguen
+ * siendo las mismas del costo presupuestado (que no se toca). null si ya tiene productos o no tiene horas.
+ */
+export function legacyProductProposal(project: Pick<Project, "budgetLines" | "items">): ProductInput | null {
+  if (project.items.length > 0) return null;
+  const hours = budgetLaborHours(project);
+  const rubros = (Object.keys(hours) as RubroId[])
+    .filter((r) => (hours[r] ?? 0) > 0 && rubroDef(r).kind === "full")
+    .map((rubro) => {
+      const workers = Math.max(1, ...project.budgetLines.filter((l) => l.category === "labor" && l.rubro === rubro).map((l) => l.workers ?? 1));
+      return { rubro, hours: hours[rubro] ?? 0, workers };
+    });
+  return rubros.length > 0 ? { name: "Trabajo general", quantity: 1, rubros } : null;
+}
+
 // ── Estado del producto y del proyecto ────────────────────────
 
 /** Horas cargadas en el producto (todos los rubros y operarios). */
@@ -113,7 +176,8 @@ export function projectProduction(project: Pick<Project, "items" | "actualEntrie
 
 export type ScheduleSignal = "on_time" | "at_risk" | "late";
 
-export const SCHEDULE_LABELS: Record<ScheduleSignal, string> = { on_time: "En tiempo", at_risk: "En riesgo", late: "Atrasado" };
+/** Plazo: nunca "En riesgo" a secas, que se confunde con la economía (Auditoría UX). */
+export const SCHEDULE_LABELS: Record<ScheduleSignal, string> = { on_time: "En tiempo", at_risk: "Plazo en riesgo", late: "Atrasado" };
 
 /**
  * Supuesto (a validar con el cliente) para no confiar en una fecha sola:

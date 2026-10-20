@@ -19,7 +19,7 @@ import { computeCalculator, initialCalcState, newRubroRow, type CalcState, type 
 import { benchmarksForType, suggestedAdjustments } from "@/lib/historical-benchmarks";
 import { DEFAULT_FINANCIAL_PCT, DEFAULT_HOUR_RATES } from "@/lib/constants";
 import { RUBROS } from "@/lib/rubros";
-import { line, project, usage } from "./helpers";
+import { laborProduct, line, project, usage } from "./helpers";
 
 const RATES: HourRate[] = DEFAULT_HOUR_RATES; // Mano de obra $19.000 · Diseño $27.000 · Administración $27.000
 const rates = ratesByCategory(RATES);
@@ -228,10 +228,12 @@ describe("de la calculadora al costo presupuestado", () => {
     materialsTargetPct: "30",
     laborTargetPct: "40",
     rubros: [
-      row({ materials: [{ key: "m1", name: "Melamina blanca 18 mm", unit: "placa", quantity: "10", unitCost: "50000", wastePct: "10" }], workers: "2", hoursPerWorker: "40", designHours: "6", adminHours: "4" }),
+      row({ materials: [{ key: "m1", name: "Melamina blanca 18 mm", unit: "placa", quantity: "10", unitCost: "50000", wastePct: "10" }], designHours: "6", adminHours: "4" }),
       { ...newRubroRow("transporte"), amount: "100000" },
       { ...newRubroRow("imprevistos"), amount: "50000" },
     ],
+    // Antes: 2 operarios × 40 h en el rubro. Ahora: un producto con 80 h y 2 operarios. Los números no cambian.
+    products: [laborProduct("carpinteria_madera", 2, 40)],
   };
   const ctx = { projects: [], rates: RATES, overtimeMultiplier: 2, hoursPerDay: 8, salesPrice: 0, isDemo: false };
 

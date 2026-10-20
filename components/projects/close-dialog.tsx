@@ -80,9 +80,7 @@ export function CloseDialog({ project, open, onOpenChange }: { project: Project;
                     </div>
                     <Button size="sm" variant="outline" onClick={() => setAct({ action: "release", target: target(h) })}>Volver al stock</Button>
                     <Button size="sm" variant="outline" onClick={() => setAct({ action: "transfer", target: target(h) })}>Otro proyecto</Button>
-                    <Button size="sm" variant="outline" onClick={() => setAct({ action: "leftover", target: target(h) })}>Sobrante</Button>
-                    <Button size="sm" variant="outline" onClick={() => setAct({ action: "supplier", target: target(h) })}>A proveedor</Button>
-                    <Button size="sm" variant="ghost" className="text-red-700" onClick={() => markWaste(h)}>Desperdicio</Button>
+                    <Button size="sm" variant="outline" onClick={() => setAct({ action: "leftover", target: target(h) })}>Sobrante</Button>                    <Button size="sm" variant="ghost" className="text-red-700" onClick={() => markWaste(h)}>Desperdicio</Button>
                   </li>
                 ))}
               </ul>

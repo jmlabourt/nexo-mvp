@@ -20,9 +20,11 @@ interface Props {
   salesPrice: number;
   onSalesPrice: (n: number) => void;
   priceError?: string;
+  /** false = sin objetivos de rentabilidad ni rentabilidad resultante (Administración). */
+  showMargin?: boolean;
 }
 
-export function ResultSection({ state, onState, result, projectType, salesPrice, onSalesPrice, priceError }: Props) {
+export function ResultSection({ state, onState, result, projectType, salesPrice, onSalesPrice, priceError, showMargin = true }: Props) {
   const isDemo = useAppStore((s) => s.isDemo);
   const { breakdown: b, insights } = result;
   const pending = insights.filter((i) => !state.safetyMargins.some((m) => m.category === i.category));
@@ -44,23 +46,26 @@ export function ResultSection({ state, onState, result, projectType, salesPrice,
         </>
       }
     >
+      {!showMargin && (
+        <p className="mb-3 text-sm text-slate-600">El precio sugerido usa los objetivos que define Gerencia. Podés escribir otro precio abajo.</p>
+      )}
       <div className="grid gap-3 sm:grid-cols-3">
-        <NumField
+        {showMargin && <NumField
           id="c-target-mat"
           label="Rentabilidad objetivo de materiales"
           suffix="%"
           value={state.materialsTargetPct}
           onChange={(v) => onState({ materialsTargetPct: v })}
           help="Ganancia sobre el precio de venta que se busca en los materiales."
-        />
-        <NumField
+        />}
+        {showMargin && <NumField
           id="c-target-lab"
           label="Rentabilidad objetivo de mano de obra"
           suffix="%"
           value={state.laborTargetPct}
           onChange={(v) => onState({ laborTargetPct: v })}
           help="Ganancia sobre el precio de venta que se busca en la mano de obra. Incluye diseño y administración (a confirmar)."
-        />
+        />}
         <NumField
           id="c-fin"
           label="Gasto financiero"
@@ -166,7 +171,7 @@ export function ResultSection({ state, onState, result, projectType, salesPrice,
           </div>
         </div>
         {priceError && <p id="c-price-error" role="alert" className="text-xs text-red-600">{priceError}</p>}
-        {b.priceSource === "chosen" && !b.usesSuggested && b.suggestedPrice !== null && (
+        {showMargin && b.priceSource === "chosen" && !b.usesSuggested && b.suggestedPrice !== null && (
           <p>
             Con este precio la rentabilidad total es <strong className="tabular">{formatPercent(b.margin)}</strong>. El desglose por materiales y mano de obra solo
             aplica al precio sugerido.

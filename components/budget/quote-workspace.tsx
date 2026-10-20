@@ -9,6 +9,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { HelpTip } from "@/components/ui/help-tip";
 import { cn } from "@/lib/utils";
+import { canSee } from "@/lib/permissions";
+import { useIdentity } from "@/store/selectors";
 import { BudgetCalculator, type ProjectTypeControl } from "./budget-calculator";
 import { quoteActionBlocker, type CalcState, type CalculatorResult } from "./calculator-state";
 
@@ -25,10 +27,15 @@ export interface QuoteWorkspaceProps {
   onAction: () => void;
   /** Línea de contexto arriba del resumen (en Nuevo proyecto: código y cliente). */
   context?: ReactNode;
+  /** Nuevo proyecto: no se sigue sin al menos un producto. */
+  requireProducts?: boolean;
 }
 
-export function QuoteWorkspace({ state, onState, result, projectType, salesPrice, onSalesPrice, priceError, actionLabel, onAction, context }: QuoteWorkspaceProps) {
-  const blocker = quoteActionBlocker(result, salesPrice);
+export function QuoteWorkspace({ state, onState, result, projectType, salesPrice, onSalesPrice, priceError, actionLabel, onAction, context, requireProducts }: QuoteWorkspaceProps) {
+  const blocker = quoteActionBlocker(result, salesPrice, { requireProducts });
+  // Administración / Comercial / Diseño cotiza sin ver ganancia ni rentabilidad (las define Gerencia).
+  const { session } = useIdentity();
+  const showMargin = canSee(session, "margin");
   const { schedule, breakdown: b } = result;
   const sale = (v: number | null) => (v === null ? "—" : formatCurrency(v));
 
@@ -42,6 +49,7 @@ export function QuoteWorkspace({ state, onState, result, projectType, salesPrice
         salesPrice={salesPrice}
         onSalesPrice={onSalesPrice}
         priceError={priceError}
+        showMargin={showMargin}
       />
 
       <aside className="lg:sticky lg:top-20 lg:max-h-[calc(100vh-6rem)] lg:self-start lg:overflow-y-auto" aria-label="Resumen de la cotización">
@@ -59,7 +67,7 @@ export function QuoteWorkspace({ state, onState, result, projectType, salesPrice
             <Group title="Materiales">
               <Row label="Costo" value={formatCurrency(b.materials.cost)} />
               {b.materials.safetyMargin > 0 && <Row label="incluye margen de seguridad" value={`+${formatCurrency(b.materials.safetyMargin)}`} small />}
-              <Row label="Rentabilidad" value={formatPercent(b.materials.targetPct)} />
+              {showMargin && <Row label="Rentabilidad" value={formatPercent(b.materials.targetPct)} />}
               <Row label="Venta" value={sale(b.materials.sale)} />
             </Group>
 
@@ -69,7 +77,7 @@ export function QuoteWorkspace({ state, onState, result, projectType, salesPrice
                 Operarios {formatCurrency(b.labor.operators)} · Diseño {formatCurrency(b.labor.design)} · Administración {formatCurrency(b.labor.admin)}
               </p>
               {b.labor.safetyMargin > 0 && <Row label="incluye margen de seguridad" value={`+${formatCurrency(b.labor.safetyMargin)}`} small />}
-              <Row label="Rentabilidad" value={formatPercent(b.labor.targetPct)} />
+              {showMargin && <Row label="Rentabilidad" value={formatPercent(b.labor.targetPct)} />}
               <Row label="Venta" value={sale(b.labor.sale)} />
             </Group>
 
@@ -88,8 +96,8 @@ export function QuoteWorkspace({ state, onState, result, projectType, salesPrice
                 value={b.price > 0 ? formatCurrency(b.price) : "Sin definir"}
                 strong
               />
-              <Row label="Ganancia" value={formatCurrencyOrDash(b.profit)} />
-              <div className="flex items-baseline justify-between gap-2 pt-1">
+              {showMargin && <Row label="Ganancia" value={formatCurrencyOrDash(b.profit)} />}
+              {showMargin && <div className="flex items-baseline justify-between gap-2 pt-1">
                 <span className="text-slate-500">Rentabilidad total</span>
                 <span
                   className={cn("text-2xl font-semibold tabular", b.margin !== null && b.margin < 15 ? "text-amber-700" : "text-slate-900")}
@@ -97,8 +105,8 @@ export function QuoteWorkspace({ state, onState, result, projectType, salesPrice
                 >
                   {formatPercent(b.margin)}
                 </span>
-              </div>
-              {b.priceSource === "chosen" && !b.usesSuggested && b.suggestedPrice !== null && (
+              </div>}
+              {showMargin && b.priceSource === "chosen" && !b.usesSuggested && b.suggestedPrice !== null && (
                 <p className="text-xs text-slate-500">Precio escrito a mano: la venta por tipo solo aplica al precio sugerido ({formatCurrency(b.suggestedPrice)}).</p>
               )}
             </div>

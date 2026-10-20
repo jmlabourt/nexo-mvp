@@ -439,6 +439,32 @@ export interface DayException {
   createdAt: string;
 }
 
+/**
+ * Entrega de material del Jefe de planta a un producto (y un operario): solo cantidades (docs/PLANTA_MATERIALES.md).
+ * No es costo: lo es lo que el cierre del día registra como consumo o desperdicio.
+ */
+export interface MaterialDelivery {
+  id: string;
+  projectId: string;
+  itemId?: string;
+  operatorId?: string;
+  materialId: string;
+  materialName: string;
+  unit: string;
+  quantity: number;
+  /** De dónde salió: el depósito (stock libre) o lo ya asignado al proyecto. */
+  source: "warehouse" | "project";
+  date: string;
+  /** Cierre del día que la cerró (sin cerrar = sigue en planta). */
+  closedAt?: string;
+  closeId?: string;
+  consumed?: number;
+  waste?: number;
+  leftover?: number;
+  createdBy: string;
+  createdAt: string;
+}
+
 export interface MaterialRequest {
   id: string;
   projectId: string;
@@ -577,7 +603,15 @@ export type AlertKind =
   | "overload"
   | "unassigned"
   | "purchase_due"
-  | "purchase_cost";
+  | "purchase_cost"
+  /** Compras/Administrativo: pedido en una orden y sin recibir, para una obra que arranca pronto o ya arrancó. */
+  | "material_arrival"
+  /** Jefe de planta (sin importes): la obra arranca pronto o ya arrancó y el material no está completo. */
+  | "material_missing"
+  /** Administrativo: material entregado en planta y sin cierre del día (no se sabe cuánto se consumió). */
+  | "delivery_open"
+  /** Administrativo: resumen con costo de un cierre del día del Jefe de planta. */
+  | "day_close";
 
 export interface Alert {
   /** Determinístico: permite marcarla como resuelta. Incluye el nivel para que un agravamiento reaparezca. */
@@ -589,14 +623,19 @@ export interface Alert {
   level: AlertLevel;
   title: string;
   message: string;
+  /** Cuánto cuesta, en pesos (solo Administrativo y Compras; nunca Jefe de planta ni Operario). */
   impactAmount?: number;
+  /** El costo en puntos de margen sobre el precio de venta (solo Administrativo). */
+  impactPoints?: number;
   expectedMargin?: number;
   projectedMargin?: number;
+  /** Qué revisar: dónde se resuelve. */
+  action?: string;
   /** De dónde sale (registros de horas, asignaciones): la alerta se puede rastrear hasta ellos. */
   records?: string[];
   /**
-   * Clave con la que se marca como resuelta: alerta + día + última modificación del proyecto.
-   * Si el problema persiste (al día siguiente o después de un nuevo registro), la alerta reaparece.
+   * Clave con la que se marca como resuelta: alerta + sus datos (título e importe).
+   * Queda resuelta hasta que cambie el dato: si cambia (más horas, otro monto), la alerta vuelve.
    */
   resolutionKey: string;
 }
@@ -612,3 +651,127 @@ export interface DemoUser {
  * compras = Compras, jefe_planta = Jefe de planta, operator = Operario. Ver lib/permissions.ts.
  */
 export type AppRole = "owner" | "member" | "compras" | "jefe_planta" | "operator";
+
+// ─────────────────────────────────────────────────────────────
+// Contratos de las cinco sesiones que TODAVÍA NO TIENEN persistencia en la base (ver PENDIENTES_BACKEND.md).
+// La interfaz los usa con "Datos de ejemplo" (marcados) o sin datos; nunca simula un guardado.
+// ─────────────────────────────────────────────────────────────
+
+/** Factura al cliente (o cuota prevista). Facturación ≠ precio de venta ≠ cobro. */
+export interface ClientInvoice {
+  id: string;
+  projectId: string;
+  /** "issued" = facturada · "planned" = prevista (todavía no se facturó). */
+  status: "issued" | "planned";
+  /** Fecha de la factura (o la prevista). */
+  date: string;
+  /** Importe sin IVA (la misma base que el precio de venta). */
+  amount: number;
+  number?: string;
+  /** Vencimiento del cobro. */
+  dueDate?: string;
+  /** Fecha en que se cobró (sin dato = no se cobró). */
+  collectedAt?: string;
+  concept?: string;
+}
+
+/** Cómo va la negociación de una cotización. */
+export type NegotiationStatus = "sent" | "negotiating" | "waiting_client";
+
+/** Información comercial de una cotización (o de una oportunidad sin proyecto todavía). */
+export interface Opportunity {
+  id: string;
+  /** Proyecto en Cotización, si existe. */
+  projectId?: string;
+  ref: string;
+  client: string;
+  name: string;
+  /** Importe cotizado (sin IVA). */
+  amount: number;
+  expectedApprovalDate?: string;
+  startDate?: string;
+  dueDate?: string;
+  /** 0 a 100. null = sin estimar (nunca se inventa). */
+  probability: number | null;
+  negotiation: NegotiationStatus;
+  /** Horas presupuestadas por rubro de trabajo (nombre del rubro → horas). */
+  hoursByRubro: Record<string, number>;
+}
+
+/** Capacidad de un rubro de trabajo (Configuración de Gerencia). */
+export interface RubroCapacity {
+  rubro: string;
+  employees: number;
+  hoursPerDay: number;
+  /** Días de la semana (0 = domingo … 6 = sábado). */
+  workDays: number[];
+}
+
+/** Parámetros de Gerencia sin persistencia todavía. */
+export interface ManagementParams {
+  /** Inflación mensual estimada, en %. */
+  inflationMonthlyPct: number;
+  /** Formato del código de proyecto: {prefijo}{numero}_{cliente}_{nombre}. */
+  projectCodePattern: string;
+  projectCodePrefix: string;
+  /** Rubros de trabajo de la empresa (texto libre). */
+  workRubros: Array<{ name: string; active: boolean }>;
+  /** Puesto del operario → rubro de trabajo (para no contar dos veces a quien trabaja en varios rubros). */
+  roleToRubro: Record<string, string>;
+}
+
+/** Cliente (la tabla existe en la base; su lectura y edición desde la app están pendientes). */
+export interface ClientRecord {
+  id: string;
+  name: string;
+  contact?: string;
+  phone?: string;
+  email?: string;
+  address?: string;
+  notes?: string;
+  active: boolean;
+}
+
+/** Proveedor (directorio compartido Administración ↔ Compras). */
+export interface SupplierRecord {
+  id: string;
+  name: string;
+  contact?: string;
+  phone?: string;
+  email?: string;
+  address?: string;
+  notes?: string;
+  catalogUrl?: string;
+}
+
+/** Estado de los planos de un mueble (Diseño). No reemplaza las etapas del mueble. */
+export type DesignStatus = "preparing" | "sent" | "waiting_approval" | "approved";
+
+/** Etapas de un mueble: pueden estar varias activas a la vez. */
+export type FurnitureStage = "design" | "purchasing" | "production" | "installation" | "done";
+
+/** Línea de la lista de materiales (BOM) de un mueble. */
+export interface BomLine {
+  material: string;
+  spec?: string;
+  quantity: number;
+  unit: string;
+  notes?: string;
+}
+
+/** Lo que Diseño agrega a cada mueble (sin persistencia todavía). */
+export interface FurnitureDesign {
+  itemId: string;
+  designStatus: DesignStatus;
+  stages: FurnitureStage[];
+  bom: BomLine[];
+  bomStatus: "draft" | "ready";
+  notes?: string;
+}
+
+/** Rechazo comercial de una cotización: queda el motivo; no es un estado más del proyecto. */
+export interface CommercialRejection {
+  projectId: string;
+  date: string;
+  reason: string;
+}

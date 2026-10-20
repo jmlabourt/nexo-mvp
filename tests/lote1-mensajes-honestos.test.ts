@@ -108,21 +108,25 @@ describe("Proyecto Finalizado", () => {
 
 describe("globo de alertas = pestaña Todas", () => {
   it("salen de la misma cuenta de alertas abiertas", () => {
-    const { projects, stock } = buildSeed(new Date("2026-10-07T12:00:00"));
-    const all = allAlerts(projects, S, "2026-10-07", stock);
+    const { projects } = buildSeed(new Date("2026-10-07T12:00:00"));
+    const all = allAlerts(projects, S, "2026-10-07");
     const resolvedKeys = [all[0].resolutionKey];
     const { open, resolved } = splitAlerts(all, resolvedKeys);
     expect(openAlertCount(open)).toBe(open.length);
     expect(openAlertCount(open) + resolved.length).toBe(all.length);
     expect(resolved).toHaveLength(1);
   });
-  it("si el problema persiste después de un nuevo registro, la alerta reaparece", () => {
+  it("\"Marcar resuelta\" dura hasta que cambie el dato (no vence al día siguiente)", () => {
     const p = project({ salesPrice: 2000, budgetLines: [line("materials", null, 1000)], materialUsages: [usage({ quantityConsumed: 1, unitCost: 1300, date: "2026-01-10" })] });
-    const [a] = projectAlerts(p, S, TODAY).filter((x) => x.kind === "category");
-    expect(splitAlerts(projectAlerts(p, S, TODAY), [a.resolutionKey]).open.some((x) => x.id === a.id)).toBe(false);
-    const touched = { ...p, updatedAt: "2026-01-11T09:00:00Z" };
-    expect(splitAlerts(projectAlerts(touched, S, TODAY), [a.resolutionKey]).open.some((x) => x.id === a.id)).toBe(true);
-    expect(splitAlerts(projectAlerts(p, S, "2026-01-12"), [a.resolutionKey]).open.some((x) => x.id === a.id)).toBe(true);
+    const [a] = projectAlerts(p, S, TODAY).filter((x) => x.kind === "margin");
+    const isOpen = (q: typeof p, day: string) => splitAlerts(projectAlerts(q, S, day), [a.resolutionKey]).open.some((x) => x.id === a.id);
+    expect(isOpen(p, TODAY)).toBe(false);
+    // Otro día, o un cambio en el proyecto que no toca el dato: sigue resuelta.
+    expect(isOpen(p, "2026-01-12")).toBe(false);
+    expect(isOpen({ ...p, updatedAt: "2026-01-11T09:00:00Z" }, TODAY)).toBe(false);
+    // Cambia el dato (más sobrecosto): la alerta vuelve.
+    const worse = { ...p, materialUsages: [...p.materialUsages, usage({ id: "u2", quantityConsumed: 1, unitCost: 300, date: "2026-01-10" })] };
+    expect(isOpen(worse, TODAY)).toBe(true);
   });
 });
 
@@ -152,11 +156,11 @@ describe("categorías de reporte (Lote 4)", () => {
 });
 
 describe("textos", () => {
-  it("días y puntos de rentabilidad bien escritos, sin pp", () => {
+  it("días y puntos de margen bien escritos, sin pp", () => {
     expect(formatDays(1)).toBe("1 día");
     expect(formatWorkingDays(1)).toBe("1 día hábil");
     expect(formatWorkingDays(12)).toBe("12 días hábiles");
-    expect(formatMarginPoints(-9.2, { signed: true })).toBe("−9,2 puntos de rentabilidad");
+    expect(formatMarginPoints(-9.2, { signed: true })).toBe("−9,2 puntos de margen");
     expect(formatMarginPoints(9.2, { short: true })).toBe("9,2 puntos");
     expect(formatMarginPoints(-9.2, { signed: true })).not.toMatch(/pp/);
   });

@@ -1,6 +1,6 @@
 "use client";
 import { useConfirmedAction } from "@/store/confirmed-action";
-// Compras → Necesidades (Lote 6): los materiales de los proyectos aprobados con lo que falta pedir, neteando el stock
+// Compras → Necesidades: los materiales de los proyectos aprobados con lo que falta pedir, neteando el stock
 // libre del depósito. Estado por material: Por comprar / En orden de compra / Recibido (se deriva de las órdenes).
 // Se eligen varios ítems (de uno o varios proyectos) y se genera una orden de compra. Sin precio de venta ni mano de obra.
 import Link from "next/link";

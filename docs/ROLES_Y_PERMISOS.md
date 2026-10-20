@@ -157,3 +157,12 @@ El pedido fue "Cotizador de materiales: variante para Compras que solo trabaja c
 
 ### Configuración que falta en el panel de Supabase
 - **Código por mail**: Authentication → Email Templates → plantilla "Magic Link" → incluir `{{ .Token }}` en el texto (ej. "Tu código es: {{ .Token }}"). Sin eso el mail trae un link en vez del código.
+
+## Entregas de material y cierre del día (oct 2026)
+
+- **Jefe de planta:** registra entregas (`planta_deliver_material`) y el cierre del día (`planta_close_day`); lee el
+  material con `planta_stock()`: lotes y movimientos **sin costo ni proveedor**. Nunca recibe ni manda importes.
+- **Administrativo:** lee `material_deliveries` y ve el resumen con costo en Alertas / "Para revisar hoy".
+- **Compras:** no ve entregas; el stock sigue siendo solo consulta.
+- **Operario:** nada (no lee la tabla ni puede llamar las funciones).
+- Nadie escribe `material_deliveries` directo (RLS sin políticas de escritura). Ver `docs/PLANTA_MATERIALES.md`.

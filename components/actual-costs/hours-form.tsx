@@ -19,7 +19,7 @@ import { cn } from "@/lib/utils";
  * (Lote 6): al guardar se crea la asignación de ese día y las horas quedan contra ella. El costo/hora sale de la
  * ficha del operario, vigente ese día: no se tipea.
  */
-export function HoursForm({ project, onDone }: { project: Project; onDone: (summary: string) => void }) {
+export function HoursForm({ project, onDone, showCost = true }: { project: Project; onDone: (summary: string) => void; showCost?: boolean }) {
   const identity = useIdentity();
   const hoursPerDay = useAppStore((s) => s.costSettings.hoursPerDay);
   const projects = useAppStore((s) => s.projects);
@@ -154,7 +154,8 @@ export function HoursForm({ project, onDone }: { project: Project; onDone: (summ
         </div>
       )}
 
-      {operator && hoursN > 0 && (
+      {/* Administración / Comercial / Diseño no ve remuneraciones: carga las horas sin su costo. */}
+      {showCost && operator && hoursN > 0 && (
         <div className="rounded-md bg-slate-50 p-3 text-sm">
           Costo: <strong className="tabular">{formatCurrency(hoursN * operator.hourlyCost)}</strong>
           <span className="text-slate-500"> ({formatNumber(hoursN, 1)} h × {formatCurrency(operator.hourlyCost)} de la ficha de {operator.name})</span>

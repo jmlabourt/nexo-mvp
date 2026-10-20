@@ -88,3 +88,31 @@ No puede existir una hora "sin rubro":
 - **Atrasado a propósito:** P-1047, que venció hace 2 días.
 - **En riesgo:** P-1039, con entrega en 3 días.
 - **Fechas:** todas son relativas al día en que se restaura la demo. Con el tiempo se desactualizan: "Restaurar datos demo" las vuelve a poner al día.
+
+## Presupuesto por producto (Auditoría UX · P0-7, oct 2026)
+
+- En **Nuevo proyecto → Costo presupuestado** se cargan los **productos** (nombre, cantidad) y, por cada uno, las horas
+  estimadas por rubro (para toda la cantidad) y los operarios pedidos. Es el mismo registro de siempre (`project_items`):
+  no hay un modelo nuevo.
+- La **mano de obra presupuestada es la suma de los productos**: una línea por producto + rubro
+  ("Mesa de comedor × 10 · Carpintería madera: mano de obra (1 operario × 60 h)"), con la tarifa, la jornada y las
+  horas extra de siempre (`productLaborRubros` en `lib/budget-calculator.ts`). El rubro conserva materiales, diseño,
+  administración e importes; ya no tiene "operarios × horas por operario".
+- Días de trabajo: producto detrás de producto (el mismo supuesto conservador que antes con los rubros).
+- Si después se editan las horas de un producto, la pestaña Productos avisa la diferencia con la mano de obra
+  presupuestada (`laborHoursGaps`). El costo presupuestado no cambia solo (queda congelado al aprobar).
+
+### Proyectos anteriores sin productos (no se migran solos)
+
+Los totales de los proyectos guardados **no cambian**: sus líneas de costo presupuestado no se recalculan. Un
+proyecto anterior que no tenga productos no se puede asignar en planta por producto. Propuesta, **no aplicada**:
+
+1. Listar los proyectos abiertos sin productos (consulta de solo lectura: `project_items` vacío y líneas de
+   `labor` en horas).
+2. Para cada uno, crear un producto **"Trabajo general × 1"** con las horas por rubro de sus líneas de mano de obra
+   (normales + extra) y los operarios de esas líneas (`legacyProductProposal` en `lib/production.ts`).
+3. Hacerlo desde la pestaña Productos (alta normal de un producto, la hace el Administrativo) o con un script que use
+   la misma función. No toca líneas de costo: el costo presupuestado y los márgenes quedan iguales (está en los tests).
+4. Los proyectos cerrados no se migran: no se asignan más horas.
+
+En la demo no hace falta: todos los proyectos ya tienen productos y sus horas coinciden con la mano de obra presupuestada.

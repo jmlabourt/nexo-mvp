@@ -4,19 +4,23 @@ import { quoteBreakdown } from "@/lib/budget-calculator";
 import { benchmarksForType, learningInsights, MIN_LEARNING_PROJECTS } from "@/lib/historical-benchmarks";
 import { DEFAULT_HOUR_RATES } from "@/lib/constants";
 import { computeCalculator, initialCalcState, newRubroRow, safetyMarginFrom, type CalcState, type CalculatorContext, type RubroRow } from "@/components/budget/calculator-state";
-import { line, project, usage } from "./helpers";
+import { laborProduct, line, project, usage } from "./helpers";
 
 // Caso de la planilla del cliente: materiales 50.000; operarios 3 h × 19.000; diseño 1 h × 27.000; administración 2 h × 27.000.
 const rubro = (patch: Partial<RubroRow> = {}): RubroRow => ({
   ...newRubroRow("carpinteria_madera"),
   materials: [{ key: "m", name: "Melamina", unit: "placa", quantity: "1", unitCost: "50000", wastePct: "0" }],
-  workers: "1",
-  hoursPerWorker: "3",
   designHours: "1",
   adminHours: "2",
   ...patch,
 });
-const state = (patch: Partial<CalcState> = {}, row: Partial<RubroRow> = {}): CalcState => ({ ...initialCalcState(5), rubros: [rubro(row)], ...patch });
+// La mano de obra (antes 1 operario × 3 h en el rubro) va en un producto: los números esperados no cambian.
+const state = (patch: Partial<CalcState> = {}, row: Partial<RubroRow> = {}, hours = 3): CalcState => ({
+  ...initialCalcState(5),
+  rubros: [rubro(row)],
+  products: [laborProduct("carpinteria_madera", 1, hours)],
+  ...patch,
+});
 const ctx: CalculatorContext = { projects: [], rates: DEFAULT_HOUR_RATES, overtimeMultiplier: 2, hoursPerDay: 9.5, salesPrice: 0, isDemo: false };
 const calc = (s: CalcState, patch: Partial<typeof ctx> = {}) => computeCalculator(s, "Local comercial", { ...ctx, ...patch });
 
@@ -45,7 +49,7 @@ describe("desglose del resumen (panel, Resultado y Revisar y crear)", () => {
     const base = calc(state()).breakdown;
     const changed = [
       calc(state({}, { materials: [{ key: "m", name: "Melamina", unit: "placa", quantity: "2", unitCost: "50000", wastePct: "0" }] })).breakdown,
-      calc(state({}, { hoursPerWorker: "4" })).breakdown,
+      calc(state({}, {}, 4)).breakdown,
       calc(state({}, { designHours: "2" })).breakdown,
       calc(state(), { rates: DEFAULT_HOUR_RATES.map((r) => (r.category === "labor" ? { ...r, hourlyRate: 20_000 } : r)) }).breakdown,
       calc(state({ materialsTargetPct: "40" })).breakdown,

@@ -1,4 +1,5 @@
-import type { BudgetLine, MaterialUsageEntry, Project } from "@/types";
+import type { BudgetLine, MaterialUsageEntry, Project, RubroId } from "@/types";
+import type { ProductRow } from "@/components/budget/calculator-state";
 import { budgetLineTotal } from "@/lib/calculations";
 
 let n = 0;
@@ -24,4 +25,13 @@ export function project(extra: Partial<Project> = {}): Project {
     budgetLines: [], actualEntries: [], materialUsages: [], purchaseEntries: [], activity: [], isClosed: false,
     assignedOperatorIds: [], items: [], stageLogs: [], attachments: [], ...extra,
   };
+}
+
+/**
+ * Mano de obra de la calculadora, cargada en un producto (Auditoría UX · P0-7): "2 operarios × 40 h" de un rubro
+ * es un producto con 80 h y 2 operarios en ese rubro. Los totales tienen que dar lo mismo que antes.
+ */
+export function laborProduct(rubro: RubroId, workers: number, hoursPerWorker: number, name = "Mueble"): ProductRow {
+  n += 1;
+  return { key: `pr${n}`, name, quantity: "1", rubros: [{ key: `prr${n}`, rubro, hours: String(workers * hoursPerWorker).replace(".", ","), workers: String(workers) }] };
 }

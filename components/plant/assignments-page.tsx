@@ -1,5 +1,5 @@
 "use client";
-// Jefe de planta → Asignaciones: calendario operarios × días (capacidad según los días laborales de cada operario y sus
+// Jefe de planta → Operarios → Asignaciones: calendario operarios × días (capacidad según los días laborales de cada operario y sus
 // excepciones, Lote 6 · Fase 3) y producto + rubro pendientes de asignar. Sin importes.
 import { useMemo, useState } from "react";
 import { Pencil, Plus } from "lucide-react";
@@ -18,7 +18,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AssignmentDialog, type AssignmentDraft } from "./assignment-dialog";
 import { PlantCalendar } from "./plant-calendar";
 
-export function AssignmentsPage() {
+/** `embedded`: dentro de la pestaña Operarios (sin título de página). */
+export function AssignmentsPage({ embedded = false }: { embedded?: boolean } = {}) {
   const today = useToday();
   const projects = useAppStore((s) => s.projects);
   const operators = activeOperators(useAppStore((s) => s.operators));
@@ -28,18 +29,23 @@ export function AssignmentsPage() {
   const pending = useMemo(() => pendingAssignments(projects, assignments, today), [projects, assignments, today]);
   const materialsOf = useMaterialsStateOf();
   const projectOf = (id: string) => projects.find((p) => p.id === id);
+  const subtitle = `Quién trabaja en qué proyecto cada día. Capacidad: la jornada de ${formatNumber(hoursPerDay)} h (Configuración) en los días laborales de cada operario, o lo que diga su excepción.`;
+  const newButton = (
+    <Button onClick={() => setDraft({ date: today })}>
+      <Plus /> Nueva asignación
+    </Button>
+  );
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        title="Asignaciones"
-        subtitle={`Quién trabaja en qué proyecto cada día. Capacidad: la jornada de ${formatNumber(hoursPerDay)} h (Configuración) en los días laborales de cada operario, o lo que diga su excepción.`}
-        actions={
-          <Button onClick={() => setDraft({ date: today })}>
-            <Plus /> Nueva asignación
-          </Button>
-        }
-      />
+      {embedded ? (
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <p className="max-w-2xl text-sm text-slate-500">{subtitle}</p>
+          {newButton}
+        </div>
+      ) : (
+        <PageHeader title="Asignaciones" subtitle={subtitle} actions={newButton} />
+      )}
 
       <PlantCalendar operators={operators} today={today} onAssign={setDraft} />
 

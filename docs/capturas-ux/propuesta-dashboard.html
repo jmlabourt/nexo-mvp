@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Boceto Dashboard</title>
+<!-- Boceto ESTÁTICO (no es código de la app). Números de la demo del 19/10/2026. Ver docs/AUDITORIA_UX.md §5. -->
+<style>
+:root{--bg:#f7f8fa;--card:#fff;--ink:#0f172a;--muted:#64748b;--line:#e2e8f0;--red:#b91c1c;--redbg:#fef2f2;--amber:#92400e;--amberbg:#fffbeb;--green:#047857;--greenbg:#ecfdf5;--blue:#1d4ed8;--gray:#f1f5f9}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0b1220;--card:#111a2b;--ink:#e5e7eb;--muted:#94a3b8;--line:#1f2a3d;--red:#f87171;--redbg:#2a1215;--amber:#fbbf24;--amberbg:#2a2110;--green:#34d399;--greenbg:#0f2a22;--blue:#93c5fd;--gray:#172235}}
+:root[data-theme="dark"]{--bg:#0b1220;--card:#111a2b;--ink:#e5e7eb;--muted:#94a3b8;--line:#1f2a3d;--red:#f87171;--redbg:#2a1215;--amber:#fbbf24;--amberbg:#2a2110;--green:#34d399;--greenbg:#0f2a22;--blue:#93c5fd;--gray:#172235}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 system-ui,-apple-system,"Segoe UI",Inter,sans-serif}
+main{max-width:1180px;margin:0 auto;padding:24px 16px 48px}
+h1{font-size:24px;margin:0}h2{font-size:16px;margin:0 0 4px}.muted{color:var(--muted)}.small{font-size:12px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin-top:16px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-top:16px}
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+.kpi b{display:block;font-size:26px;margin-top:2px;font-variant-numeric:tabular-nums}
+.neg{color:var(--red)}.ok{color:var(--green)}.warn{color:var(--amber)}
+table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+th{font-size:11px;text-transform:uppercase;letter-spacing:.03em;color:var(--muted);text-align:left;padding:8px 6px;border-bottom:1px solid var(--line)}
+td{padding:10px 6px;border-bottom:1px solid var(--line);vertical-align:top}td.r,th.r{text-align:right}
+.pill{display:inline-block;border-radius:999px;padding:1px 8px;font-size:11px;font-weight:600;white-space:nowrap}
+.p-red{background:var(--redbg);color:var(--red)}.p-amber{background:var(--amberbg);color:var(--amber)}.p-green{background:var(--greenbg);color:var(--green)}.p-gray{background:var(--gray);color:var(--muted)}
+a{color:var(--blue);text-decoration:none}
+.cols{display:grid;grid-template-columns:2fr 1fr;gap:16px}@media (max-width:820px){.cols{grid-template-columns:1fr}.hide-m{display:none}}
+.note{border-left:3px solid var(--amber);background:var(--amberbg);padding:8px 10px;border-radius:6px;margin-top:10px;font-size:12px}
+ul.clean{list-style:none;margin:8px 0 0;padding:0}ul.clean li{padding:8px 0;border-bottom:1px solid var(--line)}
+.tbl{overflow-x:auto}
+</style>
+</head>
+<body>
+<main>
+  <p class="small muted">BOCETO · propuesta de la auditoría UX, no es la app · datos de la demo</p>
+  <h1>¿Qué proyectos se desvían y por qué?</h1>
+  <p class="muted">Hoy, 19/10/2026 · 8 proyectos en curso. Cada número se abre hasta sus registros.</p>
+
+  <!-- 1. Lo económico primero: tres números, todos en pesos o puntos de margen -->
+  <div class="kpis">
+    <div class="kpi"><span class="small muted">Plata en riesgo (en curso)</span><b class="neg">−$ 1.717.000</b><span class="small muted">costo final proyectado por encima del presupuestado</span></div>
+    <div class="kpi"><span class="small muted">Margen esperado → proyectado</span><b>32,0% → <span class="warn">29,8%</span></b><span class="small neg">−2,1 puntos de margen</span></div>
+    <div class="kpi"><span class="small muted">Desvíos detectados aún no proyectados</span><b class="warn">$ 720.000</b><span class="small muted">horas de más y facturas más caras (P-1058)</span></div>
+    <div class="kpi"><span class="small muted">Margen real final (cerrados)</span><b>31,0%</b><span class="small muted">4 proyectos · no se mezcla con los de arriba</span></div>
+  </div>
+
+  <!-- 2. Lista de proyectos ordenada por impacto en pesos -->
+  <section class="card">
+    <h2>Proyectos ordenados por impacto en pesos</h2>
+    <p class="small muted">Economía y plazo van en columnas separadas: "Atrasado" nunca significa "pierde plata".</p>
+    <div class="tbl"><table>
+      <thead><tr><th>Proyecto</th><th class="r">Impacto</th><th class="r">Margen esperado → proyectado</th><th>Causa principal</th><th>Plazo</th></tr></thead>
+      <tbody>
+        <tr><td><a href="#">P-1042</a> Local Palermo<br><span class="small muted">Producción · 64% hecho</span></td><td class="r neg">−$ 1.050.000</td><td class="r">40,0% → <b class="neg">31,3%</b><br><span class="small neg">−8,8 puntos</span></td><td>Materiales <b class="neg">+$ 1.000.000</b><br><span class="small muted">5 facturas por encima de lo estimado</span></td><td><span class="pill p-green">En tiempo</span></td></tr>
+        <tr><td><a href="#">P-1058</a> Restaurante Costanera<br><span class="small muted">Producción · 53% hecho</span></td><td class="r warn">−$ 720.000<br><span class="small muted">detectado</span></td><td class="r">26,8% → 26,8%<br><span class="small warn">≈ −4,5 puntos si no se compensa</span></td><td>Facturas más caras <b class="warn">+$ 510.000</b><br><span class="small muted">y Mesas · Carpintería +14 h ≈ $ 210.000</span></td><td><span class="pill p-green">En tiempo</span></td></tr>
+        <tr><td><a href="#">P-1045</a> Oficinas Núñez<br><span class="small muted">Producción · 28% hecho</span></td><td class="r neg">−$ 653.000</td><td class="r">28,7% → <b class="neg">22,8%</b><br><span class="small neg">−5,9 puntos</span></td><td>Diseño <b class="neg">+$ 486.000</b><br><span class="small muted">y Administración +$ 162.000</span></td><td><span class="pill p-green">En tiempo</span></td></tr>
+        <tr><td><a href="#">P-1039</a> Recepción Puerto Madero<br><span class="small muted">Instalación · 82% hecho</span></td><td class="r">−$ 13.750</td><td class="r">35,0% → 34,9%</td><td><span class="muted">Sin desvío relevante</span></td><td><span class="pill p-amber">Entrega en 3 días</span></td></tr>
+        <tr><td><a href="#">P-1047</a> Pop-up Abasto<br><span class="small muted">Producción · 20% hecho</span></td><td class="r">$ 0</td><td class="r">30,7% → 30,7%</td><td><span class="muted">Sin desvío económico</span></td><td><span class="pill p-red">Atrasado 2 días</span></td></tr>
+        <tr><td colspan="5" class="small muted">+ 3 proyectos sin desvíos (P-1048, P-1051, P-1053) · <a href="#">ver todos</a></td></tr>
+      </tbody>
+    </table></div>
+    <div class="note"><b>A decidir (no se cambia sin aprobación):</b> hoy el margen proyectado de P-1058 no incluye las 14 h de más ni la factura del caño. El boceto los muestra aparte como "detectado". Ver hallazgo P0-1.</div>
+  </section>
+
+  <div class="cols">
+    <!-- 3. Por qué: causas sumadas en pesos -->
+    <section class="card">
+      <h2>¿Por qué se pierde? (todas las obras en curso)</h2>
+      <div class="tbl"><table>
+        <thead><tr><th>Causa</th><th class="r">Monto</th><th class="hide-m">Dónde</th></tr></thead>
+        <tbody>
+          <tr><td>Materiales por encima de lo presupuestado</td><td class="r neg">$ 1.013.750</td><td class="hide-m small">P-1042, P-1039</td></tr>
+          <tr><td>Diseño y Administración</td><td class="r neg">$ 648.000</td><td class="hide-m small">P-1045</td></tr>
+          <tr><td>Transporte y fletes</td><td class="r neg">$ 50.000</td><td class="hide-m small">P-1042</td></tr>
+          <tr><td><span class="warn">Detectado, aún no proyectado:</span> facturas más caras</td><td class="r warn">$ 510.000</td><td class="hide-m small">P-1058 (caño, multilaminado)</td></tr>
+          <tr><td><span class="warn">Detectado, aún no proyectado:</span> horas de más</td><td class="r warn">$ 210.000</td><td class="hide-m small">P-1058 · Mesas · Carpintería</td></tr>
+        </tbody>
+      </table></div>
+    </section>
+    <!-- 4. Lo operativo, bajado de jerarquía y en lo que significa en plata -->
+    <section class="card">
+      <h2>Para revisar hoy</h2>
+      <ul class="clean">
+        <li><b>Mesas (P-1058): Juan cargó 14 h de más</b><br><span class="small muted">≈ $ 210.000 · revisar con el Jefe de planta</span></li>
+        <li><b>4 obras arrancaron sin todo el material pedido</b><br><span class="small muted">P-1048, P-1047, P-1045, P-1053 · Compras</span></li>
+        <li><b>8 tareas sin persona asignada</b><br><span class="small muted">Jefe de planta</span></li>
+        <li><b>Diego no viene el 21/10 y tiene 8 h asignadas</b><br><span class="small muted">Jefe de planta</span></li>
+      </ul>
+    </section>
+  </div>
+</main>
+</body>
+</html>

@@ -1,6 +1,6 @@
 # Blerp (antes NEXO) — Conexiones de datos, estándares de carga y prioridades
 
-Versión 1 · 7/10/2026 · Origen: revisión de los 6 videos del recorrido de pantalla y decisiones de Juanita.
+Versión 1 · 7/10/2026 · Origen: revisión de los 6 videos del recorrido de pantalla y decisiones del equipo.
 Estado: son decisiones de diseño para implementar. Nada de esto está validado con fabricantes reales y no se afirma Product-Market Fit. El módulo de machine learning es un objetivo futuro, no algo que ya funcione.
 
 Para el chat de desarrollo: este documento se suma a la especificación del MVP. Si algo lo contradice, preservá primero el núcleo del producto (presupuesto → ejecución → captura → costo → desvío → margen) y explicá la decisión en una línea.
@@ -60,7 +60,7 @@ Regla de oro para el equipo: **ninguna pantalla guarda su propia copia de una ci
 
 ### 3.1 Reglas generales de formularios
 
-- **Texto**: quitar espacios sobrantes; capitalizar nombres propios al salir del campo ("pedro" → "Pedro"; "juanita" → "Juanita"); sin diferencias por mayúsculas o acentos al buscar o detectar duplicados.
+- **Texto**: quitar espacios sobrantes; capitalizar nombres propios al salir del campo ("pedro" → "Pedro"; "ana maría" → "Ana María"); sin diferencias por mayúsculas o acentos al buscar o detectar duplicados.
 - **Duplicados**: avisar si ya existe un cliente u operario con el mismo nombre normalizado.
 - **Dinero**: campo numérico, siempre en pesos, con separador de miles al mostrar. Nunca "k" ni "M" salvo en tarjetas del Dashboard.
 - **Fechas**: calendario, formato visible dd/mm/aaaa; se guardan en formato estándar con zona horaria.
