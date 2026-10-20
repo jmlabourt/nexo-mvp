@@ -1,6 +1,6 @@
 # Jefe de planta: entrega de materiales y cierre del día (diseño corto)
 
-Pedido de producto (oct 2026, Juanita). El Jefe de planta es quien maneja el material físico. **No es un ERP:**
+Pedido de producto (oct 2026). El Jefe de planta es quien maneja el material físico. **No es un ERP:**
 no hay depósitos múltiples, remitos, lotes con código ni valorización nueva. Se usa el libro de movimientos de
 stock que ya existe (`lib/stock.ts`) y la misma regla de siempre: **solo consumo y desperdicio son costo**.
 

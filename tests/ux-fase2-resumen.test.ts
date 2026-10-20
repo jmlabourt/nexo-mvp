@@ -1,4 +1,4 @@
-// Ajustes al Resumen tras la Fase 1 (video de Juanita): sin signo en pesos, "podría quedar en ~X%" cuando el
+// Ajustes al Resumen tras la Fase 1 (video de revisión): sin signo en pesos, "podría quedar en ~X%" cuando el
 // proyectado no cambia, rojo solo para lo grave (umbral de Configuración), "N proyectos en orden". Funciones puras.
 import { describe, expect, it } from "vitest";
 import type { ActualEntry } from "@/types";
