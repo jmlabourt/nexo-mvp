@@ -1,7 +1,7 @@
 "use client";
 import { Plus, Trash2 } from "lucide-react";
 import type { BudgetCategory, BudgetLine, RubroId } from "@/types";
-import { CATEGORY_LABELS, CATEGORY_ORDER, MATERIAL_CATALOG } from "@/lib/constants";
+import { CATEGORY_LABELS, CATEGORY_ORDER, HOUR_CATEGORIES, MATERIAL_CATALOG } from "@/lib/constants";
 import { budgetLineTotal } from "@/lib/calculations";
 import { formatCurrency } from "@/lib/formatting";
 import { budgetLineSchema } from "@/lib/schemas";
@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input, Select } from "@/components/ui/input";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { useCatalogPrice } from "@/store/selectors";
+import { useAppStore } from "@/store/use-app-store";
 
 /** Fila en edición: los números como texto para permitir vacíos. quantity vacío = monto directo. */
 export interface DraftLine {
@@ -75,7 +76,20 @@ export function BudgetEditor({
   onChange: (lines: DraftLine[]) => void;
   errors?: Record<string, string>;
 }) {
-  const update = (key: string, patch: Partial<DraftLine>) => onChange(lines.map((l) => (l.key === key ? { ...l, ...patch } : l)));
+  const hourRates = useAppStore((s) => s.hourRates);
+  // Las horas (Mano de obra, Diseño, Administración) se valorizan con la tarifa de Configuración: acá no se escribe.
+  const rateOf = (c: BudgetCategory) => hourRates.find((r) => r.category === c)?.hourlyRate;
+  const isHourLine = (l: Pick<DraftLine, "category" | "quantity">) => (HOUR_CATEGORIES as readonly string[]).includes(l.category) && l.quantity.trim() !== "";
+  const update = (key: string, patch: Partial<DraftLine>) =>
+    onChange(
+      lines.map((l) => {
+        if (l.key !== key) return l;
+        const next = { ...l, ...patch };
+        const rate = rateOf(next.category);
+        // Una línea de horas nueva (o que pasa a ser de horas) toma la tarifa vigente; una ya guardada conserva la suya.
+        return isHourLine(next) && rate !== undefined && (patch.category !== undefined || next.unitCost.trim() === "") ? { ...next, unitCost: String(rate) } : next;
+      }),
+    );
   const catalogPrice = useCatalogPrice();
   return (
     <div>
@@ -142,7 +156,17 @@ export function BudgetEditor({
               </TD>
               <TD className="w-40">
                 <label className="sr-only" htmlFor={`cost-${l.key}`}>Costo fila {i + 1}</label>
-                <Input id={`cost-${l.key}`} inputMode="decimal" className="text-right" placeholder="$" value={l.unitCost} onChange={(e) => update(l.key, { unitCost: e.target.value })} />
+                <Input
+                  id={`cost-${l.key}`}
+                  inputMode="decimal"
+                  className="text-right"
+                  placeholder="$"
+                  value={l.unitCost}
+                  readOnly={isHourLine(l)}
+                  aria-describedby={isHourLine(l) ? `cost-hint-${l.key}` : undefined}
+                  onChange={(e) => update(l.key, { unitCost: e.target.value })}
+                />
+                {isHourLine(l) && <p id={`cost-hint-${l.key}`} className="mt-1 text-xs text-slate-500">Tarifa de Configuración</p>}
               </TD>
               <TD className="whitespace-nowrap pt-4 text-right font-medium tabular text-slate-900">{formatCurrency(draftTotal(l))}</TD>
               <TD className="w-10">

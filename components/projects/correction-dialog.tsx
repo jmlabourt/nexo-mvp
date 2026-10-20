@@ -6,6 +6,7 @@ import { History, PencilLine } from "lucide-react";
 import type { Project, ValueCorrection } from "@/types";
 import { formatCurrency, formatDateTime, formatNumber } from "@/lib/formatting";
 import { parseDecimal } from "@/lib/schemas";
+import { HOUR_CATEGORIES } from "@/lib/constants";
 import { useAppStore } from "@/store/use-app-store";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
@@ -18,7 +19,9 @@ function optionsOf(project: Project): Option[] {
   const out: Option[] = [{ key: "price", label: "Precio de venta", target: "sales_price", field: "sales_price", current: project.salesPrice }];
   for (const l of project.budgetLines) {
     if (l.quantity !== null) out.push({ key: `${l.id}:q`, label: `${l.description} — cantidad`, target: "budget_line", field: "quantity", lineId: l.id, current: l.quantity });
-    out.push({ key: `${l.id}:c`, label: `${l.description} — ${l.quantity === null ? "monto" : "costo unitario"}`, target: "budget_line", field: "unit_cost", lineId: l.id, current: l.unitCost });
+    // El costo de una hora (Mano de obra, Diseño, Administración) es la tarifa de Configuración: no se corrige por proyecto.
+    const hourLine = (HOUR_CATEGORIES as readonly string[]).includes(l.category) && l.quantity !== null;
+    if (!hourLine) out.push({ key: `${l.id}:c`, label: `${l.description} — ${l.quantity === null ? "monto" : "costo unitario"}`, target: "budget_line", field: "unit_cost", lineId: l.id, current: l.unitCost });
   }
   return out;
 }

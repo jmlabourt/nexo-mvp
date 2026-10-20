@@ -8,7 +8,7 @@ import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Copy, UserCheck, UserMinus, UserPlus } from "lucide-react";
 import type { Operator } from "@/types";
-import { formatDate } from "@/lib/formatting";
+import { formatCurrency, formatDate } from "@/lib/formatting";
 import { activeOperators } from "@/lib/operators";
 import { ROLE_KEYS, ROLE_LABELS, roleKeyOf, type RoleKey } from "@/lib/permissions";
 import {
@@ -28,6 +28,7 @@ import { createClient } from "@/lib/supabase/client";
 import { loadMembers, revokeInvitation, setMemberActive, setMemberRole } from "@/lib/supabase/users";
 import { inviteUser } from "@/app/(gestion)/settings/actions";
 import { useAppStore } from "@/store/use-app-store";
+import { useCategoryRate } from "@/store/selectors";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -88,7 +89,7 @@ export function UsersSection() {
             <HelpTip label="Usuarios y operarios">
               <span className="block">Un usuario es una cuenta para entrar a Blerp, con un rol: Administrativo, Compras, Jefe de planta u Operario.</span>
               <span className="block">
-                Un operario (en Operarios) es la persona con su costo por hora: puede existir sin usuario. Para que entre, invitalo acá como Operario y elegí
+                Un operario (en Personal) es la persona que carga horas: puede existir sin usuario. Para que entre, invitalo acá como Operario y elegí
                 quién es.
               </span>
               <span className="block">Operarios sin mail: todavía no tienen forma de entrar. Está como pregunta abierta para el cliente (acceso con PIN).</span>
@@ -294,11 +295,12 @@ function MembersTable({ data, operators, run }: { data: { members: Member[]; inv
 
 function NewUserCard({ free, onDone }: { free: Operator[]; onDone: () => Promise<void> }) {
   const createOperator = useConfirmedAction("createOperator");
+  const laborRate = useCategoryRate("labor");
   const [pending, startTransition] = useTransition();
   const [status, setStatus] = useState<Status>(null);
   const { register, handleSubmit, reset, control, setValue, setError, formState } = useForm<UserFormInput, unknown, UserFormValues>({
     resolver: zodResolver(userFormSchema),
-    defaultValues: { displayName: "", email: "", role: "admin", operatorId: "", position: "", hourlyCost: "" },
+    defaultValues: { displayName: "", email: "", role: "admin", operatorId: "", position: "" },
   });
   const role = useWatch({ control, name: "role" });
   const operatorId = useWatch({ control, name: "operatorId" });
@@ -311,7 +313,6 @@ function NewUserCard({ free, onDone }: { free: Operator[]; onDone: () => Promise
     // Operario: por defecto es una persona nueva. Otro rol: se limpian los datos propios de Operario.
     setValue("operatorId", next === "operario" ? NEW_OPERATOR : "");
     setValue("position", "");
-    setValue("hourlyCost", "");
     if (existing) setValue("displayName", "");
   };
 
@@ -332,7 +333,7 @@ function NewUserCard({ free, onDone }: { free: Operator[]; onDone: () => Promise
         <CardTitle>Nuevo usuario</CardTitle>
         <CardDescription>
           Le llega un mail de invitación y podés copiar su link. Después entra con ese mismo mail (le pedimos un código) o con Google si usa el mismo mail.
-          Un Operario puede ser una persona nueva (se la carga en Operarios con su costo por hora) o una que ya está cargada.
+          Un Operario puede ser una persona nueva (se la carga en Operarios con la tarifa de Mano de obra de Configuración) o una que ya está cargada.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -347,7 +348,8 @@ function NewUserCard({ free, onDone }: { free: Operator[]; onDone: () => Promise
               if (person) {
                 const dup = duplicateOperatorError(person.name, free);
                 if (dup) return setError("displayName", { message: dup });
-                const created = await createOperator(person);
+                // El costo por hora no se escribe: es la tarifa de Mano de obra de Configuración.
+                const created = await createOperator({ ...person, hourlyCost: laborRate });
                 if (!created.ok) return setStatus({ ok: false, text: created.error });
                 linkedId = created.value;
               }
@@ -408,9 +410,9 @@ function NewUserCard({ free, onDone }: { free: Operator[]; onDone: () => Promise
                 <Field label="Puesto o especialidad" htmlFor="nu-position" error={errors.position?.message} hint="Ej.: carpintero, lustrador.">
                   <Input id="nu-position" autoComplete="off" aria-invalid={!!errors.position} {...register("position")} />
                 </Field>
-                <Field label="Costo por hora ($)" htmlFor="nu-cost" error={errors.hourlyCost?.message} hint="Con esto se valorizan las horas que cargue. Después se edita en Operarios.">
-                  <Input id="nu-cost" inputMode="decimal" autoComplete="off" aria-invalid={!!errors.hourlyCost} {...register("hourlyCost")} />
-                </Field>
+                <p className="text-xs text-slate-500">
+                  Sus horas se valorizan con la tarifa de Mano de obra de Configuración ({formatCurrency(laborRate)} por hora). No se escribe por persona.
+                </p>
               </>
             )}
           </div>

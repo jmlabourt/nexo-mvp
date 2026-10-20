@@ -7,7 +7,8 @@ import { HOURS_MAX_PER_DAY, checkHours } from "@/lib/project-rules";
 import { parseDecimal } from "@/lib/schemas";
 import { formatCurrency, formatNumber, todayISO } from "@/lib/formatting";
 import { useAppStore } from "@/store/use-app-store";
-import { useIdentity } from "@/store/selectors";
+import { useCategoryRate, useIdentity } from "@/store/selectors";
+import { laborCostAt } from "@/lib/price-history";
 import { rubroLabel } from "@/lib/rubros";
 import { Button } from "@/components/ui/button";
 import { Input, Select, Textarea } from "@/components/ui/input";
@@ -47,6 +48,11 @@ export function HoursForm({ project, onDone, showCost = true }: { project: Proje
 
   const isOperator = identity.role === "operator";
   const operator = isOperator ? identity.operator : operators.find((o) => o.id === pickedOperator);
+  // El costo se muestra calculado como lo valoriza la app (Configuración); acá no se escribe.
+  const laborValuation = useAppStore((s) => s.costSettings.laborValuation);
+  const priceHistory = useAppStore((s) => s.priceHistory);
+  const laborRate = useCategoryRate("labor");
+  const hourCost = operator ? laborCostAt({ valuation: laborValuation, operator, laborRate, history: priceHistory, date }) : 0;
   const hoursN = parseDecimal(hours || "0");
   const check = operator && Number.isFinite(hoursN) && hoursN > 0 ? checkHours(projects.flatMap(p=>p.actualEntries), operator.id, date, hoursN, todayISO(), hoursPerDay) : null;
 
@@ -157,8 +163,10 @@ export function HoursForm({ project, onDone, showCost = true }: { project: Proje
       {/* Administración / Comercial / Diseño no ve remuneraciones: carga las horas sin su costo. */}
       {showCost && operator && hoursN > 0 && (
         <div className="rounded-md bg-slate-50 p-3 text-sm">
-          Costo: <strong className="tabular">{formatCurrency(hoursN * operator.hourlyCost)}</strong>
-          <span className="text-slate-500"> ({formatNumber(hoursN, 1)} h × {formatCurrency(operator.hourlyCost)} de la ficha de {operator.name})</span>
+          Costo: <strong className="tabular">{formatCurrency(hoursN * hourCost)}</strong>
+          <span className="text-slate-500">
+            {" "}({formatNumber(hoursN, 1)} h × {formatCurrency(hourCost)}, {laborValuation === "general" ? "tarifa de Mano de obra de Configuración" : `costo guardado de ${operator.name} (Configuración: valorizar por operario)`})
+          </span>
         </div>
       )}
       <p className="text-xs text-slate-500">Máximo {HOURS_MAX_PER_DAY} horas por persona y día.</p>

@@ -1,7 +1,7 @@
 "use client";
 // Hooks derivados: combinan estado + funciones puras. Memoizados para no recalcular en cada render.
 import { useCallback, useMemo } from "react";
-import type { Alert, EconomicHealth, Project } from "@/types";
+import type { Alert, EconomicHealth, HourRate, Project } from "@/types";
 import { allAlerts, openAlertCount, projectHealth, sortAlerts, splitAlerts } from "@/lib/alerts";
 import { plantAlerts } from "@/lib/plant";
 import { materialNeeds, materialsState, plantMaterialAlerts, purchasingAlerts, type MaterialNeed, type MaterialsState } from "@/lib/purchasing";
@@ -152,4 +152,12 @@ export function useIdentity() {
 export function useCatalogPrice(): (materialId: string) => number {
   const history = useAppStore((s) => s.priceHistory);
   return useCallback((materialId: string) => catalogPriceAt(history, materialId, todayISO()), [history]);
+}
+
+/**
+ * Tarifa por hora vigente de una categoría (Configuración → Costos horarios). Es el único lugar donde se define el
+ * costo de una hora de operario, de diseño o de administración: todos cobran lo mismo.
+ */
+export function useCategoryRate(category: HourRate["category"]): number {
+  return useAppStore((s) => s.hourRates.find((r) => r.category === category)?.hourlyRate ?? 0);
 }

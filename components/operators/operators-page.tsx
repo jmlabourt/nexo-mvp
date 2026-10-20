@@ -3,11 +3,10 @@ import { useConfirmedAction } from "@/store/confirmed-action";
 import { useMemo, useState } from "react";
 import { HardHat, Plus, Trash2, UserCheck, UserMinus } from "lucide-react";
 import type { Operator } from "@/types";
-import { parseDecimal } from "@/lib/schemas";
 import { formatCurrency, formatDate, formatNumber, todayISO } from "@/lib/formatting";
 import { activeOperators, operatorHasRecords, visibleOperators } from "@/lib/operators";
 import { useAppStore, type Result } from "@/store/use-app-store";
-import { useIdentity } from "@/store/selectors";
+import { useCategoryRate, useIdentity } from "@/store/selectors";
 import { PageHeader } from "@/components/shared/page-header";
 import Link from "next/link";
 import { useManagementParams } from "@/store/session-data";
@@ -19,7 +18,6 @@ import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { DeactivatePanel } from "./deactivate-panel";
-import { PriceHistoryList } from "@/components/settings/price-history-list";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 type Confirm = "deactivate" | "delete" | null;
@@ -31,16 +29,16 @@ function OperatorDialog({ operator, hasRecords, open, onOpenChange }: { operator
   const deleteOperator = useConfirmedAction("deleteOperator");
   const [name, setName] = useState(operator?.name ?? "");
   const [role, setRole] = useState(operator?.role ?? "");
-  const [rate, setRate] = useState(operator ? String(operator.hourlyCost) : "");
+  const laborRate = useCategoryRate("labor");
   const [email, setEmail] = useState(operator?.email ?? "");
-  const [validFrom, setValidFrom] = useState(todayISO());
   const [confirm, setConfirm] = useState<Confirm>(null);
   const [error, setError] = useState("");
 
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
-    const input = { name, role, hourlyCost: parseDecimal(rate), email: email.trim() || undefined, userId: operator?.userId };
-    const r = operator ? await updateOperator(operator.id, input, validFrom) : await createOperator(input);
+    // El costo por hora no se edita acá: un alta toma la tarifa de Mano de obra de Configuración y una edición no lo toca.
+    const input = { name, role, hourlyCost: operator ? operator.hourlyCost : laborRate, email: email.trim() || undefined, userId: operator?.userId };
+    const r = operator ? await updateOperator(operator.id, input, todayISO()) : await createOperator(input);
     if (!r.ok) return setError(r.error);
     onOpenChange(false);
   };
@@ -58,20 +56,16 @@ function OperatorDialog({ operator, hasRecords, open, onOpenChange }: { operator
         <DialogHeader>
           <DialogTitle>{operator ? "Editar operario" : "Nuevo operario"}</DialogTitle>
           <DialogDescription>
-            El costo por hora se usa para valorizar las horas que cargue. Un cambio vale desde la fecha que indiques: las horas anteriores conservan su
-            valor.
+            El costo por hora no se carga por persona: todos los operarios cobran la tarifa de Mano de obra de Configuración.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={save} className="space-y-4" noValidate>
           <Field label="Nombre" htmlFor="op-name"><Input id="op-name" value={name} onChange={(e) => setName(e.target.value)} /></Field>
           <Field label="Rol o especialidad" htmlFor="op-role"><Input id="op-role" value={role} onChange={(e) => setRole(e.target.value)} placeholder="Carpintería, Armado…" /></Field>
-          <Field label="Costo por hora ($)" htmlFor="op-rate"><Input id="op-rate" inputMode="decimal" value={rate} onChange={(e) => setRate(e.target.value)} /></Field>
-          {operator && parseDecimal(rate) !== operator.hourlyCost && (
-            <Field label="El nuevo costo vale desde" htmlFor="op-valid-from" hint="Por defecto, hoy. Las horas cargadas antes de esa fecha no cambian.">
-              <Input id="op-valid-from" type="date" value={validFrom} onChange={(e) => setValidFrom(e.target.value)} />
-            </Field>
-          )}
-          {operator && <PriceHistoryList kind="operator_cost" subjectId={operator.id} label={`costo por hora de ${operator.name}`} />}
+          <p className="rounded-md bg-slate-50 p-3 text-sm text-slate-700">
+            Costo por hora: <strong className="tabular">{formatCurrency(laborRate)}</strong> (tarifa de Mano de obra). Se cambia solo en{" "}
+            <Link href="/settings" className="text-blue-700 hover:underline">Configuración → Costos horarios</Link>.
+          </p>
           <Field
             label="Email (opcional)"
             htmlFor="op-email"
@@ -150,6 +144,12 @@ export function OperatorsPage({ op }: { op?: string }) {
   // Horas reales del período: el mes elegido (por defecto, el actual).
   const [month, setMonth] = useState(todayISO().slice(0, 7));
   const params = useManagementParams();
+  const laborRate = useCategoryRate("labor");
+  const designRate = useCategoryRate("design");
+  const laborValuation = useAppStore((s) => s.costSettings.laborValuation);
+  // Categoría de la tarifa: quien trabaja en Diseño cobra la hora de Diseño; el resto, la de Mano de obra.
+  const categoryOf = (role: string) => ((params.roleToRubro[role] ?? role) === "Diseño" ? "design" : "labor");
+  const rateOf = (role: string) => (categoryOf(role) === "design" ? designRate : laborRate);
   const stats = useMemo(() => {
     const m = new Map<string, { hours: number; cost: number; projects: number }>();
     for (const o of operators) m.set(o.id, { hours: 0, cost: 0, projects: projects.filter((p) => !p.isClosed && p.assignedOperatorIds.includes(o.id)).length });
@@ -167,7 +167,7 @@ export function OperatorsPage({ op }: { op?: string }) {
       <PageHeader
         back
         title="Personal"
-        subtitle="Quién trabaja, en qué rubro, a qué costo por hora y cuántas horas reales cargó. Los costos son privados de Gerencia."
+        subtitle="Quién trabaja, en qué rubro, la tarifa por hora de su categoría (se define solo en Configuración) y cuántas horas reales cargó. Los costos son privados de Gerencia."
         actions={isManager ? <Button onClick={() => setEditing("new")}><Plus /> Agregar empleado</Button> : undefined}
       />
       <div className="mb-3 flex flex-wrap items-end gap-4">
@@ -179,6 +179,12 @@ export function OperatorsPage({ op }: { op?: string }) {
           Los roles del sistema (Gerencia, Compras, Jefe de planta…) se asignan en <Link href="/settings#usuarios" className="text-blue-700 hover:underline">Configuración → Usuarios</Link>.
         </p>
       </div>
+      {laborValuation === "operator" && (
+        <p role="note" className="mb-3 rounded-md bg-amber-50 p-3 text-sm text-amber-900">
+          En Configuración está elegido valorizar las horas reales con el costo guardado de cada operario. Para que todos cobren la tarifa de esta tabla, elegí
+          “Con la tarifa general de Mano de obra” en <Link href="/settings" className="underline">Configuración → Costos horarios</Link>.
+        </p>
+      )}
       {operators.length > 0 && (
         <label className="mb-3 flex items-center gap-2 text-sm text-slate-700">
           <input type="checkbox" className="size-4" checked={showDeactivated} onChange={(e) => setShowDeactivated(e.target.checked)} />
@@ -199,7 +205,7 @@ export function OperatorsPage({ op }: { op?: string }) {
                 <TH>Rol del sistema</TH>
                 <TH>Estado</TH>
                 <TH>Remuneración</TH>
-                <TH className="text-right">Costo horario</TH>
+                <TH className="text-right">Tarifa por hora</TH>
                 <TH className="text-right">Horas reales del mes</TH>
                 <TH><span className="sr-only">Acciones</span></TH>
               </TR>
@@ -221,7 +227,10 @@ export function OperatorsPage({ op }: { op?: string }) {
                       </Badge>
                     </TD>
                     <TD className="text-xs text-slate-600">Por hora</TD>
-                    <TD className="text-right tabular">{formatCurrency(o.hourlyCost)}</TD>
+                    <TD className="text-right tabular">
+                      {formatCurrency(rateOf(o.role))}
+                      <span className="block text-xs text-slate-500">{categoryOf(o.role) === "design" ? "Diseño" : "Mano de obra"} · Configuración</span>
+                    </TD>
                     <TD className="text-right tabular">{formatNumber(s?.hours ?? 0)} h<span className="block text-xs text-slate-500">{formatCurrency(s?.cost ?? 0)}</span></TD>
                     <TD>
                       {isManager && (
