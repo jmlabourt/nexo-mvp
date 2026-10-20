@@ -1,9 +1,8 @@
 "use client";
 import { useConfirmedAction } from "@/store/confirmed-action";
 // "Mi día" del Operario (Lote 6): lo mínimo posible, pensado para el celular.
-// Solo lo asignado a esa persona para HOY: proyecto, producto, rubro y horas estimadas de la tarea,
-// con un único campo de horas y "Guardar". Sin plata, sin otros proyectos, sin unidades y sin alertas.
-import Link from "next/link";
+// Solo lo asignado a esa persona para HOY: proyecto, mueble y rubro, con un único campo de horas y "Guardar".
+// Sin horas estimadas ni planificadas, sin plata, sin materiales, sin incidencias, sin otros proyectos y sin alertas.
 import { useMemo, useRef, useState } from "react";
 import { CheckCircle2 } from "lucide-react";
 import { APP_NAME } from "@/lib/constants";
@@ -96,7 +95,7 @@ export function WorkshopHome() {
   );
 }
 
-/** Una asignación de hoy: proyecto, producto, rubro y horas estimadas; un solo campo de horas y Guardar. */
+/** Una asignación de hoy: proyecto, mueble y rubro; un solo campo de horas y Guardar. */
 function AssignmentCard({ item, onSaved }: { item: MyDayItem; onSaved: (msg: string) => void }) {
   const logHours = useConfirmedAction("logHours");
   const hoursPerDay = useAppStore((s) => s.costSettings.hoursPerDay);
@@ -128,9 +127,9 @@ function AssignmentCard({ item, onSaved }: { item: MyDayItem; onSaved: (msg: str
   return (
     <div className="rounded-xl border border-slate-200 p-4 shadow-sm">
       <div className="text-xs font-medium text-slate-500">{item.project.code} · {item.project.name}</div>
-      <div className="mt-0.5 break-words text-lg font-semibold text-slate-900">{item.item?.name ?? "Producto"}</div>
+      <div className="mt-0.5 break-words text-lg font-semibold text-slate-900">{item.item?.name ?? "Mueble"}</div>
       <div className="text-sm text-slate-600">
-        {a.hourKind === "design" ? "Diseño" : a.hourKind === "admin" ? "Administración" : rubroLabel(a.rubro)} · estimadas <strong className="tabular">{formatNumber(a.plannedHours)} h</strong>
+        {a.hourKind === "design" ? "Diseño" : a.hourKind === "admin" ? "Administración" : rubroLabel(a.rubro)}
       </div>
       {item.logged > 0 && (
         <p className="mt-3 flex items-center gap-1.5 text-sm font-medium text-emerald-700">
@@ -151,7 +150,6 @@ function AssignmentCard({ item, onSaved }: { item: MyDayItem; onSaved: (msg: str
           </div>
           <Button type="submit" size="lg" className="flex-1" disabled={busy}>{busy ? "Guardando…" : "Guardar"}</Button>
         </form>
-      <Link href={`/taller/${item.project.id}`} className="mt-3 block text-xs text-blue-700 underline">Pedir material o avisar un problema</Link>
       {error && <p role="alert" className="mt-2 text-sm text-red-600">{error}</p>}
       {warn && !error && (
         <div role="alert" className="mt-2 space-y-2 rounded-md bg-amber-50 p-3 text-sm text-amber-900">

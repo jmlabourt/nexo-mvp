@@ -14,11 +14,10 @@ vi.mock("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams(),
 }));
 
-const { Dashboard } = await import("@/components/dashboard/dashboard");
+const { GerenciaDashboard } = await import("@/components/gerencia/gerencia-dashboard");
 const { DetectedDeviationsCard } = await import("@/components/projects/detected-deviations");
 const { AlertsPage } = await import("@/components/alerts/alerts-page");
 const { PlantSummaryPage, PlantAlertsPage } = await import("@/components/plant/plant-pages");
-const { WorkshopRecorder } = await import("@/components/workshop/workshop-recorder");
 const { WorkshopHome } = await import("@/components/workshop/workshop-home");
 
 const seed = buildSeed(new Date());
@@ -45,25 +44,14 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("Administrativo", () => {
-  it("el dashboard responde primero \"¿qué proyectos se desvían y por qué?\", ordenado por pesos", () => {
-    render(<Dashboard />);
-    expect(screen.getByRole("heading", { name: "Resumen" })).toBeInTheDocument();
-    expect(screen.getByText(/¿Qué proyectos se desvían y por qué\?/)).toBeInTheDocument();
-    for (const k of ["Plata en riesgo (en curso)", "Margen esperado → Margen proyectado", "Desvíos detectados aún no proyectados", "Margen real final (cerrados)"]) {
-      expect(screen.getByText(k)).toBeInTheDocument();
-    }
-    const rows = within(document.querySelector("#proyectos table")!).getAllByRole("row").slice(1);
-    expect(rows[0]).toHaveTextContent("P-1042");
-    expect(rows[0]).toHaveTextContent("Pierde $ 1.050.000");
-    expect(rows[0]).toHaveTextContent("Materiales $ 1.000.000");
-    expect(rows[1]).toHaveTextContent("P-1058");
-    expect(rows[1]).toHaveTextContent("Detectado $ 705.811");
-    // En pesos no hay signos: el − queda solo para los puntos de margen.
-    expect(document.querySelector("#proyectos")!.textContent).not.toMatch(/[−+-]\s?\$/);
-    // Plazo aparte: "Atrasado" no aparece como pérdida.
-    expect(screen.getByText("Atrasado")).toBeInTheDocument();
-    expect(screen.queryByText(/Rubro que más falla/)).toBeNull();
-    expect(document.body.textContent).not.toMatch(/puntos de rentabilidad/);
+  it("el Dashboard de Gerencia explica por qué se pierde, ordenado por pesos", () => {
+    render(<GerenciaDashboard />);
+    const why = screen.getByRole("heading", { name: /¿Por qué se pierde\?/ }).parentElement!;
+    const items = within(why).getAllByRole("listitem");
+    expect(items.length).toBeGreaterThan(0);
+    const amounts = items.map((li) => Number(li.querySelector("strong")!.textContent!.replace(/\D/g, "")));
+    expect([...amounts].sort((a, b) => b - a)).toEqual(amounts);
+    expect(why.textContent).toMatch(/P-1042/);
   });
   it("el proyecto muestra los desvíos detectados aparte del margen, hasta sus registros", () => {
     render(<DetectedDeviationsCard project={star} />);
@@ -107,11 +95,9 @@ describe("Operario: solo lo de hoy y un campo de horas", () => {
     expect(screen.getAllByLabelText("Horas trabajadas").length).toBeGreaterThan(0);
     expect(document.body.textContent).not.toMatch(/\$|Material usado|desperdicio|sobrante|unidades/i);
   });
-  it("ya no puede cargar material usado, desperdicio ni sobrante", () => {
-    render(<WorkshopRecorder projectId={STAR_PROJECT_ID} />);
-    expect(screen.queryByText("Material usado")).toBeNull();
-    expect(document.body.textContent).not.toMatch(/desperdicio|sobrante/i);
-    expect(screen.getByText("Solicitar material")).toBeInTheDocument();
+  it("Mi día no muestra horas estimadas ni el pedido de material o problemas", () => {
+    render(<WorkshopHome />);
+    expect(document.body.textContent).not.toMatch(/estimadas|previstas|planificadas|Pedir material|problema/i);
   });
   it("y si lo intenta igual, la app lo rechaza", () => {
     const r = useAppStore.getState().registerUsage(STAR_PROJECT_ID, { materialId: "multilaminado-18", materialName: "Multilaminado 18 mm", unit: "placa", consumed: 1, waste: 0, date: "2026-10-16" });

@@ -19,7 +19,7 @@ vi.mock("next/navigation", () => ({
 
 const { PurchasingProjectsPage } = await import("@/components/purchasing/purchasing-projects");
 const { PurchasingDashboard, PurchasingAlertsPage, OrdersPage } = await import("@/components/purchasing/purchasing-pages");
-const { MaterialsQuotePage } = await import("@/components/purchasing/materials-quote-page");
+const { SuppliersPage } = await import("@/components/directory/suppliers-page");
 const { StockPage } = await import("@/components/stock/stock-page");
 
 const seed = buildSeed(new Date());
@@ -105,7 +105,7 @@ describe("ninguna pantalla de Compras muestra venta, rentabilidad ni mano de obr
     ["Necesidades", () => <PurchasingProjectsPage />],
     ["Órdenes de compra", () => <OrdersPage />],
     ["Alertas", () => <PurchasingAlertsPage />],
-    ["Cotizador", () => <MaterialsQuotePage />],
+    ["Proveedores", () => <SuppliersPage prices />],
   ])("%s", (_name, page) => {
     render(page());
     expect(document.body.textContent).not.toMatch(FORBIDDEN);

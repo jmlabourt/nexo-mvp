@@ -18,6 +18,9 @@ const { ProjectsPage } = await import("@/components/projects/projects-page");
 const { StockPage } = await import("@/components/stock/stock-page");
 const { SettingsPage } = await import("@/components/settings/settings-page");
 const { ProjectDetail } = await import("@/components/projects/project-detail");
+const { PlantOperatorsPage, PlantSummaryPage } = await import("@/components/plant/plant-pages");
+const { PurchasingDashboard } = await import("@/components/purchasing/purchasing-pages");
+const { PurchasingProjectsPage } = await import("@/components/purchasing/purchasing-projects");
 
 const seed = buildSeed(new Date());
 // jsdom no implementa scrollIntoView (Indicadores y cálculos lo usa para llegar al ancla).
@@ -27,6 +30,9 @@ beforeEach(() => {
   useAppStore.setState({
     projects: seed.projects,
     operators: seed.operators,
+    assignments: seed.assignments,
+    dayExceptions: seed.dayExceptions,
+    orders: seed.orders,
     stock: seed.stock,
     role: "owner",
     isDemo: true,
@@ -124,5 +130,27 @@ describe("Configuración por sesión", () => {
     render(<SettingsPage />);
     expect(screen.getAllByRole("tab").map((t) => t.textContent)).toEqual(["Nomenclatura", "Rubros"]);
     expect(screen.queryByRole("button", { name: /Guardar/ })).not.toBeInTheDocument();
+  });
+});
+
+describe("Jefe de planta y Compras", () => {
+  it("Jefe: Dashboard y Operarios con las asignaciones integradas, sin importes", () => {
+    useAppStore.setState({ currentMode: "jefe_planta" });
+    render(<PlantSummaryPage />);
+    expect(screen.getByRole("heading", { name: "Dashboard" })).toBeInTheDocument();
+    cleanup();
+    render(<PlantOperatorsPage />);
+    expect(screen.getAllByRole("tab").map((t) => t.textContent)).toEqual(["Asignaciones", "Disponibilidad", "Correcciones de horas"]);
+    expect(screen.getByRole("button", { name: /Nueva asignación/ })).toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/\$|proveedor/i);
+  });
+
+  it("Compras: Dashboard y Necesidades", () => {
+    useAppStore.setState({ currentMode: "compras" });
+    render(<PurchasingDashboard />);
+    expect(screen.getByRole("heading", { name: "Dashboard" })).toBeInTheDocument();
+    cleanup();
+    render(<PurchasingProjectsPage />);
+    expect(screen.getByRole("heading", { name: "Necesidades" })).toBeInTheDocument();
   });
 });

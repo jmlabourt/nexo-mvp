@@ -1,6 +1,6 @@
 "use client";
 import { useConfirmedAction } from "@/store/confirmed-action";
-// Compras → Por comprar (ex Necesidades, Lote 6): los materiales de los proyectos aprobados con lo que falta pedir, neteando el stock
+// Compras → Necesidades: los materiales de los proyectos aprobados con lo que falta pedir, neteando el stock
 // libre del depósito. Estado por material: Por comprar / En orden de compra / Recibido (se deriva de las órdenes).
 // Se eligen varios ítems (de uno o varios proyectos) y se genera una orden de compra. Sin precio de venta ni mano de obra.
 import Link from "next/link";
@@ -52,7 +52,7 @@ export function PurchasingProjectsPage({ projectId }: { projectId?: string }) {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Por comprar"
+        title="Necesidades"
         subtitle="Materiales de los proyectos aprobados: lo que falta pedir (descontando el stock libre del depósito), lo que está en órdenes y lo recibido."
         actions={
           <Button disabled={chosen.length === 0} onClick={() => setOrdering(chosen)}>

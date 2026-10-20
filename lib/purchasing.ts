@@ -459,7 +459,7 @@ export function purchasingAlerts(ctx: PurchasingContext): Alert[] {
       title,
       message: `El proyecto arranca el ${formatDate(p.startDate)}. Falta pedir: ${mine.map((l) => l.description).join(", ")}.`,
       records: mine.map((l) => `${l.description} · faltan ${formatQty(l.toBuy, l.unit)} · ${NEED_STATUS_LABELS[l.status].toLowerCase()}`),
-      action: "Compras → Por comprar: elegir los materiales y generar la orden de compra.",
+      action: "Compras → Necesidades: elegir los materiales y generar la orden de compra.",
     }));
   }
   alerts.push(...orderedNotReceivedAlerts(ctx.projects, needs, ctx.today, ctx.settings.purchaseLeadDays));

@@ -61,7 +61,7 @@ export function PurchasingDashboard() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Resumen" subtitle={`Hoy, ${formatDate(today)}. Qué pedir, qué órdenes siguen abiertas y qué costó más de lo estimado.`} />
+      <PageHeader title="Dashboard" subtitle={`Hoy, ${formatDate(today)}. Qué pedir, qué órdenes siguen abiertas y qué costó más de lo estimado.`} />
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <StatLink icon={CalendarClock} label="Para pedir esta semana" value={String(week.length)} href="#esta-semana" tone={week.length ? "warn" : undefined} />
         <StatLink icon={FileText} label="Órdenes abiertas" value={String(open.length)} href="/compras/ordenes" />
@@ -93,7 +93,7 @@ export function PurchasingDashboard() {
             </ul>
           )}
           <Link href="/compras/proyectos" className="mt-3 inline-block text-sm text-blue-700 hover:underline">
-            Ir a Por comprar para generar la orden de compra
+            Ir a Necesidades para generar la orden de compra
           </Link>
         </CardContent>
       </Card>
@@ -198,7 +198,7 @@ export function OrdersPage() {
         </TabsList>
         <TabsContent value="ordenes" className="space-y-4">
           {orders.length === 0 ? (
-            <EmptyState icon={FileText} title="Todavía no hay órdenes" description="Generalas desde Por comprar eligiendo los materiales." />
+            <EmptyState icon={FileText} title="Todavía no hay órdenes" description="Generalas desde Necesidades eligiendo los materiales." />
           ) : (
             [...orders]
               .sort((a, b) => b.number.localeCompare(a.number))

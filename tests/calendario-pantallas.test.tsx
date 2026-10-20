@@ -60,7 +60,7 @@ describe("calendario operarios × días", () => {
 describe("días laborales en Operarios", () => {
   it("el Jefe agrega una excepción y la celda cambia", async () => {
     const user = userEvent.setup();
-    render(<PlantOperatorsPage />);
+    render(<PlantOperatorsPage tab="disponibilidad" />);
     expect(screen.getByText("lunes, martes, miércoles y jueves")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Días laborales de Lucía Ferreyra" }));
     const dialog = screen.getByRole("dialog");

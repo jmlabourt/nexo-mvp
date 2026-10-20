@@ -1,6 +1,6 @@
-import { WorkshopRecorder } from "@/components/workshop/workshop-recorder";
+import { redirect } from "next/navigation";
 
-export default async function Page({ params }: PageProps<"/taller/[projectId]">) {
-  const { projectId } = await params;
-  return <WorkshopRecorder projectId={projectId} />;
+// "Mi día" del operario es solo horas: pedir material y avisar problemas lo hace el Jefe de planta.
+export default function Page() {
+  redirect("/taller");
 }
