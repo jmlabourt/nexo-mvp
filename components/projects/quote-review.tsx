@@ -9,8 +9,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { HelpTip } from "@/components/ui/help-tip";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { ratesText, reviewWarnings, type CalculatorResult } from "@/components/budget/calculator-state";
-import { canSee } from "@/lib/permissions";
-import { useIdentity } from "@/store/selectors";
 
 export interface ReviewInfo {
   name: string;
@@ -36,8 +34,6 @@ export function QuoteReview({ info, calc, salesPrice }: { info: ReviewInfo; calc
   const b = calc.breakdown;
   const warnings = reviewWarnings(calc, salesPrice);
   const { schedule } = calc;
-  // Administración / Comercial / Diseño no ve ganancia ni rentabilidad.
-  const showMargin = canSee(useIdentity().session, "margin");
   const totalRow = (label: string, value: string, strong = false) => (
     <TR className={strong ? "bg-slate-50 font-semibold" : undefined}>
       <TD colSpan={COLUMNS.length + 1}>{label}</TD>
@@ -114,8 +110,8 @@ export function QuoteReview({ info, calc, salesPrice }: { info: ReviewInfo; calc
                 )}
                 {totalRow("Costo total (sin IVA)", formatCurrency(table.total), true)}
                 {totalRow("Precio (sin IVA)", salesPrice > 0 ? formatCurrency(salesPrice) : "Sin definir")}
-                {showMargin && totalRow("Ganancia", formatCurrencyOrDash(b.profit))}
-                {showMargin && totalRow(
+                {totalRow("Ganancia", formatCurrencyOrDash(b.profit))}
+                {totalRow(
                   b.usesSuggested
                     ? `Rentabilidad total (materiales ${formatPercent(b.materials.targetPct)} · mano de obra ${formatPercent(b.labor.targetPct)})`
                     : "Rentabilidad total",

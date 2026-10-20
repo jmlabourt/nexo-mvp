@@ -174,3 +174,30 @@ describe("una sola estructura: pantalla", () => {
     expect(screen.getByRole("group", { name: "Mueble 3" })).toBeInTheDocument();
   });
 });
+
+describe("Resultado: porcentajes, transporte, imprevistos y gasto financiero", () => {
+  beforeEach(() => useAppStore.setState({ role: "owner", isDemo: true, currentMode: "administracion", organizationId: null }));
+
+  it("se ven y se ajustan los márgenes de materiales y mano de obra, transporte, imprevistos y gasto financiero", async () => {
+    const user = userEvent.setup();
+    render(<Harness initial={{ ...now, rubros: [] }} />);
+    const result = screen.getByRole("region", { name: "Resultado" });
+    expect(within(result).getByLabelText("Rentabilidad objetivo de materiales")).toHaveValue("30");
+    expect(within(result).getByLabelText("Rentabilidad objetivo de mano de obra")).toHaveValue("30");
+    expect(within(result).getByLabelText("Gasto financiero")).toHaveValue("5");
+    const aside = screen.getByRole("complementary", { name: "Resumen de la cotización" });
+    expect(within(aside).getByText("Rentabilidad total")).toBeInTheDocument();
+    expect(within(aside).getAllByText("Rentabilidad")).toHaveLength(2);
+    await user.type(within(result).getByLabelText("Transporte / Fletes"), "250000");
+    await user.type(within(result).getByLabelText("Imprevistos"), "50000");
+    expect(within(aside).getByText("Transporte").nextSibling).toHaveTextContent("$ 250.000");
+    expect(within(aside).getByText("Imprevistos").nextSibling).toHaveTextContent("$ 50.000");
+  });
+
+  it("transporte e imprevistos cargados acá valorizan igual que cuando eran rubros (misma fórmula de precio)", () => {
+    const withAmounts = computeCalculator(now, "", ctx);
+    const withoutAmounts = computeCalculator({ ...now, rubros: [] }, "", ctx);
+    expect(withAmounts.breakdown.transport).toBe(250_000);
+    expect(withAmounts.total - withoutAmounts.total).toBeCloseTo(250_000, 2);
+  });
+});

@@ -26,11 +26,9 @@ interface Props {
   salesPrice: number;
   priceError?: string;
   onSalesPrice: (n: number) => void;
-  /** false = sin ganancia ni rentabilidad (Administración / Comercial / Diseño). */
-  showMargin?: boolean;
 }
 
-export function BudgetCalculator({ state, onState, result, projectType, salesPrice, priceError, onSalesPrice, showMargin = true }: Props) {
+export function BudgetCalculator({ state, onState, result, projectType, salesPrice, priceError, onSalesPrice }: Props) {
   const set = (patch: Partial<CalcState>) => onState({ ...state, ...patch });
   const { rates, input } = result;
 
@@ -66,9 +64,9 @@ export function BudgetCalculator({ state, onState, result, projectType, salesPri
         </div>
       </Section>
 
-      <ResultSection state={state} onState={set} result={result} projectType={projectType} salesPrice={salesPrice} onSalesPrice={onSalesPrice} priceError={priceError} showMargin={showMargin} />
+      <ResultSection state={state} onState={set} result={result} projectType={projectType} salesPrice={salesPrice} onSalesPrice={onSalesPrice} priceError={priceError} />
 
-      {showMargin && result.delay && <DelaySection result={result} state={state} onState={set} />}
+      {result.delay && <DelaySection result={result} state={state} onState={set} />}
     </div>
   );
 }
