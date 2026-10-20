@@ -22,6 +22,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { AssignmentDialog, type AssignmentDraft } from "./assignment-dialog";
+import { ProjectMaterials } from "./plant-materials";
 
 export function PlantProjectsPage() {
   const projects = useAppStore((s) => s.projects);
@@ -30,7 +31,7 @@ export function PlantProjectsPage() {
 
   return (
     <div className="space-y-4">
-      <PageHeader title="Proyectos" subtitle="Por producto: unidades terminadas, rubros, horas estimadas y cargadas, y cómo le fue a cada operario. Sin importes." />
+      <PageHeader title="Proyectos" subtitle="Por producto: unidades terminadas, rubros, horas estimadas y cargadas, y cómo le fue a cada operario. Entrega de material y cierre del día. Sin importes." />
       {list.length === 0 ? (
         <EmptyState icon={ClipboardList} title="No hay proyectos en curso" description="Cuando se apruebe un proyecto, aparece acá." />
       ) : (
@@ -114,6 +115,7 @@ function ProjectCard({ project: p, onAssign }: { project: Project; onAssign: (d:
             </section>
           ))
         )}
+        <ProjectMaterials project={p} />
       </CardContent>
     </Card>
   );
@@ -139,7 +141,7 @@ function OperatorChip({ name, work: o }: { name: string; work: OperatorWork }) {
 }
 
 /** Contador de unidades terminadas (ej. 40/100). Solo Jefe de planta (o Administrativo). */
-function UnitsCounter({ project, item }: { project: Project; item: ProjectItem }) {
+export function UnitsCounter({ project, item }: { project: Project; item: ProjectItem }) {
   const setCompletedUnits = useConfirmedAction("setCompletedUnits");
   const [value, setValue] = useState(String(item.completedUnits));
   const [error, setError] = useState("");

@@ -1,0 +1,12 @@
+-- ─────────────────────────────────────────────────────────────
+-- Auditoría UX · P0-6: el Operario ya no carga material usado, desperdicio ni sobrante.
+-- Lo carga el Administrativo (Proyecto → "Registrar lo que pasó" → Material utilizado), que escribe por sus políticas.
+--
+-- Se quita el permiso de ejecutar taller_register_usage a los usuarios: la función queda (no se borra), pero ningún
+-- usuario la puede llamar. Sin DROP ni DELETE. Reversible con:
+--   grant execute on function public.taller_register_usage(jsonb) to authenticated;
+--
+-- ORDEN DE DESPLIEGUE: esta migración y el código que saca "Material usado" de la pantalla del Operario salen juntos.
+-- Si la migración se aplica antes que el código, el botón viejo del Operario muestra un error de permiso (no rompe nada más).
+-- ─────────────────────────────────────────────────────────────
+revoke execute on function public.taller_register_usage(jsonb) from authenticated;

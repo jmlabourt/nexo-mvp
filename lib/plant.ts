@@ -6,7 +6,7 @@
 // Ver docs/PRODUCCION.md.
 // ─────────────────────────────────────────────────────────────
 import type { Alert, AlertSettings, DayException, Operator, Project, RubroId, WorkAssignment } from "@/types";
-import { alertBase, alertResolutionKey } from "./alerts";
+import { alertBase, keyed } from "./alerts";
 import { splitOvertime } from "./capacity";
 import { rubroLabel } from "./rubros";
 import { daysBetween, formatDate, formatNumber } from "./formatting";
@@ -294,8 +294,8 @@ export function productRubroHours(project: Project, assignments: WorkAssignment[
 const describe = (r: HoursRecord) => `${formatDate(r.date)} · ${r.worker} · ${formatNumber(r.hours)} h (registro ${r.entryId})`;
 const signedPct = (pct: number | null) => (pct === null ? "" : `, +${formatNumber(pct, 0)} %`);
 
-/** La alerta se vuelve a evaluar si el proyecto cambia o pasa el día (igual que el resto de las alertas). */
-const withKey = (a: Omit<Alert, "resolutionKey">, p: Project, today: string): Alert => ({ ...a, resolutionKey: alertResolutionKey(a.id, p, today) });
+/** "Marcar resuelta" dura hasta que cambie el dato de la alerta (igual que el resto de las alertas). */
+const withKey = (a: Omit<Alert, "resolutionKey">): Alert => keyed(a);
 
 export interface PlantContext {
   projects: Project[];
@@ -332,9 +332,8 @@ export function plantAlerts(ctx: PlantContext): Alert[] {
             title: `${r.itemName} · ${rubroLabel(r.rubro)}: ${formatNumber(r.over)} h por encima de lo estimado`,
             message: `Se estimaron ${formatNumber(r.estimated)} h y se cargaron ${formatNumber(r.actual)} h (+${formatNumber(r.over)} h${signedPct(r.pct)}). Operarios: ${who.join(", ")}.`,
             records: r.records.map(describe),
+            action: `Planta → Proyectos → ${r.itemName}: ver quién se pasó de lo asignado y por qué.`,
           },
-          p,
-          ctx.today,
         ),
       );
     }
@@ -363,9 +362,8 @@ export function plantAlerts(ctx: PlantContext): Alert[] {
             ? `Ese día puede ${formatNumber(cell.capacity.hours)} h (${cell.capacity.reason.toLowerCase()}): ${formatNumber(cell.overBy)} h de más.`
             : `${cell.capacity.reason}. Hay que reasignar esas horas.`,
           records: mine.map((a) => `${byId.get(a.projectId)?.code ?? a.projectId} · ${rubroLabel(a.rubro)} · ${formatNumber(a.plannedHours)} h`),
+          action: "Planta → Planificación: mover esas horas a otro día u otra persona.",
         },
-        p,
-        ctx.today,
       ),
     );
   }
@@ -385,9 +383,8 @@ export function plantAlerts(ctx: PlantContext): Alert[] {
           message: `Se piden ${r.workers} ${r.workers === 1 ? "operario" : "operarios"} y hay ${r.assigned} asignado${r.assigned === 1 ? "" : "s"}. ${
             r.daysLeft < 0 ? `La entrega venció hace ${-r.daysLeft} días.` : `Faltan ${r.daysLeft} días para la entrega.`
           }`,
+          action: "Planta → Planificación → Pendientes de asignar.",
         },
-        p,
-        ctx.today,
       ),
     );
   }

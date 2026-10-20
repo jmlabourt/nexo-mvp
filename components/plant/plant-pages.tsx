@@ -178,7 +178,7 @@ export function PlantAlertsPage() {
   return (
     <div className="space-y-4">
       <HoursReviews />
-      <PageHeader title="Alertas de planta" subtitle="Desvío de horas, operarios sobrecargados y rubros sin asignar a pocos días de la entrega." />
+      <PageHeader title="Alertas de planta" subtitle="Desvío de horas, operarios sobrecargados, rubros sin asignar a pocos días de la entrega y obras que arrancan sin material." />
       {alerts.length === 0 ? (
         <EmptyState icon={AlertTriangle} title="Sin alertas de planta" description="Cuando haya desvíos de horas o falte asignar a alguien, aparece acá." />
       ) : (

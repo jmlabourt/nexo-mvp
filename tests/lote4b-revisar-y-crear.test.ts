@@ -4,14 +4,13 @@ import type { HourRate } from "@/types";
 import { rubroTable } from "@/lib/budget-calculator";
 import { DEFAULT_HOUR_RATES } from "@/lib/constants";
 import { computeCalculator, initialCalcState, newRubroRow, ratesText, reviewWarnings, type CalcState, type RubroRow } from "@/components/budget/calculator-state";
+import { laborProduct } from "./helpers";
 
 const RATES: HourRate[] = DEFAULT_HOUR_RATES;
 
 const madera = (patch: Partial<RubroRow> = {}): RubroRow => ({
   ...newRubroRow("carpinteria_madera"),
   materials: [{ key: "m1", name: "Melamina blanca 18 mm", unit: "placa", quantity: "10", unitCost: "50000", wastePct: "10" }],
-  workers: "2",
-  hoursPerWorker: "40",
   designHours: "6",
   adminHours: "4",
   ...patch,
@@ -22,12 +21,14 @@ const state = (rubros: RubroRow[], patch: Partial<CalcState> = {}): CalcState =>
   materialsTargetPct: "30",
   laborTargetPct: "40",
   rubros,
+  // La mano de obra (antes 2 × 40 h en el rubro) va en un producto: los números esperados no cambian.
+  products: [laborProduct("carpinteria_madera", 2, 40)],
   ...patch,
 });
 
 const base = state([
   madera(),
-  { ...newRubroRow("vidrios"), materials: [{ key: "v", name: "Vidrio templado", unit: "u", quantity: "1", unitCost: "480000", wastePct: "0" }], workers: "0" },
+  { ...newRubroRow("vidrios"), materials: [{ key: "v", name: "Vidrio templado", unit: "u", quantity: "1", unitCost: "480000", wastePct: "0" }] },
   { ...newRubroRow("transporte"), amount: "100000" },
   { ...newRubroRow("imprevistos"), amount: "50000" },
 ]);
@@ -59,7 +60,7 @@ describe("tabla por rubro del paso Revisar y crear", () => {
   });
 
   it("los rubros sin importe no aparecen", () => {
-    const t = rubroTable(calc(state([...base.rubros, newRubroRow("herrajes"), { ...newRubroRow("embalaje"), workers: "0" }])).lines);
+    const t = rubroTable(calc(state([...base.rubros, newRubroRow("herrajes"), newRubroRow("embalaje")])).lines);
     expect(t.rows.map((r) => r.rubro)).not.toContain("herrajes");
     expect(t.rows.map((r) => r.rubro)).not.toContain("embalaje");
   });
@@ -71,7 +72,7 @@ describe("tabla por rubro del paso Revisar y crear", () => {
       return c.total;
     };
     const t0 = totalOf(base);
-    expect(totalOf(state([madera({ hoursPerWorker: "50" }), ...base.rubros.slice(1)]))).toBe(t0 + 2 * 10 * 19_000);
+    expect(totalOf(state(base.rubros, { products: [laborProduct("carpinteria_madera", 2, 50)] }))).toBe(t0 + 2 * 10 * 19_000);
     expect(totalOf(state([madera({ designHours: "10" }), ...base.rubros.slice(1)]))).toBe(t0 + 4 * 27_000);
     expect(totalOf(base, { rates: RATES.map((r) => (r.id === "admin" ? { ...r, hourlyRate: 30_000 } : r)) })).toBe(t0 + 4 * 3_000);
     expect(totalOf(state(base.rubros, { financialPct: "8" }))).toBe(t0 + 0.03 * 6_000_000);

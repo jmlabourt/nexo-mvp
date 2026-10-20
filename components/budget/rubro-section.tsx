@@ -1,6 +1,6 @@
 "use client";
-// Un rubro de la cotización: materiales, operarios × horas por operario, horas de diseño y de administración
-// (o solo un importe en Transporte / Fletes e Imprevistos). El desglose muestra de dónde sale cada importe.
+// Un rubro de la cotización: materiales, horas de diseño y de administración (o solo un importe en Transporte / Fletes e
+// Imprevistos). La mano de obra va en los productos (ProductsSection). El desglose muestra de dónde sale cada importe.
 import type { HourCharge } from "@/lib/budget-calculator";
 import { formatCurrency, formatNumber } from "@/lib/formatting";
 import { rubroDef } from "@/lib/rubros";
@@ -42,25 +42,7 @@ export function RubroSection({
         <div className="space-y-4">
           <MaterialRows materials={row.materials} onChange={(materials) => onChange({ materials })} owner={def.label} />
 
-          <div>
-            <h4 className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Mano de obra</h4>
-            <div className="grid max-w-md grid-cols-2 gap-2">
-              <NumField id={`w-${row.key}`} label="Operarios" value={row.workers} onChange={(v) => onChange({ workers: v })} />
-              <NumField id={`hpw-${row.key}`} label="Horas por operario" suffix="h" value={row.hoursPerWorker} onChange={(v) => onChange({ hoursPerWorker: v })} />
-            </div>
-            {labor && labor.workers > 0 && labor.hoursPerWorker > 0 && (
-              <p className="mt-1 text-xs text-slate-600 tabular">
-                {labor.workers} × {h(labor.hoursPerWorker)} = {h(labor.normalHours + labor.overtimeHours)}: {h(labor.normalHours)} normales ×{" "}
-                {formatCurrency(labor.rate)} = {formatCurrency(labor.normalCost)}
-                {labor.overtimeHours > 0 && (
-                  <>
-                    {" "}+ <strong className="text-amber-800">{h(labor.overtimeHours)} extra</strong> × {formatCurrency(labor.overtimeRate)} ={" "}
-                    {formatCurrency(labor.overtimeCost)}
-                  </>
-                )}
-              </p>
-            )}
-          </div>
+          <p className="text-xs text-slate-500">La mano de obra de este rubro se carga en cada producto (arriba): así las horas se cargan una sola vez.</p>
 
           <div className="grid max-w-md grid-cols-2 gap-2">
             <FlatHours id={`dis-${row.key}`} title="Diseño" value={row.designHours} charge={labor?.design} onChange={(v) => onChange({ designHours: v })} />

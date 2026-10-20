@@ -10,9 +10,9 @@ import {
   reassignmentPlanError,
 } from "@/lib/operators";
 import { assignOperators, reassignForDeactivation } from "@/lib/project-operations";
-import { projectAlerts, projectHealth } from "@/lib/alerts";
+import { projectAlerts } from "@/lib/alerts";
 import { DEFAULT_SETTINGS as S } from "@/lib/constants";
-import { project, usage } from "./helpers";
+import { project } from "./helpers";
 
 const NOW = "2026-10-08T12:00:00.000Z";
 const TODAY = "2026-01-20";
@@ -69,22 +69,10 @@ describe("baja con proyectos activos", () => {
 });
 
 describe("proyecto sin operario asignado", () => {
-  it("genera la alerta de Atención y pone el proyecto en Atención", () => {
+  it("ya no es una alerta aparte: lo cubre \"Pendientes de asignar\" del Jefe de planta (Auditoría UX · P0-3)", () => {
     const { projects } = deactivate([p1], { p1: null });
-    const alerts = projectAlerts(projects[0], S, TODAY);
-    const a = alerts.find((x) => x.kind === "staffing");
-    expect(a?.title).toBe("Proyecto sin operario asignado");
-    expect(a?.level).toBe("warning");
-    const withData = { ...projects[0], materialUsages: [usage({ quantityConsumed: 1, unitCost: 1 })] };
-    expect(projectHealth(withData, projectAlerts(withData, S, TODAY).filter((x) => x.kind === "staffing"))).toBe("attention");
-  });
-  it("se resuelve sola al asignar a alguien", () => {
-    const { projects, operators } = deactivate([p1], { p1: null });
-    const staffed = assignOperators(projects[0], ["op-ana"], operators, ctx);
-    expect(projectAlerts(staffed, S, TODAY).some((x) => x.kind === "staffing")).toBe(false);
-  });
-  it("Aprobado admite trabajo y avisa si falta asignar un operario", () => {
-    expect(projectAlerts(project({ status: "approved" }), S, TODAY).some((x) => x.kind === "staffing")).toBe(true);
+    expect(projectAlerts(projects[0], S, TODAY).some((x) => x.kind === "staffing")).toBe(false);
+    expect(projectAlerts(project({ status: "approved" }), S, TODAY).some((x) => x.kind === "staffing")).toBe(false);
   });
 });
 

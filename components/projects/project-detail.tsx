@@ -14,6 +14,7 @@ import { MaterialsBadge } from "@/components/purchasing/purchasing-projects";
 import { EmptyState } from "@/components/shared/empty-state";
 import { StatusTimeline } from "./status-timeline";
 import { EconomicSummary } from "./economic-summary";
+import { DetectedDeviationsCard } from "./detected-deviations";
 import { DeviationSection } from "./deviation-section";
 import { ActivityTab } from "./activity-tab";
 import { ScheduleCard } from "./schedule-card";
@@ -121,6 +122,7 @@ export function ProjectDetail({ id, tab: initialTab, purchase }: { id: string; t
 
         <TabsContent value="summary" className="space-y-6">
           <EconomicSummary project={p} econ={econ} />
+          <DetectedDeviationsCard project={p} />
           <div className="grid gap-4 lg:grid-cols-2">
             <ScheduleCard project={p} />
             <TeamCard project={p} />

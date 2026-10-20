@@ -43,7 +43,7 @@ export function DelaySection({ result, state, onState }: { result: CalculatorRes
         {delay.dailyCost > 0 && delay.daysToFloor !== null ? (
           <>
             Cada día de trabajo extra cuesta <strong className="tabular">{formatCurrency(delay.dailyCost)}</strong>,{" "}
-            <strong className="tabular">{formatNumber(delay.pointsPerDay, 1)} puntos de rentabilidad</strong>.{" "}
+            <strong className="tabular">{formatNumber(delay.pointsPerDay, 1)} puntos de margen</strong>.{" "}
             {delay.daysToFloor < 1 ? (
               <strong>No soporta ni un día extra: ya queda por debajo del piso de {floor}.</strong>
             ) : (

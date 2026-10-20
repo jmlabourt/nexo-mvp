@@ -87,7 +87,7 @@ export function HoursPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Horas"
+        title="Mano de obra"
         subtitle={`Estimadas vs reales. En ámbar, lo que se pasa más de ${formatNumber(settings.hoursDeviationPct)} % o ${formatNumber(settings.hoursDeviationHours)} h (Configuración → Alertas; supuesto a ajustar).`}
       />
       <HoursTable

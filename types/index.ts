@@ -439,6 +439,32 @@ export interface DayException {
   createdAt: string;
 }
 
+/**
+ * Entrega de material del Jefe de planta a un producto (y un operario): solo cantidades (docs/PLANTA_MATERIALES.md).
+ * No es costo: lo es lo que el cierre del día registra como consumo o desperdicio.
+ */
+export interface MaterialDelivery {
+  id: string;
+  projectId: string;
+  itemId?: string;
+  operatorId?: string;
+  materialId: string;
+  materialName: string;
+  unit: string;
+  quantity: number;
+  /** De dónde salió: el depósito (stock libre) o lo ya asignado al proyecto. */
+  source: "warehouse" | "project";
+  date: string;
+  /** Cierre del día que la cerró (sin cerrar = sigue en planta). */
+  closedAt?: string;
+  closeId?: string;
+  consumed?: number;
+  waste?: number;
+  leftover?: number;
+  createdBy: string;
+  createdAt: string;
+}
+
 export interface MaterialRequest {
   id: string;
   projectId: string;
@@ -577,7 +603,15 @@ export type AlertKind =
   | "overload"
   | "unassigned"
   | "purchase_due"
-  | "purchase_cost";
+  | "purchase_cost"
+  /** Compras/Administrativo: pedido en una orden y sin recibir, para una obra que arranca pronto o ya arrancó. */
+  | "material_arrival"
+  /** Jefe de planta (sin importes): la obra arranca pronto o ya arrancó y el material no está completo. */
+  | "material_missing"
+  /** Administrativo: material entregado en planta y sin cierre del día (no se sabe cuánto se consumió). */
+  | "delivery_open"
+  /** Administrativo: resumen con costo de un cierre del día del Jefe de planta. */
+  | "day_close";
 
 export interface Alert {
   /** Determinístico: permite marcarla como resuelta. Incluye el nivel para que un agravamiento reaparezca. */
@@ -589,14 +623,19 @@ export interface Alert {
   level: AlertLevel;
   title: string;
   message: string;
+  /** Cuánto cuesta, en pesos (solo Administrativo y Compras; nunca Jefe de planta ni Operario). */
   impactAmount?: number;
+  /** El costo en puntos de margen sobre el precio de venta (solo Administrativo). */
+  impactPoints?: number;
   expectedMargin?: number;
   projectedMargin?: number;
+  /** Qué revisar: dónde se resuelve. */
+  action?: string;
   /** De dónde sale (registros de horas, asignaciones): la alerta se puede rastrear hasta ellos. */
   records?: string[];
   /**
-   * Clave con la que se marca como resuelta: alerta + día + última modificación del proyecto.
-   * Si el problema persiste (al día siguiente o después de un nuevo registro), la alerta reaparece.
+   * Clave con la que se marca como resuelta: alerta + sus datos (título e importe).
+   * Queda resuelta hasta que cambie el dato: si cambia (más horas, otro monto), la alerta vuelve.
    */
   resolutionKey: string;
 }

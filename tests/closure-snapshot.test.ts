@@ -84,14 +84,15 @@ describe("cierre congelado del proyecto", () => {
     expect(s.summary_text).toContain("No tenía precio de venta");
   });
 
-  it("el resumen usa el glosario: puntos de rentabilidad, nunca “pp”", () => {
+  it("el resumen usa el glosario: puntos de margen, nunca “pp”", () => {
     const p = closedProject({
       salesPrice: 1_000_000,
       budgetLines: [line("materials", 10, 50_000, { materialId: "m" })],
       materialUsages: [usage({ materialId: "m", quantityConsumed: 14 })],
     });
     const text = buildClosureSnapshot(p).summary_text;
-    expect(text).toMatch(/puntos de rentabilidad/);
+    // Vocabulario de la Auditoría UX (Fase 1): "puntos de margen".
+    expect(text).toMatch(/puntos de margen/);
     expect(text).not.toMatch(/\bpp\b/);
     expect(text).toContain("P-1");
   });

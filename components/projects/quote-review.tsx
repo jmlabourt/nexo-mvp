@@ -51,6 +51,24 @@ export function QuoteReview({ info, calc, salesPrice }: { info: ReviewInfo; calc
         </p>
       </CardHeader>
       <CardContent className="space-y-6">
+        {calc.products.length > 0 && (
+          <section aria-label="Productos">
+            <h3 className="mb-2 text-sm font-semibold text-slate-900">Productos <span className="font-normal text-slate-500">(de acá sale la mano de obra)</span></h3>
+            <ul className="divide-y divide-slate-100 text-sm">
+              {calc.products.map((p) => (
+                <li key={p.key} className="flex flex-wrap justify-between gap-2 py-1.5">
+                  <span>
+                    <strong className="text-slate-900">{p.name}</strong> × {p.quantity}
+                    <span className="block text-xs text-slate-500">
+                      {p.rubros.map((r) => `${rubroLabel(r.rubro)} ${formatNumber(r.labor.normalHours + r.labor.overtimeHours)} h · ${r.labor.workers} op.`).join(" · ")}
+                    </span>
+                  </span>
+                  <span className="tabular">{formatCurrency(p.total)}</span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
         <section aria-label="Costo por rubro">
           <h3 className="mb-2 text-sm font-semibold text-slate-900">Costo presupuestado por rubro <span className="font-normal text-slate-500">(sin IVA)</span></h3>
           <div className="overflow-x-auto">

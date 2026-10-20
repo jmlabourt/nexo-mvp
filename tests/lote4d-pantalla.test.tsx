@@ -7,6 +7,7 @@ import { DEFAULT_HOUR_RATES } from "@/lib/constants";
 import { computeCalculator, initialCalcState, newRubroRow, type CalcState } from "@/components/budget/calculator-state";
 import { DelaySection, daysText } from "@/components/budget/delay-section";
 import { QuoteWorkspace } from "@/components/budget/quote-workspace";
+import { laborProduct } from "./helpers";
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), back: vi.fn() }), usePathname: () => "/" }));
 afterEach(cleanup);
@@ -17,12 +18,11 @@ const state: CalcState = {
     {
       ...newRubroRow("carpinteria_madera"),
       materials: [{ key: "m", name: "Melamina", unit: "placa", quantity: "1", unitCost: "50000", wastePct: "0" }],
-      workers: "1",
-      hoursPerWorker: "3",
       designHours: "1",
       adminHours: "2",
     },
   ],
+  products: [laborProduct("carpinteria_madera", 1, 3)],
 };
 const calc = (salesPrice: number) =>
   computeCalculator(state, "", { projects: [], rates: DEFAULT_HOUR_RATES, overtimeMultiplier: 2, hoursPerDay: 9.5, salesPrice, isDemo: false });

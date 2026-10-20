@@ -104,7 +104,7 @@ const ALERT_GROUPS: AlertGroup[] = [
   },
   {
     title: "Caída de la rentabilidad",
-    help: "Se compara la rentabilidad proyectada con la rentabilidad esperada. La diferencia se mide en puntos de rentabilidad.",
+    help: "Se compara la rentabilidad proyectada con la rentabilidad esperada. La diferencia se mide en puntos de margen.",
     fields: [
       {
         key: "marginWarningPp",

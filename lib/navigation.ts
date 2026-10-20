@@ -10,7 +10,7 @@ export interface Crumb {
 
 /** Secciones de primer nivel: ruta → nombre visible. */
 export const SECTION_LABELS: Record<string, string> = {
-  dashboard: "Dashboard",
+  dashboard: "Resumen",
   projects: "Proyectos",
   alerts: "Alertas",
   quotes: "Cotizador",
@@ -19,17 +19,17 @@ export const SECTION_LABELS: Record<string, string> = {
   settings: "Configuración",
   materials: "Materiales",
   compras: "Compras",
-  "compras/proyectos": "Necesidades",
+  "compras/proyectos": "Por comprar",
   "compras/ordenes": "Órdenes de compra",
   "compras/alertas": "Alertas",
   "compras/cotizador": "Cotizador",
-  "compras/stock": "Stock",
+  "compras/stock": "Disponible en depósito",
   planta: "Planta",
   "planta/proyectos": "Proyectos",
   "planta/operarios": "Operarios",
-  "planta/asignaciones": "Asignaciones",
+  "planta/asignaciones": "Planificación",
   "planta/alertas": "Alertas",
-  horas: "Horas",
+  horas: "Mano de obra",
   taller: "Mi día",
 };
 

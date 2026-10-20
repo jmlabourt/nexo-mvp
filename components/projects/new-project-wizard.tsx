@@ -18,7 +18,7 @@ import { Field } from "@/components/ui/field";
 import { Input, Select, Textarea } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { QuoteWorkspace } from "@/components/budget/quote-workspace";
-import { computeCalculator, initialCalcState, quoteActionBlocker, type CalcState } from "@/components/budget/calculator-state";
+import { computeCalculator, initialCalcState, productInputs, quoteActionBlocker, type CalcState } from "@/components/budget/calculator-state";
 import { clearQuoteDraft, peekQuoteDraft } from "@/components/budget/quote-draft";
 import { QuoteReview } from "./quote-review";
 import { cn } from "@/lib/utils";
@@ -89,20 +89,20 @@ export function NewProjectWizard() {
   };
 
   const toReview = () => {
-    const blocker = quoteActionBlocker(calc, salesPrice);
+    const blocker = quoteActionBlocker(calc, salesPrice, { requireProducts: true });
     if (blocker) return setPriceError(blocker);
     setPriceError("");
     setStep(2);
   };
 
   const submit = async () => {
-    const blocker = quoteActionBlocker(calc, salesPrice);
+    const blocker = quoteActionBlocker(calc, salesPrice, { requireProducts: true });
     if (blocker) {
       setPriceError(blocker);
       return setStep(1);
     }
     const v = getValues();
-    const res = await createProject({ ...v, salesPrice: Number(v.salesPrice), code, budgetLines: calc.lines });
+    const res = await createProject({ ...v, salesPrice: Number(v.salesPrice), code, budgetLines: calc.lines, items: productInputs(calcState) });
     if (!res.ok) return setFormError(res.error);
     clearQuoteDraft();
     router.push(`/projects/${res.value}`);
@@ -181,6 +181,7 @@ export function NewProjectWizard() {
           }}
           actionLabel="Continuar"
           onAction={toReview}
+          requireProducts
           context={
             <>
               {code} · {getValues("client") || "Sin cliente"} · entrega {formatDate(dueDate)}

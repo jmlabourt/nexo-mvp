@@ -6,7 +6,7 @@
 // ─────────────────────────────────────────────────────────────
 import type { ActivityEvent, Alert, AlertLevel, AlertSettings, OrderReceived, Project, PurchaseEntry, PurchaseOrder, PurchaseOrderLine } from "@/types";
 import { receiveStock, warehouseHoldings, type StockChange, type StockCtx, type StockState } from "./stock";
-import { alertBase, alertResolutionKey, sortAlerts } from "./alerts";
+import { alertBase, keyed, sortAlerts } from "./alerts";
 import { materialBudgetQuantity, type QuoteMaterial } from "./budget-calculator";
 import { daysBetween, formatCurrency, formatDate, formatNumber, formatQty } from "./formatting";
 import { materialKey } from "./material-reconciliation";
@@ -440,32 +440,36 @@ export interface PurchasingContext {
 export function purchasingAlerts(ctx: PurchasingContext): Alert[] {
   const byId = new Map(ctx.projects.map((p) => [p.id, p]));
   const alerts: Alert[] = [];
-  const due = toBuyWithin(materialNeeds(ctx.projects, ctx.orders, ctx.stock, ctx.today), ctx.today, ctx.settings.purchaseLeadDays);
+  const needs = materialNeeds(ctx.projects, ctx.orders, ctx.stock, ctx.today);
+  const due = toBuyWithin(needs, ctx.today, ctx.settings.purchaseLeadDays);
   for (const projectId of [...new Set(due.map((l) => l.projectId))]) {
     const p = byId.get(projectId);
     if (!p) continue;
     const mine = due.filter((l) => l.projectId === projectId);
     const days = mine[0].daysLeft;
-    const when = days < 0 ? `se necesitaban desde el ${formatDate(p.startDate)}` : days === 0 ? "se necesitan hoy" : `se necesitan en ${days} ${days === 1 ? "día" : "días"}`;
+    const what = `${mine.length} ${mine.length === 1 ? "material sin pedir" : "materiales sin pedir"}`;
+    // Si la obra ya arrancó, el problema ya no es "pedir": se está trabajando sin ese material.
+    const title = days < 0 ? `Trabajando sin material: ${what} (arrancó el ${formatDate(p.startDate)})` : `${what}: ${days === 0 ? "se necesitan hoy" : `se necesitan en ${days} ${days === 1 ? "día" : "días"}`}`;
     const id = `${p.id}:purchase-due:${mine.map((l) => l.lineId).join(",")}`;
-    alerts.push({
+    alerts.push(keyed({
       ...alertBase(p),
       id,
       kind: "purchase_due",
       level: days <= 0 ? "critical" : "warning",
-      title: `${mine.length} ${mine.length === 1 ? "material sin pedir" : "materiales sin pedir"}: ${when}`,
+      title,
       message: `El proyecto arranca el ${formatDate(p.startDate)}. Falta pedir: ${mine.map((l) => l.description).join(", ")}.`,
       records: mine.map((l) => `${l.description} · faltan ${formatQty(l.toBuy, l.unit)} · ${NEED_STATUS_LABELS[l.status].toLowerCase()}`),
-      resolutionKey: alertResolutionKey(id, p, ctx.today),
-    });
+      action: "Compras → Por comprar: elegir los materiales y generar la orden de compra.",
+    }));
   }
+  alerts.push(...orderedNotReceivedAlerts(ctx.projects, needs, ctx.today, ctx.settings.purchaseLeadDays));
   for (const o of overBudgetPurchases(ctx.projects)) {
     const p = byId.get(o.projectId);
     // Una diferencia chica de precio no es una alerta: avisa desde el % de Atención (Configuración → Alertas).
     if (!p || o.pct < ctx.settings.categoryWarningPct) continue;
     const level: AlertLevel = o.pct >= ctx.settings.categoryCriticalPct ? "critical" : "warning";
     const id = `${p.id}:purchase-cost:${o.purchaseId}`;
-    alerts.push({
+    alerts.push(keyed({
       ...alertBase(p),
       id,
       kind: "purchase_cost",
@@ -474,10 +478,75 @@ export function purchasingAlerts(ctx: PurchasingContext): Alert[] {
       message: `Estimado ${formatCurrency(o.budgetUnitCost)} por ${o.unit || "unidad"}; costo real ${formatCurrency(o.paidUnitCost)}${o.supplier ? ` de ${o.supplier}` : ""} el ${formatDate(o.date)} (${formatQty(o.quantity, o.unit)}): ${formatCurrency(o.overBy)} más.`,
       impactAmount: o.overBy,
       records: [`Compra ${o.purchaseId} · ${formatDate(o.date)} · ${o.supplier ?? "sin proveedor"}`],
-      resolutionKey: alertResolutionKey(id, p, ctx.today),
-    });
+      action: "Órdenes de compra → revisar la factura y el precio del proveedor.",
+    }));
   }
   return sortAlerts(alerts);
+}
+
+// ── Material pedido que no llegó (Auditoría UX · P1-3) ────────
+
+/** Obras que importan: aprobadas, sin terminar, que arrancan dentro de `leadDays` días o ya arrancaron. */
+const startsWithin = (p: Project, today: string, leadDays: number) =>
+  !p.isClosed && p.status !== "quotation" && p.status !== "completed" && p.startDate <= addDays(today, leadDays);
+
+const startsLabel = (p: Project, today: string) => {
+  const days = daysBetween(today, p.startDate);
+  return days < 0 ? `arrancó el ${formatDate(p.startDate)}` : days === 0 ? "arranca hoy" : `arranca en ${days} ${days === 1 ? "día" : "días"}`;
+};
+
+/**
+ * Compras y Administrativo: material que está en una orden de compra y todavía no se recibió, para obras que arrancan
+ * en `leadDays` días o menos (o ya arrancaron: "Trabajando sin material"). Lo que falta PEDIR va en "material sin pedir".
+ */
+export function orderedNotReceivedAlerts(projects: Project[], needs: MaterialNeed[], today: string, leadDays: number): Alert[] {
+  const alerts: Alert[] = [];
+  for (const p of projects.filter((x) => startsWithin(x, today, leadDays))) {
+    const mine = needs
+      .filter((n) => n.projectId === p.id && n.status === "ordered")
+      .map((n) => ({ n, pending: round2(Math.min(n.ordered - n.receivedFromOrders, n.needed - n.receivedFromOrders - n.direct - n.fromDepot)) }))
+      .filter((x) => x.pending > EPS);
+    if (mine.length === 0) continue;
+    const started = daysBetween(today, p.startDate) <= 0;
+    const what = `${mine.length} ${mine.length === 1 ? "material pedido y sin recibir" : "materiales pedidos y sin recibir"}`;
+    const orders = [...new Set(mine.flatMap((x) => x.n.orders.filter((o) => o.received < o.quantity).map((o) => o.number)))];
+    alerts.push(keyed({
+      ...alertBase(p),
+      id: `${p.id}:arrival:${mine.map((x) => x.n.lineId).join(",")}`,
+      kind: "material_arrival",
+      level: started ? "critical" : "warning",
+      title: started ? `Trabajando sin material: ${what}` : `${what}: ${startsLabel(p, today)}`,
+      message: `El proyecto ${startsLabel(p, today)}. Pedido y no llegó: ${mine.map((x) => `${x.n.description} (faltan ${formatQty(x.pending, x.n.unit)})`).join(", ")}.`,
+      records: mine.map((x) => `${x.n.description} · pedido ${formatQty(x.n.ordered, x.n.unit)} · recibido ${formatQty(x.n.receivedFromOrders, x.n.unit)} · ${x.n.orders.map((o) => o.number).join(", ")}`),
+      action: `Órdenes de compra${orders.length ? ` → ${orders.join(", ")}` : ""}: confirmar con el proveedor cuándo llega y marcar lo recibido.`,
+    }));
+  }
+  return alerts;
+}
+
+/**
+ * Jefe de planta: la obra arranca en `leadDays` días o menos (o ya arrancó) y el material no está completo. Sin importes
+ * ni proveedores: usa solo el estado de materiales que calcula la base (Sin comprar / En camino).
+ */
+export function plantMaterialAlerts(projects: Project[], stateOf: (p: Project) => MaterialsState | null, today: string, leadDays: number): Alert[] {
+  return projects
+    .filter((p) => startsWithin(p, today, leadDays))
+    .flatMap((p): Alert[] => {
+      const state = stateOf(p);
+      if (state !== "none" && state !== "on_the_way") return [];
+      const started = daysBetween(today, p.startDate) <= 0;
+      // "En camino" = algo pedido o recibido, no todo: puede faltar recibir o faltar pedir. El detalle lo tiene Compras.
+      const how = state === "none" ? "todavía no se compró" : "no está completo";
+      return [keyed({
+        ...alertBase(p),
+        id: `${p.id}:plant-material:${state}`,
+        kind: "material_missing",
+        level: started ? "critical" : "warning",
+        title: started ? `Trabajando sin todo el material: ${how}` : `Falta material: ${startsLabel(p, today)}`,
+        message: `El proyecto ${startsLabel(p, today)} y el material ${how} (Materiales: ${MATERIALS_STATE_LABELS[state]}).`,
+        action: "Hablar con Compras cuándo llega, y planificar primero lo que no necesita ese material.",
+      })];
+    });
 }
 
 // ── Historial de compras y precios por proveedor ─────────────

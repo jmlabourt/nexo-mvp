@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { ArrowRight, Check, RotateCcw } from "lucide-react";
 import type { Alert } from "@/types";
-import { formatSignedCurrency } from "@/lib/formatting";
+import { formatCurrency, formatMarginPoints } from "@/lib/formatting";
 import { AlertLevelBadge } from "@/components/shared/badges";
 import { MarginShift } from "@/components/shared/margin-shift";
 import { Button } from "@/components/ui/button";
@@ -55,9 +55,15 @@ export function AlertItem({
               </ul>
             </details>
           )}
-          {!compact && alert.impactAmount !== undefined && alert.impactAmount > 0 && (
-            <p className="text-sm text-slate-600">
-              Impacto: <strong className="tabular text-red-700">{formatSignedCurrency(alert.impactAmount)}</strong>
+          {alert.impactAmount !== undefined && alert.impactAmount > 0 && (
+            <p className="text-sm text-slate-700">
+              Cuesta: <strong className="tabular text-red-700">{formatCurrency(alert.impactAmount)}</strong>
+              {alert.impactPoints !== undefined && <span className="text-slate-600"> (≈ {formatMarginPoints(alert.impactPoints)})</span>}
+            </p>
+          )}
+          {alert.action && (
+            <p className="text-sm text-slate-700">
+              <span className="font-medium">Qué revisar:</span> {alert.action}
             </p>
           )}
         </div>

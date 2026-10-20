@@ -11,6 +11,7 @@ import { Select } from "@/components/ui/input";
 import { HelpTip } from "@/components/ui/help-tip";
 import { NumField, Section } from "./fields";
 import { RubroSection } from "./rubro-section";
+import { ProductsSection } from "./products-section";
 import { MaterialCatalogList } from "./material-rows";
 import { ResultSection } from "./result-section";
 import { DelaySection } from "./delay-section";
@@ -44,12 +45,14 @@ export function BudgetCalculator({ state, onState, result, projectType, salesPri
     <div className="space-y-4">
       <MaterialCatalogList />
 
+      <ProductsSection state={state} onState={set} result={result} />
+
       <div className="flex items-center gap-1 text-sm font-semibold text-slate-900">
         Cotización por rubros
         <HelpTip label="Cómo se arma la cotización">
           <span className="block">
-            Cada rubro tiene materiales, operarios × horas por operario, horas de diseño y horas de administración. Transporte / Fletes e Imprevistos son solo
-            un importe.
+            Cada rubro tiene materiales, horas de diseño y horas de administración. La mano de obra se carga en los productos. Transporte / Fletes e
+            Imprevistos son solo un importe.
           </span>
           <span className="block">Las horas se valorizan con las tarifas de Configuración: {ratesText(rates)}. La tarifa y la jornada vigentes quedan guardadas en la cotización.</span>
         </HelpTip>
@@ -95,8 +98,8 @@ export function BudgetCalculator({ state, onState, result, projectType, salesPri
         help={
           <>
             <span className="block">
-              Días de trabajo estimados = horas por operario / jornada del operario ({formatNumber(input.hoursPerDay, 1)} h, de Configuración), sumando los rubros
-              como si se hicieran uno detrás de otro. Es un supuesto conservador, a confirmar: algunos rubros pueden hacerse en paralelo.
+              Días de trabajo estimados = horas por operario / jornada del operario ({formatNumber(input.hoursPerDay, 1)} h, de Configuración), sumando cada
+              producto y rubro como si se hicieran uno detrás de otro. Es un supuesto conservador, a confirmar: algunos rubros pueden hacerse en paralelo.
             </span>
             <span className="block">
               Con plazo, las horas que no entran se calculan como horas extra (tarifa × {formatNumber(input.overtimeMultiplier, 2)}). Sin plazo no hay horas extra.
