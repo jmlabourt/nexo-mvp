@@ -38,6 +38,7 @@ import * as circuit from "@/lib/circuit";
 import { EMPTY_LEDGER, normalizeLedger, type LedgerCtx } from "@/lib/ledger";
 import { closeCheck } from "@/lib/tablero";
 import { setRubroNames } from "@/lib/rubros";
+import { correctHours, type HoursCorrectionInput } from "@/lib/hours-review";
 import { demoScenario } from "@/lib/demo/escenario";
 import { demoDataChanged, pickDemoData, readDemo, setDemoActive, writeDemo } from "./demo-local";
 import type { DeliveryChoice } from "@/lib/circuit";
@@ -261,6 +262,10 @@ interface AppState {
    * `sessions` = sesiones que pueden hacerlo.
    */
   recordLedger: (sessions: SessionKey[], fn: (ledger: Ledger, ctx: LedgerCtx, state: AppState) => Ledger) => Result;
+  /** Demo: el Jefe confirma que la jornada está bien (en una empresa real, planta_confirm_hours). */
+  confirmHoursLocal: (key: string) => Result;
+  /** Demo: el Jefe redistribuye horas con motivo (en una empresa real, planta_correct_hours). */
+  correctHoursLocal: (input: HoursCorrectionInput) => Result;
   /** Borra todos los datos de la empresa para empezar de cero. */
   clearData: () => Promise<Result>;
   dismissSyncError: () => void;
@@ -788,7 +793,7 @@ export const useAppStore = create<AppState>()(
           run(() => {
             const who = effectiveIdentity(get()).roleKey;
             if (who !== "admin" && who !== "jefe_planta") throw new ops.DomainError("El cierre del día lo hace el Jefe de planta.");
-            const r = closeDay(find(input.projectId), get().stock, get().deliveries, input, { ...ctx(), today: todayISO() });
+            const r = closeDay(find(input.projectId), get().stock, get().deliveries, input, { ...ctx(), today: todayISO(), carryOver: get().demoLocal });
             set({ projects: get().projects.map((p) => (p.id === input.projectId ? r.project : p)), stock: r.stock, deliveries: r.deliveries });
             // El costo de cada uso y de cada sobrante lo pone la base con el lote (el Jefe no lo conoce).
             const p = closeDayPayload(input, r);
@@ -1179,6 +1184,21 @@ export const useAppStore = create<AppState>()(
           setDemoActive(false);
           set({ demoLocal: false });
         },
+        confirmHoursLocal: (key) =>
+          run(() => {
+            if (!get().demoLocal) throw new ops.DomainError("Solo en el modo demostración.");
+            if (!["jefe_planta", "gerencia"].includes(effectiveIdentity(get()).session)) throw new ops.DomainError("La revisión de horas la hace el Jefe de planta.");
+            if (!get().reviewedHoursKeys.includes(key)) set({ reviewedHoursKeys: [...get().reviewedHoursKeys, key] });
+            return undefined;
+          }),
+        correctHoursLocal: (input) =>
+          run(() => {
+            if (!get().demoLocal) throw new ops.DomainError("Solo en el modo demostración.");
+            if (!["jefe_planta", "gerencia"].includes(effectiveIdentity(get()).session)) throw new ops.DomainError("La corrección de horas la hace el Jefe de planta.");
+            const { actor } = effectiveIdentity(get());
+            set({ projects: correctHours(get().projects, get().assignments, input, { actor, now: new Date().toISOString(), id: () => createId("hc") }) });
+            return undefined;
+          }),
         recordLedger: (sessions, fn) =>
           run(() => {
             const state = get();

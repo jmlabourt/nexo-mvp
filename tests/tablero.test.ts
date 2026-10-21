@@ -61,3 +61,19 @@ describe("cierre", () => {
     expect(check.warnings).toEqual(["OC-9 (Proveedor) sin factura del proveedor"]);
   });
 });
+
+describe("planta: material en producción entre días", () => {
+  it("liberado = consumido + desperdiciado + devuelto + en producción, y lo no rendido sigue abierto", async () => {
+    const { closeDay, deliveryBalance, inProduction } = await import("@/lib/plant-materials");
+    const p = running();
+    const d = { id: "del-1", projectId: p.id, itemId: p.items[0].id, materialId: "m", materialName: "Placa", unit: "u", quantity: 10, source: "project" as const, date: "2026-10-20", createdBy: "x", createdAt: "" };
+    const ctx2 = { actor: "Jefe", now: "2026-10-21T12:00:00Z", today: "2026-10-21", carryOver: true };
+    // Sin stock asignado no hay consumo real que mover: probamos solo el balance con devuelto 0 y consumo 0 → nada que rendir.
+    const r = closeDay(p, emptyStock, [d], { projectId: p.id, date: "2026-10-21", units: [{ itemId: p.items[0].id, units: 0 }], deliveries: [] }, ctx2);
+    expect(r.deliveries[0].closedAt).toBeUndefined();
+    const half = { ...d, consumed: 4, waste: 1, leftover: 2 };
+    expect(inProduction(half)).toBe(3);
+    const b = deliveryBalance(half);
+    expect(b.consumed + b.waste + b.returned + b.inProduction).toBe(b.released);
+  });
+});

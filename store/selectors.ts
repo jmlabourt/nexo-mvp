@@ -1,5 +1,6 @@
 "use client";
 // Hooks derivados: combinan estado + funciones puras. Memoizados para no recalcular en cada render.
+import { withPublishedBom } from "@/lib/bom-needs";
 import { useCallback, useMemo } from "react";
 import type { Alert, EconomicHealth, HourRate, Project } from "@/types";
 import { allAlerts, openAlertCount, projectHealth, sortAlerts, splitAlerts } from "@/lib/alerts";
@@ -44,7 +45,7 @@ export function usePlantAlerts(): Alert[] {
 
 /** Alertas de Compras (Lote 5C): material sin comprar a pocos días y compras más caras que lo presupuestado. */
 export function usePurchasingAlerts(): Alert[] {
-  const projects = useAppStore((s) => s.projects);
+  const projects = useNeedsProjects();
   const orders = useAppStore((s) => s.orders);
   const stock = useAppStore((s) => s.stock);
   const settings = useAppStore((s) => s.settings);
@@ -67,8 +68,19 @@ export function useMaterialsStateOf(): (project: Project) => MaterialsState | nu
 }
 
 /** Necesidades de compra de los proyectos aprobados (Lote 6): por comprar, en orden de compra o recibido. */
-export function useMaterialNeeds(): MaterialNeed[] {
+/**
+ * Proyectos tal como los ve Compras: en el modo demostración, los materiales salen del BOM publicado de cada mueble
+ * (lib/bom-needs.ts); en una empresa real, de las líneas de materiales del presupuesto (como hasta ahora).
+ */
+export function useNeedsProjects(): Project[] {
   const projects = useAppStore((s) => s.projects);
+  const demoLocal = useAppStore((s) => s.demoLocal);
+  const boms = useAppStore((s) => s.ledger.boms);
+  return useMemo(() => (demoLocal ? projects.map((p) => withPublishedBom(p, { boms })) : projects), [projects, demoLocal, boms]);
+}
+
+export function useMaterialNeeds(): MaterialNeed[] {
+  const projects = useNeedsProjects();
   const orders = useAppStore((s) => s.orders);
   const stock = useAppStore((s) => s.stock);
   const today = useToday();

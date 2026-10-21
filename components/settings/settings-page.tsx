@@ -683,7 +683,13 @@ export function SettingsPage() {
           <div id="nomenclatura" className="scroll-mt-20"><NomenclatureSection /></div>
         </TabsContent>
         <TabsContent value="users" id="usuarios" className="space-y-6">
-          <UsersSection />
+          {demoLocal ? (
+            <p className="rounded-md bg-slate-50 p-3 text-sm text-slate-600">
+              En el modo demostración no se muestran ni se cambian los usuarios reales de tu empresa. Las cinco sesiones se prueban con &quot;Ver como&quot;.
+            </p>
+          ) : (
+            <UsersSection />
+          )}
           <PermissionsSection />
         </TabsContent>
         <TabsContent value="data">

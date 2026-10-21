@@ -27,6 +27,50 @@ import { allUnitsDone, deliveryDecision } from "@/lib/circuit";
 import { MaterialChangesCard } from "@/components/projects/material-changes";
 import { AttachmentList } from "@/components/shared/attachments";
 import { PendingAction } from "@/components/shared/data-origin";
+import { confirmHandover, handoverOf } from "@/lib/ledger";
+
+/** Entrega real al cliente (demo): la confirma el Jefe con fecha y responsable; habilita el cierre de Gerencia. */
+function HandoverCard({ project }: { project: Project }) {
+  const today = useToday();
+  const handover = useAppStore((s) => handoverOf(s.ledger, project.id));
+  const record = useAppStore((s) => s.recordLedger);
+  const [date, setDate] = useState(today);
+  const [notes, setNotes] = useState("");
+  const [error, setError] = useState("");
+  if (handover) {
+    return (
+      <p className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">
+        Entregado al cliente el {formatDate(handover.date)} · responsable: {handover.by}
+        {handover.notes ? ` · ${handover.notes}` : ""}. Gerencia ya puede cerrar el proyecto.
+      </p>
+    );
+  }
+  return (
+    <form
+      aria-label="Entrega real al cliente"
+      className="space-y-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm"
+      onSubmit={(e) => {
+        e.preventDefault();
+        const r = record(["jefe_planta", "gerencia"], (l, ctx) => confirmHandover(l, project, { date, notes }, ctx));
+        setError(r.ok ? "" : r.error);
+      }}
+    >
+      <p className="font-medium text-emerald-900">Todas las unidades están terminadas. ¿Se entregó al cliente?</p>
+      <div className="flex flex-wrap items-end gap-2">
+        <label className="text-xs font-medium text-slate-700">
+          Fecha de entrega
+          <Input className="mt-1 w-40" type="date" value={date} max={today} onChange={(e) => setDate(e.target.value)} />
+        </label>
+        <label className="min-w-48 flex-1 text-xs font-medium text-slate-700">
+          Observaciones (opcional)
+          <Input className="mt-1" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Recibió…, remito…" />
+        </label>
+        <Button type="submit" size="sm">Confirmar entrega al cliente</Button>
+      </div>
+      {error && <p role="alert" className="text-red-700">{error}</p>}
+    </form>
+  );
+}
 
 export function PlantProjectsPage() {
   const projects = useAppStore((s) => s.projects);
@@ -47,6 +91,7 @@ export function PlantProjectsPage() {
 }
 
 function ProjectCard({ project: p, onAssign }: { project: Project; onAssign: (d: AssignmentDraft) => void }) {
+  const demoLocal = useAppStore((s) => s.demoLocal);
   const today = useToday();
   const assignments = useAppStore((s) => s.assignments);
   const settings = useAppStore((s) => s.settings);
@@ -125,7 +170,8 @@ function ProjectCard({ project: p, onAssign }: { project: Project; onAssign: (d:
             </section>
           ))
         )}
-        {p.status === "production" && allUnitsDone(p) && !deliveryDecision(p) && (
+        {demoLocal && allUnitsDone(p) && !p.isClosed && <HandoverCard project={p} />}
+        {!demoLocal && p.status === "production" && allUnitsDone(p) && !deliveryDecision(p) && (
           <section aria-label="¿Se terminó este proyecto?" className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm">
             <p className="font-medium text-emerald-900">Todas las unidades están terminadas. ¿Se terminó este proyecto?</p>
             <div className="mt-2">

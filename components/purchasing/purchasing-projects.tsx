@@ -1,4 +1,5 @@
 "use client";
+import { itemsWithoutBom } from "@/lib/bom-needs";
 import { useConfirmedAction } from "@/store/confirmed-action";
 // Compras → Necesidades: los materiales de los proyectos aprobados con lo que falta pedir, neteando el stock
 // libre del depósito. Estado por material: Por comprar / En orden de compra / Recibido (se deriva de las órdenes).
@@ -42,6 +43,9 @@ type Filter = "to_buy" | "all";
 export function PurchasingProjectsPage({ projectId }: { projectId?: string }) {
   const projects = useAppStore((s) => s.projects);
   const needs = useMaterialNeeds();
+  const demoLocal = useAppStore((s) => s.demoLocal);
+  const ledger = useAppStore((s) => s.ledger);
+  const withoutBom = useMemo(() => (demoLocal ? itemsWithoutBom(projects, ledger) : []), [demoLocal, projects, ledger]);
   const corrections = useAppStore((s) => s.corrections);
   const [filter, setFilter] = useState<Filter>("to_buy");
   const [selected, setSelected] = useState<string[]>([]);
@@ -63,6 +67,12 @@ export function PurchasingProjectsPage({ projectId }: { projectId?: string }) {
           </Button>
         }
       />
+      {demoLocal && withoutBom.length > 0 && (
+        <p className="rounded-md bg-slate-50 p-3 text-sm text-slate-600">
+          Solo cuenta el BOM publicado (&quot;Finalizado y enviado&quot;). Todavía sin BOM publicado:{" "}
+          {withoutBom.map((x) => `${x.project.code} · ${x.itemName}`).join(", ")}. Al publicarse aparecen acá; una nueva versión no cambia las órdenes ya emitidas.
+        </p>
+      )}
       <div className="max-w-sm">
         <Choice<Filter>
           name="Qué materiales ver"
@@ -112,6 +122,7 @@ export function PurchasingProjectsPage({ projectId }: { projectId?: string }) {
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="break-words font-medium text-slate-900">{n.description}</span>
                           <NeedPill status={n.status} />
+                          {n.detail && <span className="text-xs text-slate-500">{n.detail}</span>}
                           {changes.get(n.lineId) && (
                             <Badge tone="yellow">
                               {changes.get(n.lineId)!.diff > 0 ? "Aumentó" : "Disminuyó"} por Diseño ({changes.get(n.lineId)!.diff > 0 ? "+" : ""}
