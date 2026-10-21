@@ -814,17 +814,18 @@ export interface Collection {
   createdAt: string;
 }
 
-/** Factura de un proveedor (la registra Compras) y su pago (lo confirma Gerencia). Un pago no es ingreso ni costo nuevo. */
-export interface SupplierInvoice {
+/**
+ * Pago a un proveedor, confirmado por Gerencia sobre la factura que Compras cargó en la orden de compra.
+ * Un pago no es ingreso ni un costo nuevo: el costo del material ya está en el proyecto.
+ */
+export interface SupplierPayment {
   id: string;
   orderId: string;
-  number: string;
   date: string;
   amount: number;
-  createdBy: string;
-  createdAt: string;
-  /** Pago confirmado por Gerencia. */
-  payment?: { date: string; amount: number; reference: string; by: string; at: string };
+  reference: string;
+  by: string;
+  at: string;
 }
 
 /** Cambio del monto contratado vigente (Administración, con motivo). El monto original aprobado no se pisa. */
@@ -935,7 +936,7 @@ export interface SupplierEntry extends SupplierRecord {
 export interface Ledger {
   salesInvoices: SalesInvoice[];
   collections: Collection[];
-  supplierInvoices: SupplierInvoice[];
+  supplierPayments: SupplierPayment[];
   contractRevisions: ContractRevision[];
   paymentTerms: PaymentTerms[];
   boms: BomVersion[];

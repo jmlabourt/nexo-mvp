@@ -35,7 +35,7 @@ import { costSettingsError, hourRatesError } from "@/lib/cost-settings";
 import { buildSeed } from "@/lib/seed-data";
 import * as ops from "@/lib/project-operations";
 import * as circuit from "@/lib/circuit";
-import { EMPTY_LEDGER, normalizeLedger } from "@/lib/ledger";
+import { EMPTY_LEDGER, normalizeLedger, type LedgerCtx } from "@/lib/ledger";
 import { demoScenario } from "@/lib/demo/escenario";
 import { demoDataChanged, pickDemoData, readDemo, setDemoActive, writeDemo } from "./demo-local";
 import type { DeliveryChoice } from "@/lib/circuit";
@@ -253,6 +253,12 @@ interface AppState {
   restoreLocalDemo: () => void;
   /** Sale del modo demostración local; la app vuelve a cargar la empresa real. */
   exitLocalDemo: () => void;
+  /**
+   * Registra en el ledger de la demo (facturas, cobros, contrato vigente, BOM, entregas…) con una operación pura de
+   * lib/ledger.ts. Solo funciona en el modo demostración: en una empresa real esos datos son "Pendiente de backend".
+   * `sessions` = sesiones que pueden hacerlo.
+   */
+  recordLedger: (sessions: SessionKey[], fn: (ledger: Ledger, ctx: LedgerCtx, state: AppState) => Ledger) => Result;
   /** Borra todos los datos de la empresa para empezar de cero. */
   clearData: () => Promise<Result>;
   dismissSyncError: () => void;
@@ -1161,6 +1167,16 @@ export const useAppStore = create<AppState>()(
           setDemoActive(false);
           set({ demoLocal: false });
         },
+        recordLedger: (sessions, fn) =>
+          run(() => {
+            const state = get();
+            if (!state.demoLocal) throw new ops.DomainError("Pendiente de backend: este dato todavía no se guarda en la base.");
+            const who = effectiveIdentity(state);
+            if (!sessions.includes(who.session)) throw new ops.DomainError("Esta acción no corresponde a tu sesión.");
+            const ledger = fn(state.ledger, { actor: who.actor, now: new Date().toISOString() }, state);
+            if (ledger !== state.ledger) set({ ledger });
+            return undefined;
+          }),
         dismissSyncError: () => { void refreshWorkspace().catch(() => undefined); },
       };
     },

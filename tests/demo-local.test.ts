@@ -4,6 +4,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { DEMO_ACTIVE_KEY, DEMO_DATA_KEY, DEMO_SCHEMA_VERSION, demoDataChanged, isDemoActive, pickDemoData, readDemo, writeDemo, type DemoStorage } from "@/store/demo-local";
 import { useAppStore } from "@/store/use-app-store";
+import type { Ledger } from "@/types";
 
 const memory = (): DemoStorage & { map: Map<string, string> } => {
   const map = new Map<string, string>();
@@ -71,6 +72,19 @@ describe("modo demostración en la app", () => {
     useAppStore.getState().exitLocalDemo();
     expect(useAppStore.getState().demoLocal).toBe(false);
     expect(isDemoActive()).toBe(false);
+  });
+
+  it("los registros nuevos (ledger) se guardan solo en la demo y respetan la sesión", () => {
+    const add = (l: Ledger) => ({ ...l, internalHours: [...l.internalHours, { id: "h1", employeeId: "e", date: "2026-10-21", hours: 2, task: "Orden", createdAt: "" }] });
+    expect(useAppStore.getState().recordLedger(["gerencia"], add)).toMatchObject({ ok: false, error: expect.stringMatching(/Pendiente de backend/) });
+    useAppStore.getState().enterLocalDemo();
+    useAppStore.setState({ currentMode: "operario" });
+    expect(useAppStore.getState().recordLedger(["gerencia"], add).ok).toBe(false);
+    useAppStore.setState({ currentMode: "gerencia" });
+    expect(useAppStore.getState().recordLedger(["gerencia"], add).ok).toBe(true);
+    useAppStore.setState({ demoLocal: false, ledger: { ...useAppStore.getState().ledger, internalHours: [] } });
+    useAppStore.getState().enterLocalDemo();
+    expect(useAppStore.getState().ledger.internalHours.map((h) => h.id)).toContain("h1");
   });
 
   it("una empresa real que carga nunca usa los datos de la demo", () => {
