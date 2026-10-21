@@ -24,3 +24,14 @@ la base real ni escribe en `supabase/`.
    ```
 
 Imprime cada eslabón como `PASA` o `FALLA`. La base local se modifica al correr: para repetir, reiniciar el paso 1.
+
+## Modo demostración (sin base para los datos)
+
+La base local solo hace falta para el login (el middleware pide sesión). Después, todo corre en el navegador:
+
+```sh
+USERS="$(head -1 /tmp/pg.out)" CHROMIUM_PATH=/ruta/a/chromium node e2e/demo-persistencia.mjs
+USERS="$(head -1 /tmp/pg.out)" CHROMIUM_PATH=/ruta/a/chromium MODE=despues OUT=docs/capturas-ux/demo/despues/ node e2e/demo-capturas.mjs
+```
+
+Para las capturas "antes", levantar la versión anterior en otro puerto y pasar `BASE=http://localhost:3101 MODE=antes`.

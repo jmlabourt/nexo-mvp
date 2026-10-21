@@ -18,7 +18,7 @@ export async function as(who, viewport = { width: 1440, height: 900 }) {
   return page;
 }
 export async function go(page, path) {
-  await page.goto("http://localhost:3100" + path);
+  await page.goto((process.env.BASE ?? "http://localhost:3100") + path);
   await page.waitForSelector("main, body", { timeout: 30000 });
   await page.waitForTimeout(1200);
 }
