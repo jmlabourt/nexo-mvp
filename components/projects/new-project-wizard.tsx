@@ -1,6 +1,9 @@
 "use client";
 import { useConfirmedAction } from "@/store/confirmed-action";
 import { useMemo, useState } from "react";
+import { financePct, useMonthlyRate } from "@/components/budget/finance-fields";
+import { quoteSchedule } from "@/lib/financial";
+import { setPaymentTerms } from "@/lib/ledger";
 import { useRouter } from "next/navigation";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -43,6 +46,7 @@ export function NewProjectWizard() {
   const { overtimeMultiplier, financialPct, hoursPerDay } = useAppStore((s) => s.costSettings);
   const rates = useAppStore((s) => s.hourRates);
   const isDemo = useAppStore((s) => s.isDemo);
+  const monthlyRate = useMonthlyRate();
   const createProject = useConfirmedAction("createProject");
   const code = useMemo(() => nextProjectCode(projects), [projects]);
   const [draft] = useState(peekQuoteDraft);
@@ -58,9 +62,9 @@ export function NewProjectWizard() {
       client: "",
       projectType: draft?.projectType || PROJECT_TYPES[0],
       description: "",
-      startDate: todayISO(),
+      startDate: draft?.state.finance?.startDate ?? todayISO(),
       // Con plazo en la cotización, la entrega propuesta es inicio + plazo; se puede cambiar.
-      dueDate: draft && plazoOf(draft.state) > 0 ? addWorkingDays(todayISO(), plazoOf(draft.state)) : in30days(),
+      dueDate: draft?.state.finance?.deliveryDate ?? (draft && plazoOf(draft.state) > 0 ? addWorkingDays(todayISO(), plazoOf(draft.state)) : in30days()),
       owner: useAppStore.getState().userName,
       salesPrice: (draft?.salesPrice ?? undefined) as unknown as number,
     },
@@ -81,10 +85,18 @@ export function NewProjectWizard() {
   const toCost = async () => {
     if (!(await trigger(["name", "client", "projectType", "description", "startDate", "dueDate", "owner"]))) return;
     // Ya hay fechas del proyecto: si la cotización no tenía plazo, se propone el de esas fechas (editable).
+    let next = calcState;
     if (plazo === 0) {
       const days = workingDaysBetween(startDate, dueDate);
-      if (days > 0) setCalcState({ ...calcState, deadlineDays: String(days) });
+      if (days > 0) next = { ...next, deadlineDays: String(days) };
     }
+    // Las condiciones de cobro usan las fechas del proyecto (el gasto financiero se recalcula con ellas).
+    if (next.finance && (next.finance.startDate !== startDate || next.finance.deliveryDate !== dueDate)) {
+      const finance = { ...next.finance, startDate, deliveryDate: dueDate };
+      const r = financePct(finance, monthlyRate);
+      next = { ...next, finance, ...(r.ok ? { financialPct: String(r.amount).replace(".", ",") } : {}) };
+    }
+    setCalcState(next);
     setStep(1);
   };
 
@@ -102,8 +114,17 @@ export function NewProjectWizard() {
       return setStep(1);
     }
     const v = getValues();
-    const res = await createProject({ ...v, salesPrice: Number(v.salesPrice), code, budgetLines: calc.lines, items: productInputs(calcState) });
+    const f = calcState.finance;
+    const dates = f ? { startDate: f.startDate, dueDate: f.deliveryDate } : {};
+    const res = await createProject({ ...v, ...dates, salesPrice: Number(v.salesPrice), code, budgetLines: calc.lines, items: productInputs(calcState) });
     if (!res.ok) return setFormError(res.error);
+    if (f && useAppStore.getState().demoLocal) {
+      // Demo: la seña y las cuotas pactadas quedan como condiciones de pago del proyecto.
+      const n = (x: string) => Number(x.replace(",", "."));
+      const terms = { startDate: f.startDate, deliveryDate: f.deliveryDate, daysAfterDelivery: Math.round(n(f.daysAfterDelivery)) || 0, seniaPct: n(f.seniaPct) || 0, installments: Math.round(n(f.installments)) || 1 };
+      const schedule = quoteSchedule(Number(v.salesPrice), terms).map((x) => ({ ...x, id: "" }));
+      useAppStore.getState().recordLedger(["administracion", "gerencia"], (l) => setPaymentTerms(l, { projectId: res.value, daysAfterDelivery: terms.daysAfterDelivery, schedule }));
+    }
     clearQuoteDraft();
     router.push(`/projects/${res.value}`);
   };

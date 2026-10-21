@@ -364,13 +364,31 @@ export function confirmHandover(ledger: Ledger, p: Project, input: { date: strin
 
 // ── Horas internas (sin proyecto): no se imputan a ninguna OT ──
 
-export function registerInternalHours(ledger: Ledger, input: { employeeId: string; date: string; hours: number; task: string }, ctx: LedgerCtx): Ledger {
+export function registerInternalHours(
+  ledger: Ledger,
+  input: { employeeId: string; date: string; hours: number; task: string; projectId?: string; hourlyCost?: number },
+  ctx: LedgerCtx,
+): Ledger {
   if (!input.employeeId) throw new DomainError("Elegí la persona.");
   if (!isDate(input.date)) throw new DomainError("Indicá la fecha.");
   if (!(input.hours > 0) || input.hours > 24) throw new DomainError("Las horas van de más de 0 a 24.");
   if (input.task.trim().length < 2) throw new DomainError("Contá brevemente en qué trabajaste.");
-  const h: InternalHours = { id: createId("hint"), employeeId: input.employeeId, date: input.date, hours: round2(input.hours), task: input.task.trim(), createdAt: ctx.now };
+  const h: InternalHours = {
+    id: createId("hint"),
+    employeeId: input.employeeId,
+    projectId: input.projectId || undefined,
+    date: input.date,
+    hours: round2(input.hours),
+    task: input.task.trim(),
+    hourlyCost: input.projectId ? round2(input.hourlyCost ?? 0) : undefined,
+    createdAt: ctx.now,
+  };
   return { ...ledger, internalHours: [...ledger.internalHours, h] };
+}
+
+/** Costo de las horas propias (Administración, Compras, Jefe) imputadas a un proyecto. */
+export function staffHoursCost(ledger: Pick<Ledger, "internalHours">, projectId: string): number {
+  return sum(ledger.internalHours.filter((h) => h.projectId === projectId).map((h) => h.hours * (h.hourlyCost ?? 0)));
 }
 
 // ── Catálogo de rubros (Gerencia: texto libre, sin lista cerrada) ──

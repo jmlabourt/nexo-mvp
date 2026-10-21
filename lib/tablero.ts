@@ -11,7 +11,7 @@
 // ─────────────────────────────────────────────────────────────
 import type { Ledger, Project, PurchaseOrder } from "@/types";
 import { actualCostToDate } from "./calculations";
-import { billingStatus, currentContract, handoverOf, termsOf } from "./ledger";
+import { billingStatus, currentContract, handoverOf, staffHoursCost, termsOf } from "./ledger";
 import { generalState, inPeriod, monthsBetween } from "./gerencia";
 import { unresolvedMaterial } from "./material-flow";
 import type { StockState } from "./stock";
@@ -146,7 +146,8 @@ export function profitView(project: Project, ledger: Ledger): ProfitView {
   const b = project.baseline;
   const budgeted = b ? { price: b.salesPrice, cost: b.budgetTotal, profit: round2(b.salesPrice - b.budgetTotal), margin: pct(b.salesPrice - b.budgetTotal, b.salesPrice) } : null;
   const contract = currentContract(project, ledger);
-  const cost = actualCostToDate(project);
+  // Costo cargado: el del proyecto más las horas propias de Administración, Compras y el Jefe imputadas a la OT.
+  const cost = round2(actualCostToDate(project) + staffHoursCost(ledger, project.id));
   const closure = closureOf(ledger, project.id);
   const complete = project.isClosed && (!closure || closure.pendingCosts.length === 0);
   const toDate = { contract, cost, profit: round2(contract - cost), margin: pct(contract - cost, contract), partial: !complete };

@@ -17,6 +17,8 @@ import { GeneralStateBadge } from "./projects-table";
 import { FurniturePanel } from "./furniture-panel";
 import { HoursTab } from "./hours-tab";
 import { BillingTab } from "./billing-tab";
+import { OwnHoursButton } from "@/components/shared/own-hours";
+import { ContractTerms } from "./contract-terms";
 import { EditProjectDialog } from "./edit-project-dialog";
 import { HoursForm } from "@/components/actual-costs/hours-form";
 import { CircuitActions, CircuitBadge } from "./circuit-actions";
@@ -47,7 +49,7 @@ type DialogName = "record" | "hours" | "status" | "close" | "edit" | null;
  * muebles (Diseño, etapas, BOM, archivos) y las etapas, sin importes gerenciales.
  */
 const GERENCIA_TABS = ["summary", "items", "budget", "materials", "hours", "costs", "billing", "activity"] as const;
-const ADMIN_TABS = ["items", "stages"] as const;
+const ADMIN_TABS = ["items", "contract", "stages"] as const;
 
 export function ProjectDetail({ id, tab: initialTab, purchase }: { id: string; tab?: string; purchase?: string }) {
   const view = useProjectView(id);
@@ -115,9 +117,12 @@ export function ProjectDetail({ id, tab: initialTab, purchase }: { id: string; t
                   <ClipboardPen /> Registrar otro costo
                 </Button>
               ) : (
-                <Button onClick={openDialog("hours")} size="lg">
-                  <Clock /> Registrar horas
-                </Button>
+                <>
+                  <Button onClick={openDialog("hours")} size="lg">
+                    <Clock /> Registrar horas de operarios
+                  </Button>
+                  <OwnHoursButton projectId={p.id} />
+                </>
               )}
               <Button variant="outline" onClick={openDialog("edit")} size="lg">
                 <Pencil /> Editar información
@@ -155,6 +160,7 @@ export function ProjectDetail({ id, tab: initialTab, purchase }: { id: string; t
           ) : (
             <>
               <TabsTrigger value="items">Muebles</TabsTrigger>
+              <TabsTrigger value="contract">Contrato y pagos</TabsTrigger>
               <TabsTrigger value="stages">Etapas y notas</TabsTrigger>
             </>
           )}
@@ -204,6 +210,9 @@ export function ProjectDetail({ id, tab: initialTab, purchase }: { id: string; t
         </TabsContent>
         <TabsContent value="hours">
           <HoursTab project={p} />
+        </TabsContent>
+        <TabsContent value="contract">
+          <ContractTerms project={p} />
         </TabsContent>
         <TabsContent value="billing">
           <BillingTab project={p} />

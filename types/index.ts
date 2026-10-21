@@ -891,13 +891,20 @@ export interface ClientHandover {
   notes?: string;
 }
 
-/** Horas propias sin proyecto ("Trabajo interno"): no se imputan a ninguna OT. */
+/**
+ * Horas propias de Administración, Compras o el Jefe de planta. Con `projectId` se imputan a esa OT (costo = horas ×
+ * costo por hora vigente, congelado al cargar); sin proyecto son "Trabajo interno" y no van a ninguna OT.
+ */
 export interface InternalHours {
   id: string;
+  /** Persona que trabajó (nombre de la sesión en la demo). */
   employeeId: string;
+  projectId?: string;
   date: string;
   hours: number;
   task: string;
+  /** Costo por hora vigente al cargar (solo horas de proyecto). */
+  hourlyCost?: number;
   createdAt: string;
 }
 

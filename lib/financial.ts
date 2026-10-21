@@ -85,3 +85,43 @@ export function financialCost(i: FinancialInput): FinancialResult {
   const amount = round2(tranches.reduce((s, t) => s + t.amount, 0));
   return { ok: true, amount, financedDays: Math.max(0, (payments.at(-1)?.day ?? start) - start), productionDays, tranches };
 }
+
+/** Condiciones que pregunta el Cotizador: fechas, días de pago después de la entrega, seña y cuotas del saldo. */
+export interface QuoteFinanceTerms {
+  startDate: string;
+  deliveryDate: string;
+  /** "¿A cuántos días de la entrega paga el cliente?" (primer pago del saldo). */
+  daysAfterDelivery: number;
+  /** Seña al inicio, en % del precio. */
+  seniaPct: number;
+  /** El saldo (precio − seña) en N cuotas iguales, cada 30 días desde el primer pago. */
+  installments: number;
+}
+
+/** Cobros previstos de una cotización para un precio dado (seña al inicio + saldo en cuotas). */
+export function quoteSchedule(price: number, t: QuoteFinanceTerms): Array<{ label: string; amount: number; date: string }> {
+  const out: Array<{ label: string; amount: number; date: string }> = [];
+  const senia = round2((price * Math.max(0, t.seniaPct)) / 100);
+  if (senia > 0) out.push({ label: `Seña ${t.seniaPct} %`, amount: senia, date: t.startDate });
+  const n = Math.max(1, Math.floor(t.installments));
+  const rest = round2(price - senia);
+  const first = addDaysIso(t.deliveryDate, t.daysAfterDelivery);
+  let assigned = 0;
+  for (let i = 0; i < n; i++) {
+    const amount = i === n - 1 ? round2(rest - assigned) : round2(rest / n);
+    assigned = round2(assigned + amount);
+    if (amount > 0) out.push({ label: n === 1 ? "Saldo" : `Cuota ${i + 1} de ${n}`, amount, date: addDaysIso(first, i * 30) });
+  }
+  return out;
+}
+
+/**
+ * Gasto financiero de una cotización como % del precio (sale igual para cualquier precio porque seña y cuotas son
+ * proporcionales). Así el precio sugerido lo incluye sin circularidad: precio = costo / (1 − %).
+ */
+export function quoteFinancialPct(t: QuoteFinanceTerms, monthlyRatePct: number): FinancialResult {
+  if (!(t.seniaPct >= 0 && t.seniaPct <= 100)) return { ok: false, reason: "La seña va de 0 a 100 %." };
+  if (!(t.installments >= 1)) return { ok: false, reason: "Las cuotas van de 1 en adelante." };
+  const price = 100;
+  return financialCost({ price, monthlyRatePct, startDate: t.startDate, deliveryDate: t.deliveryDate, daysAfterDelivery: t.daysAfterDelivery, schedule: quoteSchedule(price, t) });
+}

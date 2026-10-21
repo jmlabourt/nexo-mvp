@@ -15,6 +15,7 @@ import { useAppStore } from "@/store/use-app-store";
 import { usePlantAlerts, useToday } from "@/store/selectors";
 import { AlertItem } from "@/components/alerts/alert-item";
 import { StatLink } from "@/components/shared/stat";
+import { OwnHoursButton } from "@/components/shared/own-hours";
 import { PageHeader } from "@/components/shared/page-header";
 import { CircuitPending } from "@/components/shared/pending-list";
 import { EmptyState } from "@/components/shared/empty-state";
@@ -47,7 +48,7 @@ export function PlantSummaryPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Dashboard" subtitle={`Hoy, ${formatDate(today)}. Jornada: ${formatNumber(hoursPerDay)} h.`} />
+      <PageHeader title="Dashboard" subtitle={`Hoy, ${formatDate(today)}. Jornada: ${formatNumber(hoursPerDay)} h.`} actions={<OwnHoursButton />} />
       <CircuitPending session="jefe_planta" />
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <StatLink icon={CalendarClock} label="Asignaciones de hoy" value={String(todays.length)} href="/planta/operarios" />

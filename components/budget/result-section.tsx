@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input, Select } from "@/components/ui/input";
 import { NumField, Section } from "./fields";
+import { FinanceFields } from "./finance-fields";
 import type { ProjectTypeControl } from "./budget-calculator";
 import { newRubroRow, safetyMarginFrom, type CalcState, type CalculatorResult } from "./calculator-state";
 
@@ -69,14 +70,22 @@ export function ResultSection({ state, onState, result, projectType, salesPrice,
           onChange={(v) => onState({ laborTargetPct: v })}
           help="Ganancia sobre el precio de venta que se busca en la mano de obra. Incluye diseño y administración (a confirmar)."
         />
-        <NumField
-          id="c-fin"
-          label="Gasto financiero"
-          suffix="%"
-          value={state.financialPct}
-          onChange={(v) => onState({ financialPct: v })}
-          help="Porcentaje sobre el precio de venta. Es un costo: aparece como línea del costo presupuestado. El valor inicial sale de Configuración."
-        />
+        {state.finance ? (
+          <div className="flex flex-col gap-1">
+            <span className="text-xs font-medium text-slate-600">Gasto financiero</span>
+            <span className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-right text-sm tabular">{state.financialPct} %</span>
+            <span className="text-xs text-slate-500">Calculado con las condiciones de cobro (abajo).</span>
+          </div>
+        ) : (
+          <NumField
+            id="c-fin"
+            label="Gasto financiero"
+            suffix="%"
+            value={state.financialPct}
+            onChange={(v) => onState({ financialPct: v })}
+            help="Porcentaje sobre el precio de venta. Es un costo: aparece como línea del costo presupuestado. Completá las condiciones de cobro para calcularlo."
+          />
+        )}
         <NumField
           id="c-transport"
           label="Transporte / Fletes"
@@ -94,6 +103,8 @@ export function ResultSection({ state, onState, result, projectType, salesPrice,
           help="Importe del proyecto (no de un mueble). Va al costo, sin rentabilidad."
         />
       </div>
+
+      <FinanceFields state={state} onState={onState} />
 
       <div className="mt-4 space-y-3 text-sm">
         {!result.hasContent ? (

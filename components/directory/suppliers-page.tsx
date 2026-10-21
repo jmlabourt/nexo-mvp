@@ -10,6 +10,7 @@ import { exampleSupplierDetails } from "@/lib/demo/ejemplos";
 import { formatCurrency, formatDate } from "@/lib/formatting";
 import { useAppStore } from "@/store/use-app-store";
 import { useExampleData } from "@/store/session-data";
+import { LedgerDirectory } from "./ledger-directory";
 import { PageHeader } from "@/components/shared/page-header";
 import { OriginTag, PendingAction } from "@/components/shared/data-origin";
 import { Card, CardContent } from "@/components/ui/card";
@@ -18,6 +19,11 @@ import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 export function SuppliersPage({ prices }: { prices: boolean }) {
+  const demoLocal = useAppStore((s) => s.demoLocal);
+  return demoLocal ? <LedgerDirectory kind="suppliers" /> : <ExampleSuppliersPage prices={prices} />;
+}
+
+function ExampleSuppliersPage({ prices }: { prices: boolean }) {
   const projects = useAppStore((s) => s.projects);
   const stock = useAppStore((s) => s.stock);
   const orders = useAppStore((s) => s.orders);

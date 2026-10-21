@@ -85,12 +85,25 @@ export interface CalcState {
   materialsTargetPct: string;
   laborTargetPct: string;
   financialPct: string;
+  /**
+   * Condiciones de cobro para el gasto financiero (fechas, días de pago, seña y cuotas). Con ellas el % de gasto
+   * financiero se calcula (lib/financial.ts) y deja de cargarse a mano. Opcional: las cotizaciones viejas no lo traen.
+   */
+  finance?: QuoteFinanceForm;
   /** Márgenes de seguridad aplicados desde el aprendizaje (% editable). */
   safetyMargins: SafetyMarginRow[];
   /** Atraso: multa o costo por día (opcional). */
   delayPenalty: string;
   /** Atraso: piso de rentabilidad en % ("" = la rentabilidad total del precio sugerido). */
   delayFloorPct: string;
+}
+
+export interface QuoteFinanceForm {
+  startDate: string;
+  deliveryDate: string;
+  daysAfterDelivery: string;
+  seniaPct: string;
+  installments: string;
 }
 
 /** Margen de seguridad aplicado: el % se puede editar; la referencia queda para que sea trazable. */
