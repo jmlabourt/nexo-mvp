@@ -11,10 +11,11 @@ import {
   confirmSupplierPayment,
   handoverOf,
   invoiceBalance,
+  updatedFinancialInput,
   paidOf,
   registerCollection,
   registerSalesInvoice,
-  termsOf,
+
 } from "@/lib/ledger";
 import { financialCost } from "@/lib/financial";
 import { formatCurrency, formatDate, formatNumber } from "@/lib/formatting";
@@ -54,7 +55,6 @@ export function LedgerBillingTab({ project }: { project: Project }) {
   const invoices = ledger.salesInvoices.filter((i) => i.projectId === project.id).sort((a, c) => a.date.localeCompare(c.date));
   const collections = ledger.collections.filter((c) => c.projectId === project.id).sort((a, c) => a.date.localeCompare(c.date));
   const projectOrders = orders.filter((o) => o.lines.some((l) => l.projectId === project.id));
-  const terms = termsOf(ledger, project.id);
   const done = (r: { ok: boolean; error?: string }) => {
     setError(r.ok ? "" : (r.error ?? ""));
     return r.ok;
@@ -62,8 +62,8 @@ export function LedgerBillingTab({ project }: { project: Project }) {
 
   // Gasto financiero: el del presupuesto aprobado (foto) y la estimación actualizada con la tasa y las fechas de hoy.
   const approvedFinancial = (project.baseline?.lines ?? project.budgetLines).filter((l) => l.category === "financial").reduce((s, l) => s + l.total, 0);
-  const delivery = handoverOf(ledger, project.id)?.date ?? project.dueDate;
-  const updated = financialCost({ price: b.contracted, monthlyRatePct: ledger.financialMonthlyRatePct, startDate: project.startDate, deliveryDate: delivery, daysAfterDelivery: terms.daysAfterDelivery, schedule: terms.schedule });
+  const updatedInput = updatedFinancialInput(project, ledger, today);
+  const updated = financialCost(updatedInput);
 
   return (
     <div className="space-y-4">
@@ -278,7 +278,7 @@ export function LedgerBillingTab({ project }: { project: Project }) {
               <dd className="mt-1 text-base font-semibold tabular">{updated.ok ? formatCurrency(updated.amount) : "No calculable"}</dd>
               <dd className="mt-1 text-xs text-slate-500">
                 {updated.ok
-                  ? `${updated.productionDays} días de producción + ${terms.daysAfterDelivery} de pago${terms.schedule.length ? `, por tramos (${terms.schedule.length} cobros previstos)` : ""}.`
+                  ? `Inicio ${formatDate(project.startDate)} · entrega ${handoverOf(ledger, project.id) ? "real" : "prevista"} ${formatDate(updatedInput.deliveryDate)} · ${updated.tranches.length} ${updated.tranches.length === 1 ? "tramo" : "tramos"} sobre el saldo, con los cobros reales y lo que falta cobrar (lo vencido, a hoy).`
                   : updated.reason}
               </dd>
             </div>

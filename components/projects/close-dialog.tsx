@@ -27,7 +27,8 @@ export function CloseDialog({ project, open, onOpenChange }: { project: Project;
   const demoLocal = useAppStore((s) => s.demoLocal);
   const ledger = useAppStore((s) => s.ledger);
   const orders = useAppStore((s) => s.orders);
-  const check = useMemo(() => (demoLocal ? closeCheck(project, ledger, stock, orders) : { blockers: [], warnings: [] }), [demoLocal, project, ledger, stock, orders]);
+  const deliveries = useAppStore((s) => s.deliveries);
+  const check = useMemo(() => (demoLocal ? closeCheck(project, ledger, stock, orders, deliveries) : { blockers: [], warnings: [] }), [demoLocal, project, ledger, stock, orders, deliveries]);
   const otherBlockers = check.blockers.filter((b) => !b.startsWith("Hay materiales sin rendir"));
   const flow = useMemo(() => projectMaterialFlow(stock, project.id), [stock, project.id]);
   const target = (h: (typeof loose)[number]): StockTarget => ({

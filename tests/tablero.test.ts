@@ -77,3 +77,21 @@ describe("planta: material en producción entre días", () => {
     expect(b.consumed + b.waste + b.returned + b.inProduction).toBe(b.released);
   });
 });
+
+describe("capacidad semanal y mensual", () => {
+  it("cada persona cuenta una vez; cambiar la jornada recalcula; potencial aparte de confirmado", async () => {
+    const { capacityTimeline } = await import("@/lib/tablero");
+    const { capacityFromOperators, opportunities } = await import("@/lib/gerencia");
+    const ops = data.operators.filter((o) => o.active);
+    const caps8 = capacityFromOperators(ops, {}, 8);
+    const caps6 = capacityFromOperators(ops, {}, 6);
+    expect(caps8.reduce((s, c) => s + c.employees, 0)).toBe(ops.length);
+    const opps = opportunities(data.projects, []);
+    const w8 = capacityTimeline(caps8, data.projects, opps, "2026-10-19", "week");
+    const w6 = capacityTimeline(caps6, data.projects, opps, "2026-10-19", "week");
+    expect(w8).toHaveLength(8);
+    expect(w6[0].capacity).toBeCloseTo((w8[0].capacity * 6) / 8, 6);
+    expect(w8[0].confirmed).toBe(w6[0].confirmed);
+    expect(capacityTimeline(caps8, data.projects, opps, "2026-10-19", "month")).toHaveLength(4);
+  });
+});

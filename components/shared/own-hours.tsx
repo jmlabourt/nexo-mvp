@@ -32,6 +32,8 @@ export function OwnHoursButton({ projectId }: { projectId?: string }) {
   const [error, setError] = useState("");
   const [done, setDone] = useState("");
 
+  // Gerencia no carga horas propias.
+  if (session === "gerencia" || session === "operario") return null;
   if (!demoLocal) return <PendingAction label="Registrar mis horas" reason="Las horas del personal que no es operario se guardan cuando el backend lo habilite." />;
   const active = projects.filter((p) => generalState(p) === "approved" || generalState(p) === "in_progress");
   const mine = ledger.internalHours.filter((h) => h.employeeId === actor && h.date === todayISO());
@@ -39,7 +41,7 @@ export function OwnHoursButton({ projectId }: { projectId?: string }) {
   const save = () => {
     const onProject = form.project && form.project !== INTERNAL ? form.project : undefined;
     const hourlyCost = hourlyCostAt(ledger, { employeeId: actor, date: form.date }, adminRate);
-    const sessions: SessionKey[] = ["administracion", "compras", "jefe_planta", "gerencia"];
+    const sessions: SessionKey[] = ["administracion", "compras", "jefe_planta"];
     const r = record(sessions, (l, ctx) =>
       registerInternalHours(l, { employeeId: actor, projectId: onProject, date: form.date, hours: Number(form.hours.replace(",", ".")), task: form.task, hourlyCost }, ctx),
     );

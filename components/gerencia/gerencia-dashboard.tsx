@@ -19,7 +19,7 @@ import {
   periodOf,
   type HoursGroup,
 } from "@/lib/gerencia";
-import { aggregateMargin, billingByOt, billingMonths, billingTotals, overdueSchedule, profitView } from "@/lib/tablero";
+import { aggregateMargin, billingByOt, billingMonths, billingTotals, capacityTimeline, overdueSchedule, profitView } from "@/lib/tablero";
 import { INDICATORS } from "@/lib/indicators";
 import { profitOverview } from "@/lib/dashboard";
 import { formatCurrency, formatNumber, formatPercent } from "@/lib/formatting";
@@ -109,6 +109,9 @@ export function GerenciaDashboard() {
   const horizonTo = monthsBetween(today, addMonths(today, 2)).at(-1)!.to;
   const capRows = useMemo(() => capacityRows(capacities, loadByRubro(projects, opps, today, horizonTo, today), today, horizonTo), [capacities, projects, opps, today, horizonTo]);
 
+  const [granularity, setGranularity] = useState<"week" | "month">("week");
+  const [capRubro, setCapRubro] = useState("");
+  const timeline = useMemo(() => capacityTimeline(capacities, projects, opps, today, granularity, capRubro || undefined), [capacities, projects, opps, today, granularity, capRubro]);
   const overdue = overdueSchedule(projects, ledger, today);
   const alerts = [
     ...open
@@ -347,7 +350,51 @@ export function GerenciaDashboard() {
         </div>
       </Section>
 
-      <Section id="capacidad" title="Capacidad (próximos 3 meses)" ind="capacity">
+      <Section id="capacidad" title="Capacidad" ind="capacity">
+        <div className="mb-3 flex flex-wrap items-end gap-3">
+          <Choice<"week" | "month">
+            name="Ver por"
+            value={granularity}
+            onChange={setGranularity}
+            size="sm"
+            options={[
+              { value: "week", label: "Semana" },
+              { value: "month", label: "Mes" },
+            ]}
+          />
+          <label className="text-xs font-medium text-slate-600">
+            Rubro
+            <select className="mt-1 block rounded-md border border-slate-300 px-2 py-1.5 text-sm" value={capRubro} onChange={(e) => setCapRubro(e.target.value)}>
+              <option value="">Todos</option>
+              {capRows.map((r) => (
+                <option key={r.rubro} value={r.rubro}>{r.rubro}</option>
+              ))}
+            </select>
+          </label>
+        </div>
+        <Table>
+          <THead>
+            <TR>
+              <TH>{granularity === "week" ? "Semana" : "Mes"}</TH>
+              <TH className="text-right">Disponible</TH>
+              <TH className="text-right">CONFIRMADO</TH>
+              <TH className="text-right">POTENCIAL</TH>
+              <TH className="text-right">Libre si se aprueba todo</TH>
+            </TR>
+          </THead>
+          <TBody>
+            {timeline.map((b) => (
+              <TR key={b.from}>
+                <TD>{b.label}</TD>
+                <TD className="text-right tabular">{hours(b.capacity)}</TD>
+                <TD className={cn("text-right tabular", b.confirmed > b.capacity && "text-red-700")}>{hours(b.confirmed)}</TD>
+                <TD className="text-right tabular">{hours(b.potential)}</TD>
+                <TD className={cn("text-right tabular", b.capacity - b.confirmed - b.potential < 0 && "text-amber-700")}>{hours(b.capacity - b.confirmed - b.potential)}</TD>
+              </TR>
+            ))}
+          </TBody>
+        </Table>
+        <h3 className="mb-1 mt-4 text-sm font-semibold text-slate-800">Por rubro (próximos 3 meses)</h3>
         <Table>
           <THead>
             <TR>

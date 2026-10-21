@@ -469,3 +469,56 @@ export function addGeneralCost(ledger: Ledger, name: string, monthlyAmount: numb
 export function removeGeneralCost(ledger: Ledger, id: string): Ledger {
   return { ...ledger, generalCosts: ledger.generalCosts.filter((c) => c.id !== id) };
 }
+
+// ── Gasto financiero actualizado (atrasos de entrega y de cobro, cobros parciales reales) ──
+
+/**
+ * Cobros para la estimación ACTUALIZADA del gasto financiero: los cobros reales con su fecha de ingreso y, para lo que
+ * falta cobrar, lo previsto (cuotas y saldo) llevado a hoy si ya venció. La entrega es la real (o hoy, si está
+ * atrasada). Así se financia solo el saldo pendiente y los días realmente transcurridos, sin duplicar anticipos.
+ */
+export function updatedFinancialInput(
+  p: Pick<Project, "id" | "startDate" | "dueDate" | "salesPrice" | "baseline" | "status">,
+  ledger: Ledger,
+  today: string,
+): { price: number; monthlyRatePct: number; startDate: string; deliveryDate: string; daysAfterDelivery: number; schedule: Array<{ amount: number; date: string }> } {
+  const price = currentContract(p, ledger);
+  const terms = termsOf(ledger, p.id);
+  const handover = handoverOf(ledger, p.id);
+  const deliveryDate = handover?.date ?? (p.dueDate < today ? today : p.dueDate);
+  const real = ledger.collections.filter((c) => c.projectId === p.id).map((c) => ({ amount: c.amount, date: c.date }));
+  let collected = sum(real.map((c) => c.amount));
+  const pending: Array<{ amount: number; date: string }> = [];
+  // Lo previsto se cubre en orden con lo ya cobrado; lo que queda se espera en su fecha (o hoy, si venció).
+  for (const s of [...terms.schedule].sort((a, b) => a.date.localeCompare(b.date))) {
+    const covered = Math.min(collected, s.amount);
+    collected = round2(collected - covered);
+    const left = round2(s.amount - covered);
+    if (left > 0) pending.push({ amount: left, date: s.date < today ? today : s.date });
+  }
+  const scheduled = sum([...real, ...pending].map((x) => x.amount));
+  const schedule = [...real, ...pending].filter((x) => x.amount > 0);
+  // El saldo que no cubre ninguna cuota se cobra a los días pactados de la entrega (o hoy, si ya pasó).
+  const finalDate = (() => {
+    const d = new Date(`${deliveryDate}T12:00:00Z`);
+    d.setUTCDate(d.getUTCDate() + terms.daysAfterDelivery);
+    const iso = d.toISOString().slice(0, 10);
+    return iso < today ? today : iso;
+  })();
+  if (price - scheduled > 0.005) schedule.push({ amount: round2(price - scheduled), date: finalDate });
+  // daysAfterDelivery = 0: el saldo ya está en el cronograma con su fecha.
+  return { price, monthlyRatePct: ledger.financialMonthlyRatePct, startDate: p.startDate, deliveryDate, daysAfterDelivery: 0, schedule: trimTo(schedule, price) };
+}
+
+/** Si lo cobrado supera el contrato (facturado de más), no se financia saldo negativo. */
+function trimTo(schedule: Array<{ amount: number; date: string }>, price: number) {
+  let left = price;
+  return [...schedule]
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .map((x) => {
+      const amount = round2(Math.max(0, Math.min(x.amount, left)));
+      left = round2(left - amount);
+      return { ...x, amount };
+    })
+    .filter((x) => x.amount > 0);
+}

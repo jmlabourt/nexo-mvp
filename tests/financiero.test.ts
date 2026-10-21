@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { financialCost, quoteFinancialPct, quoteSchedule } from "@/lib/financial";
+import { EMPTY_LEDGER, updatedFinancialInput } from "@/lib/ledger";
+import type { Ledger } from "@/types";
 
 describe("gasto financiero", () => {
   it("$1.000.000, 30 días de producción + 30 de pago, 5 % mensual → $100.000", () => {
@@ -61,5 +63,34 @@ describe("gasto financiero en la cotización", () => {
     expect(financialCost({ price: 1_000_000, monthlyRatePct: 5, ...base, schedule: s })).toMatchObject({ ok: true, amount: 62_500 });
     const pct = quoteFinancialPct({ ...base, seniaPct: 50, installments: 2 }, 5);
     expect(pct.ok && pct.amount).toBe(6.25);
+  });
+});
+
+describe("gasto financiero actualizado (atrasos y cobros reales)", () => {
+  // $1.000.000, 30 días de producción, pago único a 30 días de la entrega, 5 % mensual → $100.000 aprobado.
+  const project = { id: "p", startDate: "2026-09-01", dueDate: "2026-10-01", salesPrice: 1_000_000, baseline: undefined, status: "production" as const };
+  const ledger = { ...EMPTY_LEDGER, financialMonthlyRatePct: 5, paymentTerms: [{ projectId: "p", daysAfterDelivery: 30, schedule: [] }] };
+  const cost = (l: Ledger, today: string) => financialCost(updatedFinancialInput(project, l, today));
+
+  it("sin atrasos coincide con lo aprobado", () => {
+    expect(cost(ledger, "2026-09-15")).toMatchObject({ ok: true, amount: 100_000 });
+  });
+  it("entrega 15 días tarde: se financian 15 días más (sin duplicar)", () => {
+    const l = { ...ledger, handovers: [{ id: "h", projectId: "p", date: "2026-10-16", by: "Jefe" }] };
+    expect(cost(l, "2026-10-16")).toMatchObject({ ok: true, amount: 125_000 });
+  });
+  it("pago tardío: lo vencido se lleva a hoy", () => {
+    // Entrega a tiempo; debía pagar el 31/10 y hoy es 15/11 sin cobrar: 75 días financiados.
+    const l = { ...ledger, handovers: [{ id: "h", projectId: "p", date: "2026-10-01", by: "Jefe" }] };
+    expect(cost(l, "2026-11-15")).toMatchObject({ ok: true, amount: 125_000 });
+  });
+  it("pago parcial real: el saldo baja desde la fecha de ingreso", () => {
+    // Cobra 400.000 el 01/10 (a la entrega); el resto a 30 días: 1.000.000 × 30 d + 600.000 × 30 d = 50.000 + 30.000.
+    const l = {
+      ...ledger,
+      handovers: [{ id: "h", projectId: "p", date: "2026-10-01", by: "Jefe" }],
+      collections: [{ id: "c", projectId: "p", date: "2026-10-01", amount: 400_000, createdBy: "x", createdAt: "" }],
+    };
+    expect(cost(l, "2026-10-05")).toMatchObject({ ok: true, amount: 80_000 });
   });
 });

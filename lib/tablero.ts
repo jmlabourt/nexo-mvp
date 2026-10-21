@@ -9,10 +9,11 @@
 //   · Margen agregado = Σ ganancias / Σ contratos (nunca el promedio de porcentajes).
 //   · Un pago a proveedor no es ingreso ni costo nuevo; el gasto financiero estimado no es un costo pagado.
 // ─────────────────────────────────────────────────────────────
-import type { Ledger, Project, PurchaseOrder } from "@/types";
+import type { Ledger, MaterialDelivery, Opportunity, Project, PurchaseOrder, RubroCapacity } from "@/types";
+import { inProduction } from "./plant-materials";
 import { actualCostToDate } from "./calculations";
 import { billingStatus, currentContract, handoverOf, staffHoursCost, termsOf } from "./ledger";
-import { generalState, inPeriod, monthsBetween } from "./gerencia";
+import { capacityHours, generalState, inPeriod, loadByRubro, monthsBetween } from "./gerencia";
 import { unresolvedMaterial } from "./material-flow";
 import type { StockState } from "./stock";
 
@@ -112,7 +113,7 @@ export interface CloseCheck {
 }
 
 /** Gerencia cierra solo con todo terminado, la entrega real confirmada por el Jefe y sin materiales sin rendir. */
-export function closeCheck(project: Project, ledger: Ledger, stock: StockState, orders: PurchaseOrder[]): CloseCheck {
+export function closeCheck(project: Project, ledger: Ledger, stock: StockState, orders: PurchaseOrder[], deliveries: MaterialDelivery[] = []): CloseCheck {
   const blockers: string[] = [];
   if (project.isClosed) blockers.push("El proyecto ya está cerrado.");
   if (generalState(project) === "quotation") blockers.push("Una cotización no se cierra: se aprueba o se rechaza.");
@@ -120,6 +121,8 @@ export function closeCheck(project: Project, ledger: Ledger, stock: StockState, 
   if (project.items.length === 0) blockers.push("El proyecto no tiene muebles.");
   if (missing.length) blockers.push(`Faltan unidades terminadas: ${missing.map((i) => `${i.name} ${i.completedUnits}/${i.quantity}`).join(", ")}.`);
   if (!handoverOf(ledger, project.id)) blockers.push("El Jefe de planta todavía no confirmó la entrega real al cliente.");
+  const producing = deliveries.filter((d) => d.projectId === project.id && !d.closedAt && inProduction(d) > 1e-9);
+  if (producing.length) blockers.push(`Hay material en producción sin rendir: ${producing.map((d) => d.materialName).join(", ")}. El Jefe lo rinde en el cierre del día.`);
   const open = unresolvedMaterial(stock, project.id);
   if (open.length) blockers.push(`Hay materiales sin rendir: ${open.map((h) => h.lot.materialName).join(", ")}.`);
   return { blockers, warnings: pendingCosts(project, orders) };
@@ -180,4 +183,49 @@ export function overdueSchedule(projects: Project[], ledger: Ledger, today: stri
       return { project, amount: round2(due - collected) };
     })
     .filter((x) => x.amount > 0.5);
+}
+
+// ── Capacidad por semana o por mes (confirmado vs potencial, sin probabilidades) ──
+
+export interface CapacityBucket {
+  label: string;
+  from: string;
+  to: string;
+  capacity: number;
+  confirmed: number;
+  potential: number;
+}
+
+const addDaysIso = (iso: string, n: number) => new Date(Date.parse(`${iso}T12:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
+
+/**
+ * Carga y capacidad de las próximas semanas (8) o meses (4), para un rubro o para todos. Cada persona cuenta una sola
+ * vez (capacityFromOperators); la carga se reparte entre hoy y la entrega (distribución estimada).
+ */
+export function capacityTimeline(
+  capacities: RubroCapacity[],
+  projects: Project[],
+  opps: Opportunity[],
+  today: string,
+  granularity: "week" | "month",
+  rubro?: string,
+): CapacityBucket[] {
+  const buckets: Array<{ label: string; from: string; to: string }> =
+    granularity === "week"
+      ? Array.from({ length: 8 }, (_, i) => {
+          const from = addDaysIso(today, i * 7);
+          const to = addDaysIso(from, 6);
+          return { label: `Semana del ${from.slice(8, 10)}/${from.slice(5, 7)}`, from, to };
+        })
+      : monthsBetween(today, addDaysIso(today, 92)).slice(0, 4).map((m) => ({ label: m.label, from: m.from < today ? today : m.from, to: m.to }));
+  const pick = (rec: Record<string, number>) => (rubro ? (rec[rubro] ?? 0) : Object.values(rec).reduce((s, x) => s + x, 0));
+  return buckets.map((b) => {
+    const load = loadByRubro(projects, opps, b.from, b.to, today);
+    return {
+      ...b,
+      capacity: round2(capacities.filter((c) => !rubro || c.rubro === rubro).reduce((s, c) => s + capacityHours(c, b.from, b.to), 0)),
+      confirmed: round2(pick(load.confirmed)),
+      potential: round2(pick(load.potential)),
+    };
+  });
 }

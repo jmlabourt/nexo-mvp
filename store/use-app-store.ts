@@ -675,7 +675,7 @@ export const useAppStore = create<AppState>()(
             if (get().demoLocal) {
               // Demo integral: cierra solo Gerencia, con todo terminado, la entrega real y sin materiales sin rendir.
               if (effectiveIdentity(get()).session !== "gerencia") throw new ops.DomainError("El cierre lo hace Gerencia.");
-              const check = closeCheck(project, get().ledger, get().stock, get().orders);
+              const check = closeCheck(project, get().ledger, get().stock, get().orders, get().deliveries);
               if (check.blockers.length) throw new ops.DomainError(check.blockers.join(" "));
               const closed = ops.closeProject(project, get().stock, ctx());
               const closure = { projectId: id, date: ctx().now.slice(0, 10), by: ctx().actor, pendingCosts: check.warnings };
