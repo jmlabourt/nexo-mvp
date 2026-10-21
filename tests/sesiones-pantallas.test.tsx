@@ -72,10 +72,10 @@ describe("Proyectos por sesión", () => {
 });
 
 describe("Stock por sesión", () => {
-  it("Gerencia solo ingresa stock: sin asignar, ubicación ni devolución al proveedor", async () => {
+  it("Gerencia solo consulta stock: sin ingresar, asignar, ubicación ni devolución al proveedor", async () => {
     const user = userEvent.setup();
     render(<StockPage />);
-    expect(screen.getByRole("button", { name: /Ingresar stock/ })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Ingresar stock/ })).not.toBeInTheDocument();
     for (const b of screen.getAllByRole("button", { name: "Ver lotes" }).slice(0, 3)) await user.click(b);
     expect(screen.queryByRole("button", { name: /Asignar|Ubicación|proveedor/i })).not.toBeInTheDocument();
   });

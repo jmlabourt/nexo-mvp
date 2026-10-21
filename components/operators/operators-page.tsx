@@ -5,6 +5,8 @@ import { HardHat, Plus, Trash2, UserCheck, UserMinus } from "lucide-react";
 import type { Operator } from "@/types";
 import { formatCurrency, formatDate, formatNumber, todayISO } from "@/lib/formatting";
 import { activeOperators, operatorHasRecords, visibleOperators } from "@/lib/operators";
+import { hourlyCostAt } from "@/lib/ledger";
+import { rubroLabel } from "@/lib/rubros";
 import { useAppStore, type Result } from "@/store/use-app-store";
 import { useCategoryRate, useIdentity } from "@/store/selectors";
 import { PageHeader } from "@/components/shared/page-header";
@@ -21,6 +23,12 @@ import { DeactivatePanel } from "./deactivate-panel";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 type Confirm = "deactivate" | "delete" | null;
+
+const DAY_NAMES = ["Do", "Lu", "Ma", "Mi", "Ju", "Vi", "Sá"];
+const daysLabel = (days: number[] | undefined) => {
+  const d = days ?? [1, 2, 3, 4, 5];
+  return d.join() === "1,2,3,4,5" ? "Lunes a viernes" : [...d].sort().map((x) => DAY_NAMES[x]).join(", ");
+};
 
 function OperatorDialog({ operator, hasRecords, open, onOpenChange }: { operator: Operator | null; hasRecords: boolean; open: boolean; onOpenChange: (o: boolean) => void }) {
   const createOperator = useConfirmedAction("createOperator");
@@ -150,14 +158,31 @@ export function OperatorsPage({ op }: { op?: string }) {
   // Categoría de la tarifa: quien trabaja en Diseño cobra la hora de Diseño; el resto, la de Mano de obra.
   const categoryOf = (role: string) => ((params.roleToRubro[role] ?? role) === "Diseño" ? "design" : "labor");
   const rateOf = (role: string) => (categoryOf(role) === "design" ? designRate : laborRate);
+  const hoursPerDay = useAppStore((s) => s.costSettings.hoursPerDay);
+  const demoLocal = useAppStore((s) => s.demoLocal);
+  const ledger = useAppStore((s) => s.ledger);
+  // Demo: el costo sale de Configuración → Costo horario por rubro (la excepción de la persona prevalece).
+  const rubroIdOf = (o: Operator) => ledger.rubroCatalog.find((r) => r.name === (params.roleToRubro[o.role] ?? o.role))?.id;
+  const costOf = (o: Operator) => (demoLocal ? hourlyCostAt(ledger, { employeeId: o.id, rubroId: rubroIdOf(o), date: todayISO() }, rateOf(o.role)) : rateOf(o.role));
+  const costSource = (o: Operator) =>
+    demoLocal && ledger.rates.some((r) => r.scope === "employee" && r.subjectId === o.id && r.validFrom <= todayISO())
+      ? "Excepción de la persona"
+      : demoLocal && rubroIdOf(o)
+        ? "Costo del rubro · Configuración"
+        : `${categoryOf(o.role) === "design" ? "Diseño" : "Mano de obra"} · Configuración`;
   const stats = useMemo(() => {
-    const m = new Map<string, { hours: number; cost: number; projects: number }>();
-    for (const o of operators) m.set(o.id, { hours: 0, cost: 0, projects: projects.filter((p) => !p.isClosed && p.assignedOperatorIds.includes(o.id)).length });
+    const m = new Map<string, { hours: number; cost: number; projects: number; rubros: string[] }>();
+    for (const o of operators) m.set(o.id, { hours: 0, cost: 0, projects: projects.filter((p) => !p.isClosed && p.assignedOperatorIds.includes(o.id)).length, rubros: [] });
     for (const p of projects)
       for (const e of p.actualEntries) {
         if (e.type !== "labor" || !e.operatorId || !e.date.startsWith(month)) continue;
         const s = m.get(e.operatorId);
-        if (s) { s.hours += e.labor?.hours ?? 0; s.cost += e.amount; }
+        if (s) {
+          s.hours += e.labor?.hours ?? 0;
+          s.cost += e.amount;
+          const r = e.rubro ? rubroLabel(e.rubro) : null;
+          if (r && !s.rubros.includes(r)) s.rubros.push(r);
+        }
       }
     return m;
   }, [operators, projects, month]);
@@ -204,8 +229,8 @@ export function OperatorsPage({ op }: { op?: string }) {
                 <TH>Rubro principal</TH>
                 <TH>Rol del sistema</TH>
                 <TH>Estado</TH>
-                <TH>Remuneración</TH>
-                <TH className="text-right">Tarifa por hora</TH>
+                <TH>Jornada y días</TH>
+                <TH className="text-right">Costo por hora</TH>
                 <TH className="text-right">Horas reales del mes</TH>
                 <TH><span className="sr-only">Acciones</span></TH>
               </TR>
@@ -226,10 +251,14 @@ export function OperatorsPage({ op }: { op?: string }) {
                         {o.active ? "Activo" : `Inactivo${o.deactivatedAt ? ` desde el ${formatDate(o.deactivatedAt)}` : ""}`}
                       </Badge>
                     </TD>
-                    <TD className="text-xs text-slate-600">Por hora</TD>
+                    <TD className="text-xs text-slate-600">
+                      {formatNumber(hoursPerDay)} h por día
+                      <span className="block">{daysLabel(o.workDays)}</span>
+                      {(s?.rubros.length ?? 0) > 1 && <span className="block">Multirrol: {s?.rubros.join(", ")}</span>}
+                    </TD>
                     <TD className="text-right tabular">
-                      {formatCurrency(rateOf(o.role))}
-                      <span className="block text-xs text-slate-500">{categoryOf(o.role) === "design" ? "Diseño" : "Mano de obra"} · Configuración</span>
+                      {formatCurrency(costOf(o))}
+                      <span className="block text-xs text-slate-500">{costSource(o)}</span>
                     </TD>
                     <TD className="text-right tabular">{formatNumber(s?.hours ?? 0)} h<span className="block text-xs text-slate-500">{formatCurrency(s?.cost ?? 0)}</span></TD>
                     <TD>

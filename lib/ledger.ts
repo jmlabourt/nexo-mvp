@@ -36,6 +36,8 @@ export const EMPTY_LEDGER: Ledger = {
   boms: [],
   handovers: [],
   internalHours: [],
+  closures: [],
+  generalCosts: [],
   rubroCatalog: [],
   rates: [],
   clients: [],
@@ -436,4 +438,16 @@ export function upsertSupplier(ledger: Ledger, s: Omit<SupplierEntry, "id" | "cr
 export function setFinancialRate(ledger: Ledger, pct: number): Ledger {
   if (!(pct >= 0) || pct > 50) throw new DomainError("La tasa mensual va de 0 a 50 %.");
   return { ...ledger, financialMonthlyRatePct: round2(pct) };
+}
+
+// ── Otros costos generales (informativos) ──
+
+export function addGeneralCost(ledger: Ledger, name: string, monthlyAmount: number): Ledger {
+  if (name.trim().length < 2) throw new DomainError("Escribí el concepto.");
+  if (!(monthlyAmount > 0)) throw new DomainError("Indicá el monto mensual.");
+  return { ...ledger, generalCosts: [...ledger.generalCosts, { id: createId("cg"), name: name.trim(), monthlyAmount: round2(monthlyAmount) }] };
+}
+
+export function removeGeneralCost(ledger: Ledger, id: string): Ledger {
+  return { ...ledger, generalCosts: ledger.generalCosts.filter((c) => c.id !== id) };
 }

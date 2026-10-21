@@ -7,6 +7,7 @@ import { useAppStore } from "@/store/use-app-store";
 import { useIdentity, useMaterialsStateOf, useProjectAlerts, useProjectView } from "@/store/selectors";
 import { can } from "@/lib/permissions";
 import { generalState } from "@/lib/gerencia";
+import { closureOf } from "@/lib/tablero";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -51,6 +52,7 @@ const ADMIN_TABS = ["items", "stages"] as const;
 export function ProjectDetail({ id, tab: initialTab, purchase }: { id: string; tab?: string; purchase?: string }) {
   const view = useProjectView(id);
   const settings = useAppStore((s) => s.settings);
+  const ledger = useAppStore((s) => s.ledger);
   const alerts = useProjectAlerts(view?.project);
   const materialsOf = useMaterialsStateOf();
   const { session } = useIdentity();
@@ -74,6 +76,7 @@ export function ProjectDetail({ id, tab: initialTab, purchase }: { id: string; t
     );
   }
   const { project: p, econ, health } = view;
+  const closure = closureOf(ledger, p.id);
   const closed = p.isClosed;
   const daysLeft = daysBetween(todayISO(), p.dueDate);
   const openDialog = (d: DialogName) => () => setDialog(d);
@@ -102,6 +105,7 @@ export function ProjectDetail({ id, tab: initialTab, purchase }: { id: string; t
                 {!closed && <span className={daysLeft < 0 ? "text-red-700" : "text-slate-500"}> ({daysLeft < 0 ? `vencida hace ${formatDays(-daysLeft)}` : daysLeft === 0 ? "hoy" : `en ${formatDays(daysLeft)}`})</span>}
               </span>
               {closed && p.closedAt && <span>Cerrado el {formatDate(p.closedAt)}</span>}
+              {closed && closure && closure.pendingCosts.length > 0 && <span className="text-amber-800">Cerrado con costos pendientes</span>}
             </div>
           </div>
           {!closed ? (

@@ -42,4 +42,13 @@ export function isRubroId(value: unknown): value is RubroId {
   return typeof value === "string" && BY_ID.has(value as RubroId);
 }
 
-export const rubroLabel = (id: RubroId | undefined): string => (id ? rubroDef(id).label : "Sin rubro");
+/**
+ * Nombres que Gerencia le puso a los rubros en el catálogo de la demo (texto libre). Solo cambia cómo se muestran:
+ * el id sigue siendo el mismo, así lo ya cotizado y cargado no se pierde.
+ */
+let customNames = new Map<string, string>();
+export function setRubroNames(entries: ReadonlyArray<{ id: string; name: string }>): void {
+  customNames = new Map(entries.map((e) => [e.id, e.name]));
+}
+
+export const rubroLabel = (id: RubroId | undefined): string => (id ? (customNames.get(id) ?? rubroDef(id).label) : "Sin rubro");

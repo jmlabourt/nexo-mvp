@@ -40,7 +40,7 @@ afterEach(cleanup);
 describe("Personal", () => {
   it("muestra la tarifa de la categoría, de Configuración, en solo lectura", () => {
     render(<OperatorsPage />);
-    expect(screen.getByRole("columnheader", { name: "Tarifa por hora" })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "Costo por hora" })).toBeInTheDocument();
     expect(screen.getAllByText(formatCurrency(LABOR)).length).toBeGreaterThan(0);
     expect(screen.queryByRole("textbox", { name: /Costo por hora/ })).toBeNull();
   });

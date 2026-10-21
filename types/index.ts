@@ -932,6 +932,21 @@ export interface SupplierEntry extends SupplierRecord {
   createdAt: string;
 }
 
+/** Cierre de un proyecto por Gerencia. `pendingCosts` = avisos al cerrar ("Cerrado con costos pendientes"). */
+export interface ProjectClosure {
+  projectId: string;
+  date: string;
+  by: string;
+  pendingCosts: string[];
+}
+
+/** Costo general de la empresa (alquiler, servicios…): informativo, no se imputa a ningún proyecto. */
+export interface GeneralCost {
+  id: string;
+  name: string;
+  monthlyAmount: number;
+}
+
 /** Todos los registros nuevos de la demo integral, en un solo lugar. */
 export interface Ledger {
   salesInvoices: SalesInvoice[];
@@ -942,6 +957,8 @@ export interface Ledger {
   boms: BomVersion[];
   handovers: ClientHandover[];
   internalHours: InternalHours[];
+  closures: ProjectClosure[];
+  generalCosts: GeneralCost[];
   rubroCatalog: RubroCatalogEntry[];
   rates: RateRecord[];
   clients: ClientEntry[];

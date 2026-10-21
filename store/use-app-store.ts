@@ -36,6 +36,8 @@ import { buildSeed } from "@/lib/seed-data";
 import * as ops from "@/lib/project-operations";
 import * as circuit from "@/lib/circuit";
 import { EMPTY_LEDGER, normalizeLedger, type LedgerCtx } from "@/lib/ledger";
+import { closeCheck } from "@/lib/tablero";
+import { setRubroNames } from "@/lib/rubros";
 import { demoScenario } from "@/lib/demo/escenario";
 import { demoDataChanged, pickDemoData, readDemo, setDemoActive, writeDemo } from "./demo-local";
 import type { DeliveryChoice } from "@/lib/circuit";
@@ -665,6 +667,16 @@ export const useAppStore = create<AppState>()(
         closeProject: (id) =>
           run(() => {
             const project = find(id);
+            if (get().demoLocal) {
+              // Demo integral: cierra solo Gerencia, con todo terminado, la entrega real y sin materiales sin rendir.
+              if (effectiveIdentity(get()).session !== "gerencia") throw new ops.DomainError("El cierre lo hace Gerencia.");
+              const check = closeCheck(project, get().ledger, get().stock, get().orders);
+              if (check.blockers.length) throw new ops.DomainError(check.blockers.join(" "));
+              const closed = ops.closeProject(project, get().stock, ctx());
+              const closure = { projectId: id, date: ctx().now.slice(0, 10), by: ctx().actor, pendingCosts: check.warnings };
+              set({ projects: get().projects.map((p) => (p.id === id ? closed : p)), ledger: { ...get().ledger, closures: [...get().ledger.closures.filter((c) => c.projectId !== id), closure] } });
+              return undefined;
+            }
             const closed = ops.closeProject(project, get().stock, ctx());
             commit({ projects: get().projects.map((p) => (p.id === id ? closed : p)) });
             // El cierre queda congelado para el historial. Va en la misma cola (después de guardar el cierre) y,
@@ -1200,6 +1212,7 @@ export const useAppStore = create<AppState>()(
 // Modo demostración local: cada cambio de datos se guarda en este navegador (nunca en una empresa real).
 if (typeof window !== "undefined") {
   useAppStore.subscribe((next, prev) => {
+    if (next.ledger.rubroCatalog !== prev.ledger.rubroCatalog || next.demoLocal !== prev.demoLocal) setRubroNames(next.demoLocal ? next.ledger.rubroCatalog : []);
     if (!next.demoLocal || !prev.demoLocal) return;
     if (demoDataChanged(next as unknown as Record<string, unknown>, prev as unknown as Record<string, unknown>)) {
       writeDemo(pickDemoData(next as unknown as Record<string, unknown>));

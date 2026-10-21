@@ -33,6 +33,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { HelpTip } from "@/components/ui/help-tip";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { DemoSection, FinancialRateSection, GeneralCostsSection, RubroCatalogSection, RubroRatesSection } from "./demo-sections";
 import { Badge } from "@/components/ui/badge";
 import { Choice } from "@/components/ui/choice";
 import { PriceHistoryList } from "./price-history-list";
@@ -607,6 +608,7 @@ export function SettingsPage() {
   // La pestaña elegida a mano vale mientras no cambie el ancla.
   const [picked, setPicked] = useState<{ hash: string; tab: string } | null>(null);
   const gerencia = session === "gerencia";
+  const demoLocal = useAppStore((s) => s.demoLocal);
   const fallback = gerencia ? "rubros" : "nomenclature";
   const tab = picked && picked.hash === hash ? picked.tab : (gerencia ? tabFromHash(hash) : null) ?? fallback;
 
@@ -645,17 +647,31 @@ export function SettingsPage() {
           <TabsTrigger value="params">Inflación y nomenclatura</TabsTrigger>
           <TabsTrigger value="users">Usuarios y permisos</TabsTrigger>
           <TabsTrigger value="data">Datos</TabsTrigger>
+          {demoLocal && <TabsTrigger value="demo">Demo</TabsTrigger>}
         </TabsList>
         <TabsContent value="rubros" className="space-y-6">
-          <RubrosSection />
+          {demoLocal ? <RubroCatalogSection /> : <RubrosSection />}
           <CapacitySection />
         </TabsContent>
-        <TabsContent value="rates">
+        <TabsContent value="rates" className="space-y-6">
+          {demoLocal && <RubroRatesSection />}
           <RatesSection />
         </TabsContent>
-        <TabsContent value="costs">
-          <CostsSection />
+        <TabsContent value="costs" className="space-y-6">
+          {demoLocal ? (
+            <>
+              <FinancialRateSection />
+              <GeneralCostsSection />
+            </>
+          ) : (
+            <CostsSection />
+          )}
         </TabsContent>
+        {demoLocal && (
+          <TabsContent value="demo">
+            <DemoSection />
+          </TabsContent>
+        )}
         <TabsContent value="alerts">
           <AlertsSection />
         </TabsContent>
