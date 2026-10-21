@@ -90,7 +90,6 @@ export const userFormSchema = z
     role: z.enum(ROLE_KEYS as [RoleKey, ...RoleKey[]], { error: "Elegí un rol." }),
     operatorId: z.string().optional(),
     position: z.string().optional(),
-    hourlyCost: z.string().optional(),
   })
   .superRefine((v, ctx) => {
     if (v.role !== "operario") return;
@@ -100,16 +99,18 @@ export const userFormSchema = z
     }
     if (v.operatorId !== NEW_OPERATOR) return;
     if ((v.position ?? "").trim().length < 2) ctx.addIssue({ code: "custom", path: ["position"], message: "Ingresá el puesto o la especialidad." });
-    if (!(parseDecimal(v.hourlyCost ?? "") > 0)) ctx.addIssue({ code: "custom", path: ["hourlyCost"], message: "El costo por hora debe ser mayor a cero." });
   });
 
 export type UserFormInput = z.input<typeof userFormSchema>;
 export type UserFormValues = z.output<typeof userFormSchema>;
 
-/** Persona a crear en Operarios antes de invitarla (solo cuando se eligió "operario nuevo"). */
-export function newOperatorOf(v: UserFormValues): { name: string; role: string; hourlyCost: number; email: string } | null {
+/**
+ * Persona a crear en Operarios antes de invitarla (solo cuando se eligió "operario nuevo"). Su costo por hora no se
+ * escribe: es la tarifa de su categoría en Configuración (todos los operarios cobran lo mismo).
+ */
+export function newOperatorOf(v: UserFormValues): { name: string; role: string; email: string } | null {
   if (v.role !== "operario" || v.operatorId !== NEW_OPERATOR) return null;
-  return { name: v.displayName, role: (v.position ?? "").trim(), hourlyCost: parseDecimal(v.hourlyCost ?? ""), email: v.email };
+  return { name: v.displayName, role: (v.position ?? "").trim(), email: v.email };
 }
 
 /** Si el nombre de un operario nuevo ya está cargado (sin usuario), conviene elegirlo de la lista y no duplicarlo. */
@@ -193,8 +194,8 @@ export interface ParsedUserRow {
   email: string;
   role?: RoleKey;
   operatorId?: string;
-  /** Operario que no existe en Operarios: se crea con estos datos al invitar. */
-  newOperator?: { position: string; hourlyCost: number };
+  /** Operario que no existe en Operarios: se crea con estos datos al invitar (el costo por hora sale de Configuración). */
+  newOperator?: { position: string };
   /** Si tiene error, esta fila no se invita. */
   error?: string;
 }
@@ -207,7 +208,8 @@ function splitLine(line: string): string[] {
 /**
  * Listado pegado desde Excel o un CSV: una persona por línea con nombre, mail y rol (separados por tab, ; o coma).
  * La primera línea puede ser un encabezado (Nombre, Mail, Rol). Un Operario se vincula, por nombre, a una persona de
- * Operarios que todavía no tenga usuario; si no existe, se crea cuando la fila trae Puesto y Costo por hora. Función pura: no invita a nadie.
+ * Operarios que todavía no tenga usuario; si no existe, se crea cuando la fila trae el Puesto. Una columna de costo se ignora: el
+ * costo por hora es la tarifa de Configuración. Función pura: no invita a nadie.
  */
 export function parseUserList(text: string, freeOperators: { id: string; name: string }[], existingEmails: string[]): ParsedUserRow[] {
   const taken = new Set(existingEmails.map((e) => e.trim().toLowerCase()));
@@ -215,7 +217,7 @@ export function parseUserList(text: string, freeOperators: { id: string; name: s
   const usedOperators = new Set<string>();
   const rows: ParsedUserRow[] = [];
   const newNames = new Set<string>();
-  let cols: { name: number; email: number; role: number; position: number; cost: number } = { name: 0, email: 1, role: 2, position: 3, cost: 4 };
+  let cols: { name: number; email: number; role: number; position: number } = { name: 0, email: 1, role: 2, position: 3 };
 
   text.split(/\r?\n/).forEach((raw, i) => {
     if (raw.trim() === "") return;
@@ -227,8 +229,7 @@ export function parseUserList(text: string, freeOperators: { id: string; name: s
       if (e >= 0 && r >= 0) {
         const n = heads.findIndex((h) => h === "nombre" || h === "name" || h === "persona");
         const pos = heads.findIndex((h) => h === "puesto" || h === "especialidad" || h === "cargo");
-        const cost = heads.findIndex((h) => h === "costo" || h === "costo hora" || h === "costo por hora" || h === "valor hora");
-        cols = { name: n >= 0 ? n : [0, 1, 2].find((k) => k !== e && k !== r) ?? 0, email: e, role: r, position: pos, cost };
+        cols = { name: n >= 0 ? n : [0, 1, 2].find((k) => k !== e && k !== r) ?? 0, email: e, role: r, position: pos };
         return;
       }
     }
@@ -250,17 +251,16 @@ export function parseUserList(text: string, freeOperators: { id: string; name: s
       } else if (matches.length > 1) {
         row.error = "Hay más de un operario con ese nombre sin usuario.";
       } else {
-        // Persona nueva: se crea en Operarios si el listado trae su puesto y su costo por hora.
+        // Persona nueva: se crea en Operarios si el listado trae su puesto.
         const position = (cols.position >= 0 ? cells[cols.position] ?? "" : "").trim();
-        const cost = parseDecimal(cols.cost >= 0 ? cells[cols.cost] ?? "" : "");
-        if (position.length >= 2 && cost > 0) {
+        if (position.length >= 2) {
           if (newNames.has(n)) row.error = "Operario repetido en el listado.";
           else {
             newNames.add(n);
-            row.newOperator = { position, hourlyCost: cost };
+            row.newOperator = { position };
           }
         } else {
-          row.error = "Es un operario nuevo: agregá su Puesto y su Costo por hora (columnas 4 y 5, o con esos encabezados). Si ya está cargado, revisá que el nombre coincida.";
+          row.error = "Es un operario nuevo: agregá su Puesto (columna 4, o con ese encabezado). Si ya está cargado, revisá que el nombre coincida.";
         }
       }
     }

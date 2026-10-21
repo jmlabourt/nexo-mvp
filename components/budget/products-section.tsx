@@ -1,133 +1,83 @@
 "use client";
-// Productos de la cotización (Auditoría UX · P0-7): nombre, cantidad y, por rubro, horas estimadas para toda la
-// cantidad y operarios pedidos. De acá sale la mano de obra presupuestada (la suma de los productos) y, al crear el
-// proyecto, los productos que el Jefe de planta asigna. Las horas se cargan una sola vez.
+// Muebles de la cotización: cada mueble es una tarjeta con su nombre (editable en el título), su cantidad y sus rubros.
+// Dentro de cada rubro va todo junto (horas de operarios, operarios, materiales, diseño y administración: RubroSection).
+// De acá sale todo el costo de los muebles y, al crear el proyecto, los muebles que el Jefe de planta asigna.
 import { Plus } from "lucide-react";
 import type { RubroId } from "@/types";
-import { formatCurrency, formatNumber } from "@/lib/formatting";
-import { RUBROS, rubroLabel } from "@/lib/rubros";
+import { formatCurrency } from "@/lib/formatting";
 import { Button } from "@/components/ui/button";
 import { Input, Select } from "@/components/ui/input";
 import { RemoveButton, Section } from "./fields";
-import { newProductRow, newProductRubroRow, productRowError, type CalcState, type CalculatorResult, type ProductRow } from "./calculator-state";
+import { FULL_RUBROS, RubroSection } from "./rubro-section";
+import { newProductRow, newProductRubroRow, productLabel, productRowError, type CalcState, type CalculatorResult, type ProductRow } from "./calculator-state";
 
-const FULL_RUBROS = RUBROS.filter((r) => r.kind === "full");
-const h = (n: number) => `${formatNumber(n, 2)} h`;
-
-export function ProductsSection({
-  state,
-  onState,
-  result,
-  onAdd,
-}: {
-  state: CalcState;
-  onState: (patch: Partial<CalcState>) => void;
-  result: CalculatorResult;
-  /** Agrega un mueble (y lo elige en los rubros). Sin esto, solo lo agrega. */
-  onAdd?: () => void;
-}) {
+export function ProductsSection({ state, onState, result }: { state: CalcState; onState: (patch: Partial<CalcState>) => void; result: CalculatorResult }) {
   const setProduct = (key: string, patch: Partial<ProductRow>) => onState({ products: state.products.map((p) => (p.key === key ? { ...p, ...patch } : p)) });
-  const laborTotal = result.products.reduce((s, p) => s + p.total, 0);
-  const laborHours = result.products.reduce((s, p) => s + p.rubros.reduce((x, r) => x + r.labor.normalHours + r.labor.overtimeHours, 0), 0);
+  const total = result.products.reduce((s, p) => s + p.total, 0);
 
   return (
     <Section
       title="Muebles"
       help={
         <>
-          <span className="block">
-            Presupuestá por mueble (ej. “Mesa × 10”): por cada rubro que necesita, las horas estimadas para toda la cantidad y cuántos operarios pide.
-          </span>
-          <span className="block">La mano de obra presupuestada es la suma de los muebles. Las horas se valorizan con la tarifa de Mano de obra de Configuración.</span>
+          <span className="block">Cada mueble (ej. “Mesa × 10”) tiene sus rubros. En cada rubro: horas de operarios para toda la cantidad y cuántos operarios pide, materiales, y horas de diseño y de administración.</span>
+          <span className="block">Las horas se valorizan con las tarifas de Configuración. Cada rubro va una sola vez por mueble.</span>
         </>
       }
     >
       <div className="space-y-4">
         {state.products.map((p, i) => {
-          const error = productRowError(p);
+          const error = productRowError(p, i);
           const res = result.products.find((x) => x.key === p.key);
           const errId = `prod-err-${p.key}`;
+          const label = productLabel(p, i);
+          const used = p.rubros.map((r) => r.rubro);
+          const available = FULL_RUBROS.filter((r) => !used.includes(r.id));
           return (
-            <fieldset key={p.key} className="space-y-3 rounded-md border border-slate-200 p-3" aria-describedby={error ? errId : undefined}>
-              <legend className="px-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Mueble {i + 1}</legend>
-              <div className="grid grid-cols-[1fr_5.5rem_auto] items-end gap-2">
-                <div className="flex min-w-0 flex-col gap-1">
-                  <label htmlFor={`prod-name-${p.key}`} className="text-xs font-medium text-slate-600">Nombre</label>
+            <fieldset key={p.key} className="space-y-3 rounded-lg border border-slate-300 bg-slate-50/50 p-4" aria-label={label} aria-describedby={error ? errId : undefined}>
+              <div className="flex flex-wrap items-end gap-2">
+                <div className="min-w-0 flex-1">
+                  <label htmlFor={`prod-name-${p.key}`} className="sr-only">Nombre del mueble {i + 1}</label>
                   <Input
                     id={`prod-name-${p.key}`}
                     value={p.name}
-                    placeholder="Ej.: Mesa de comedor"
-                    aria-invalid={!!error && p.name.trim().length < 2}
+                    placeholder={`Mueble ${i + 1}`}
+                    className="h-10 border-transparent bg-transparent px-1 text-base font-semibold text-slate-900 shadow-none placeholder:text-slate-900 hover:border-slate-300 focus:border-slate-300 focus:bg-white"
                     onChange={(e) => setProduct(p.key, { name: e.target.value })}
                   />
                 </div>
-                <div className="flex flex-col gap-1">
+                <div className="flex w-24 flex-col gap-1">
                   <label htmlFor={`prod-qty-${p.key}`} className="text-xs font-medium text-slate-600">Cantidad</label>
                   <Input id={`prod-qty-${p.key}`} inputMode="numeric" className="text-right" value={p.quantity} onChange={(e) => setProduct(p.key, { quantity: e.target.value })} />
                 </div>
-                <RemoveButton label={`Quitar mueble ${i + 1}${p.name ? ` (${p.name})` : ""}`} onClick={() => onState({ products: state.products.filter((x) => x.key !== p.key) })} />
+                <RemoveButton label={`Quitar ${label}`} onClick={() => onState({ products: state.products.filter((x) => x.key !== p.key) })} />
               </div>
 
-              <ul className="space-y-2" aria-label={`Rubros de ${p.name || `mueble ${i + 1}`}`}>
-                {p.rubros.map((r, j) => {
-                  const labor = res?.rubros[j]?.labor;
-                  const setRubro = (patch: Partial<typeof r>) => setProduct(p.key, { rubros: p.rubros.map((x) => (x.key === r.key ? { ...x, ...patch } : x)) });
-                  return (
-                    <li key={r.key} className="space-y-1">
-                      <div className="grid grid-cols-[minmax(0,1fr)_5rem_5rem_auto] items-end gap-2">
-                        <div className="flex min-w-0 flex-col gap-1">
-                          <label htmlFor={`pr-rubro-${r.key}`} className="text-xs font-medium text-slate-600">Rubro</label>
-                          <Select id={`pr-rubro-${r.key}`} value={r.rubro} onChange={(e) => setRubro({ rubro: e.target.value as RubroId })}>
-                            {FULL_RUBROS.map((x) => (
-                              <option key={x.id} value={x.id}>{x.label}</option>
-                            ))}
-                          </Select>
-                        </div>
-                        <div className="flex flex-col gap-1">
-                          <label htmlFor={`pr-h-${r.key}`} className="text-xs font-medium text-slate-600">Horas</label>
-                          <Input id={`pr-h-${r.key}`} inputMode="decimal" className="text-right" placeholder="0" value={r.hours} onChange={(e) => setRubro({ hours: e.target.value })} />
-                        </div>
-                        <div className="flex flex-col gap-1">
-                          <label htmlFor={`pr-w-${r.key}`} className="text-xs font-medium text-slate-600">Operarios</label>
-                          <Input id={`pr-w-${r.key}`} inputMode="numeric" className="text-right" value={r.workers} onChange={(e) => setRubro({ workers: e.target.value })} />
-                        </div>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="self-end"
-                          aria-label={`Quitar rubro ${rubroLabel(r.rubro)} de ${p.name || `mueble ${i + 1}`}`}
-                          disabled={p.rubros.length === 1}
-                          onClick={() => setProduct(p.key, { rubros: p.rubros.filter((x) => x.key !== r.key) })}
-                        >
-                          <span aria-hidden>×</span>
-                        </Button>
-                      </div>
-                      {labor && (
-                        <p className="text-xs text-slate-600 tabular">
-                          {h(labor.normalHours)} × {formatCurrency(labor.rate)} = {formatCurrency(labor.normalCost)}
-                          {labor.overtimeHours > 0 && (
-                            <>
-                              {" "}+ <strong className="text-amber-800">{h(labor.overtimeHours)} extra</strong> × {formatCurrency(labor.overtimeRate)} ={" "}
-                              {formatCurrency(labor.overtimeCost)}
-                            </>
-                          )}
-                        </p>
-                      )}
-                    </li>
-                  );
-                })}
-              </ul>
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() =>
-                    setProduct(p.key, { rubros: [...p.rubros, newProductRubroRow(FULL_RUBROS.find((x) => !p.rubros.some((y) => y.rubro === x.id))?.id ?? "embalaje")] })
-                  }
-                >
-                  <Plus /> Rubro
-                </Button>
-                {res && <span className="text-sm font-medium tabular text-slate-800">Mano de obra {formatCurrency(res.total)}</span>}
+              {p.rubros.map((r) => (
+                <RubroSection
+                  key={r.key}
+                  row={r}
+                  owner={label}
+                  result={res?.rubros.find((x) => x.key === r.key)}
+                  usedRubros={used}
+                  canRemove={p.rubros.length > 1}
+                  onChange={(patch) => setProduct(p.key, { rubros: p.rubros.map((x) => (x.key === r.key ? { ...x, ...patch } : x)) })}
+                  onRemove={() => setProduct(p.key, { rubros: p.rubros.filter((x) => x.key !== r.key) })}
+                />
+              ))}
+
+              <div className="flex flex-wrap items-end justify-between gap-2">
+                {available.length > 0 ? (
+                  <AddRubro
+                    id={`add-rubro-${p.key}`}
+                    owner={label}
+                    options={available.map((r) => ({ id: r.id, label: r.label }))}
+                    onAdd={(rubro) => setProduct(p.key, { rubros: [...p.rubros, newProductRubroRow(rubro)] })}
+                  />
+                ) : (
+                  <span className="text-xs text-slate-500">Ya están todos los rubros en este mueble.</span>
+                )}
+                {res && <span className="text-sm font-medium tabular text-slate-800">{label}: {formatCurrency(res.total)}</span>}
               </div>
               {error && (
                 <p id={errId} role="alert" className="text-xs text-red-600">
@@ -138,17 +88,40 @@ export function ProductsSection({
           );
         })}
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <Button variant="outline" onClick={() => (onAdd ? onAdd() : onState({ products: [...state.products, newProductRow()] }))}>
+          <Button variant="outline" onClick={() => onState({ products: [...state.products, newProductRow()] })}>
             <Plus /> Agregar mueble
           </Button>
           {result.products.length > 0 && (
             <span className="text-sm text-slate-600 tabular">
-              Mano de obra presupuestada: <strong className="text-slate-900">{formatCurrency(laborTotal)}</strong> ({h(laborHours)}, suma de{" "}
-              {result.products.length} {result.products.length === 1 ? "mueble" : "muebles"})
+              Costo de los muebles: <strong className="text-slate-900">{formatCurrency(total)}</strong> (suma de {result.products.length}{" "}
+              {result.products.length === 1 ? "mueble" : "muebles"})
             </span>
           )}
         </div>
       </div>
     </Section>
+  );
+}
+
+/** Agregar un rubro al mueble: solo los que todavía no tiene. */
+function AddRubro({ id, owner, options, onAdd }: { id: string; owner: string; options: Array<{ id: RubroId; label: string }>; onAdd: (r: RubroId) => void }) {
+  return (
+    <div className="flex items-end gap-2">
+      <div className="flex flex-col gap-1">
+        <label htmlFor={id} className="text-xs font-medium text-slate-600">Agregar rubro a {owner}</label>
+        <Select
+          id={id}
+          value=""
+          onChange={(e) => {
+            if (e.target.value) onAdd(e.target.value as RubroId);
+          }}
+        >
+          <option value="">Elegí un rubro…</option>
+          {options.map((r) => (
+            <option key={r.id} value={r.id}>{r.label}</option>
+          ))}
+        </Select>
+      </div>
+    </div>
   );
 }

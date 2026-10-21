@@ -151,14 +151,12 @@ describe("alta masiva: listado nombre, mail, rol", () => {
 describe("alta de Operario sin contradicciones", () => {
   const base = { displayName: "Juan Pérez", email: "juan@x.com", role: "operario" as const };
 
-  it("un operario nuevo pide puesto y costo por hora, y no pide elegir a nadie de la lista", () => {
+  it("un operario nuevo pide el puesto, no un costo por hora (sale de Configuración), y no pide elegir a nadie de la lista", () => {
     const sin = userFormSchema.safeParse({ ...base, operatorId: NEW_OPERATOR });
-    expect(sin.error?.issues.map((i) => i.path[0])).toEqual(["position", "hourlyCost"]);
-    const cero = userFormSchema.safeParse({ ...base, operatorId: NEW_OPERATOR, position: "Carpintero", hourlyCost: "0" });
-    expect(cero.error?.issues.map((i) => i.path[0])).toEqual(["hourlyCost"]);
-    const ok = userFormSchema.safeParse({ ...base, operatorId: NEW_OPERATOR, position: "Carpintero", hourlyCost: "4500,50" });
+    expect(sin.error?.issues.map((i) => i.path[0])).toEqual(["position"]);
+    const ok = userFormSchema.safeParse({ ...base, operatorId: NEW_OPERATOR, position: "Carpintero" });
     expect(ok.success).toBe(true);
-    expect(ok.success && newOperatorOf(ok.data)).toEqual({ name: "Juan Pérez", role: "Carpintero", hourlyCost: 4500.5, email: "juan@x.com" });
+    expect(ok.success && newOperatorOf(ok.data)).toEqual({ name: "Juan Pérez", role: "Carpintero", email: "juan@x.com" });
   });
 
   it("un operario ya cargado se elige de la lista y no se crea de nuevo", () => {
@@ -179,11 +177,11 @@ describe("alta de Operario sin contradicciones", () => {
     expect(duplicateOperatorError("  ", free)).toBeNull();
   });
 
-  it("en el listado, un operario nuevo se crea si trae puesto y costo; sin eso, error", () => {
+  it("en el listado, un operario nuevo se crea si trae puesto (un costo escrito se ignora); sin puesto, error", () => {
     const text = "Nombre; Mail; Rol; Puesto; Costo por hora\nPedro Gómez; pedro@x.com; Operario; Lustrador; 3800,5\nLuis Ríos; luis@x.com; Operario; ; \nJuan Pérez; juan@x.com; Operario";
     const rows = parseUserList(text, [{ id: "op-juan", name: "Juan Pérez" }], []);
     expect(rows[0].error).toBeUndefined();
-    expect(rows[0].newOperator).toEqual({ position: "Lustrador", hourlyCost: 3800.5 });
+    expect(rows[0].newOperator).toEqual({ position: "Lustrador" });
     expect(rows[1].error).toMatch(/Puesto/);
     expect(rows[2].operatorId).toBe("op-juan");
     expect(rows[2].newOperator).toBeUndefined();
@@ -195,9 +193,9 @@ describe("alta de Operario sin contradicciones", () => {
     expect(rows[1].error).toMatch(/repetido/);
   });
 
-  it("sin encabezado, las columnas 4 y 5 son puesto y costo por hora", () => {
+  it("sin encabezado, la columna 4 es el puesto (una quinta columna de costo se ignora)", () => {
     const rows = parseUserList("Pedro Gómez\tpedro@x.com\tOperario\tLustrador\t3800", [], []);
-    expect(rows[0].newOperator).toEqual({ position: "Lustrador", hourlyCost: 3800 });
+    expect(rows[0].newOperator).toEqual({ position: "Lustrador" });
   });
 });
 

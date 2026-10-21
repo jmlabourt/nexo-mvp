@@ -2,7 +2,7 @@
 import { useConfirmedAction } from "@/store/confirmed-action";
 import { Fragment, useMemo, useState } from "react";
 import Link from "next/link";
-import { Boxes, Plus } from "lucide-react";
+import { Boxes } from "lucide-react";
 import type { StockLot } from "@/types";
 import { computeBalances, leftoverRows, lotTrail, stockRows, stockTotalValue, EPS } from "@/lib/stock";
 import { formatDims } from "@/lib/material-kinds";
@@ -20,7 +20,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { AddStockDialog } from "./add-stock-dialog";
 
 function LotTrailDialog({ lotId, onClose }: { lotId: string | null; onClose: () => void }) {
   const stock = useAppStore((s) => s.stock);
@@ -71,10 +70,8 @@ export function StockPage({ material, lot, tab, basePath = "/stock" }: { materia
   const requests = useAppStore((s) => s.requests);
   const setRequestStatus = useConfirmedAction("setRequestStatus");
   const { session, roleKey } = useIdentity();
-  const canIngest = session === "gerencia";
   const projectLink = (id: string, tabName?: string) => projectHref(roleKey, id, tabName);
   const [query, setQuery] = useState("");
-  const [add, setAdd] = useState(false);
   const [trailLot, setTrailLot] = useState<string | null>(lot ?? null);
   const [expanded, setExpanded] = useState<string | null>(material ?? null);
 
@@ -98,12 +95,7 @@ export function StockPage({ material, lot, tab, basePath = "/stock" }: { materia
       <PageHeader
         back={material || lot || tab ? basePath : undefined}
         title="Stock"
-        subtitle={
-          canIngest
-            ? "Todo el material físico: libre en el depósito y asignado a proyectos. Cada lote conserva su costo original."
-            : "Solo consulta: material libre en el depósito y asignado a proyectos, con su costo original."
-        }
-        actions={canIngest ? <Button onClick={() => setAdd(true)}><Plus /> Ingresar stock</Button> : undefined}
+        subtitle="Solo consulta: material libre en el depósito y asignado a proyectos, con su costo original. El material entra por las recepciones de Compras."
       />
       <div className="mb-5 grid grid-cols-2 gap-3 md:grid-cols-4">
         <Card><CardContent className="p-4"><div className="text-xs text-slate-500">Valor total en stock</div><div className="text-lg font-semibold tabular">{formatCurrency(total)}</div></CardContent></Card>
@@ -280,7 +272,7 @@ export function StockPage({ material, lot, tab, basePath = "/stock" }: { materia
                       <TD>{r.requestedBy}</TD>
                       <TD><Badge tone={r.status === "open" ? "yellow" : r.status === "resolved" ? "green" : "gray"}>{r.status === "open" ? "Abierto" : r.status === "resolved" ? "Resuelto" : "Cancelado"}</Badge></TD>
                       <TD>
-                        {canIngest && r.status === "open" && (
+                        {session === "gerencia" && r.status === "open" && (
                           <div className="flex gap-1.5">
                             <Button size="sm" variant="outline" onClick={async () => await setRequestStatus(r.id, "resolved")}>Resuelto</Button>
                             <Button size="sm" variant="ghost" onClick={async () => await setRequestStatus(r.id, "cancelled")}>Cancelar</Button>
@@ -296,7 +288,6 @@ export function StockPage({ material, lot, tab, basePath = "/stock" }: { materia
         </TabsContent>
       </Tabs>
 
-      <AddStockDialog open={add} onOpenChange={setAdd} />
       <LotTrailDialog lotId={trailLot} onClose={() => setTrailLot(null)} />
     </div>
   );

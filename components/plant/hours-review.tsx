@@ -34,6 +34,15 @@ function Review({ row, reviewed }: { row: HoursReview; reviewed: boolean }) {
   const entry = row.entries.find(e => e.id === entryId);
   const run = async (correct: boolean) => {
     setError("");
+    const st = useAppStore.getState();
+    if (st.demoLocal) {
+      // Demo: misma regla, guardada en este navegador.
+      const r = correct && entry
+        ? st.correctHoursLocal({ entryId: entry.id, reason, allocations: row.assignments.map(a => ({ assignmentId: a.id, hours: Number((hours[a.id] ?? "0").replace(",", ".")) })) })
+        : st.confirmHoursLocal(row.key);
+      if (!r.ok) setError(r.error); else setOpen(false);
+      return;
+    }
     const result = await useAppStore.getState().confirmOperation(async () => {
       const db = createClient();
       const response = correct && entry ? await db.rpc("planta_correct_hours", { p: {

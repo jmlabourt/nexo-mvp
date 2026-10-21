@@ -67,7 +67,7 @@ describe("Jefe de planta", () => {
     await user.click(within(dialog).getByRole("button", { name: "Registrar entrega" }));
 
     expect(useAppStore.getState().deliveries).toHaveLength(1);
-    expect(within(section).getByText(/de Melamina blanca 18 mm → Mesa de comedor · Juan Pérez/)).toBeInTheDocument();
+    expect(within(section).getByText(/de Melamina blanca 18 mm en producción → Mesa de comedor · Juan Pérez/)).toBeInTheDocument();
 
     await user.click(within(section).getByRole("button", { name: /Cierre del día/ }));
     const close = await screen.findByRole("dialog");
@@ -75,8 +75,8 @@ describe("Jefe de planta", () => {
     const consumed = within(close).getByLabelText("Consumido");
     await user.clear(consumed);
     await user.type(consumed, "1,5");
-    await user.clear(within(close).getByLabelText("Sobrante reutilizable"));
-    await user.type(within(close).getByLabelText("Sobrante reutilizable"), "0,5");
+    await user.clear(within(close).getByLabelText("Devuelto al depósito"));
+    await user.type(within(close).getByLabelText("Devuelto al depósito"), "0,5");
     expect(close.textContent).not.toMatch(/\$/);
     await user.click(within(close).getByRole("button", { name: "Cerrar el día" }));
 

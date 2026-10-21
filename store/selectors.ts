@@ -1,8 +1,10 @@
 "use client";
 // Hooks derivados: combinan estado + funciones puras. Memoizados para no recalcular en cada render.
+import { withPublishedBom } from "@/lib/bom-needs";
 import { useCallback, useMemo } from "react";
-import type { Alert, EconomicHealth, Project } from "@/types";
+import type { Alert, EconomicHealth, HourRate, Project } from "@/types";
 import { allAlerts, openAlertCount, projectHealth, sortAlerts, splitAlerts } from "@/lib/alerts";
+import { designChangeAlerts } from "@/lib/circuit";
 import { plantAlerts } from "@/lib/plant";
 import { materialNeeds, materialsState, plantMaterialAlerts, purchasingAlerts, type MaterialNeed, type MaterialsState } from "@/lib/purchasing";
 import type { RoleKey } from "@/lib/permissions";
@@ -43,12 +45,17 @@ export function usePlantAlerts(): Alert[] {
 
 /** Alertas de Compras (Lote 5C): material sin comprar a pocos días y compras más caras que lo presupuestado. */
 export function usePurchasingAlerts(): Alert[] {
-  const projects = useAppStore((s) => s.projects);
+  const projects = useNeedsProjects();
   const orders = useAppStore((s) => s.orders);
   const stock = useAppStore((s) => s.stock);
   const settings = useAppStore((s) => s.settings);
+  const corrections = useAppStore((s) => s.corrections);
   const today = useToday();
-  return useMemo(() => purchasingAlerts({ projects, orders, stock, settings, today }), [projects, orders, stock, settings, today]);
+  // "Diseño cambió materiales" es una sola alerta: la ven Compras y (por estas alertas) Gerencia, con su impacto.
+  return useMemo(
+    () => sortAlerts([...purchasingAlerts({ projects, orders, stock, settings, today }), ...designChangeAlerts(projects, corrections)]),
+    [projects, orders, stock, settings, today, corrections],
+  );
 }
 
 /**
@@ -61,8 +68,19 @@ export function useMaterialsStateOf(): (project: Project) => MaterialsState | nu
 }
 
 /** Necesidades de compra de los proyectos aprobados (Lote 6): por comprar, en orden de compra o recibido. */
-export function useMaterialNeeds(): MaterialNeed[] {
+/**
+ * Proyectos tal como los ve Compras: en el modo demostración, los materiales salen del BOM publicado de cada mueble
+ * (lib/bom-needs.ts); en una empresa real, de las líneas de materiales del presupuesto (como hasta ahora).
+ */
+export function useNeedsProjects(): Project[] {
   const projects = useAppStore((s) => s.projects);
+  const demoLocal = useAppStore((s) => s.demoLocal);
+  const boms = useAppStore((s) => s.ledger.boms);
+  return useMemo(() => (demoLocal ? projects.map((p) => withPublishedBom(p, { boms })) : projects), [projects, demoLocal, boms]);
+}
+
+export function useMaterialNeeds(): MaterialNeed[] {
+  const projects = useNeedsProjects();
   const orders = useAppStore((s) => s.orders);
   const stock = useAppStore((s) => s.stock);
   const today = useToday();
@@ -152,4 +170,12 @@ export function useIdentity() {
 export function useCatalogPrice(): (materialId: string) => number {
   const history = useAppStore((s) => s.priceHistory);
   return useCallback((materialId: string) => catalogPriceAt(history, materialId, todayISO()), [history]);
+}
+
+/**
+ * Tarifa por hora vigente de una categoría (Configuración → Costos horarios). Es el único lugar donde se define el
+ * costo de una hora de operario, de diseño o de administración: todos cobran lo mismo.
+ */
+export function useCategoryRate(category: HourRate["category"]): number {
+  return useAppStore((s) => s.hourRates.find((r) => r.category === category)?.hourlyRate ?? 0);
 }

@@ -7,6 +7,7 @@ import { useAppStore } from "@/store/use-app-store";
 import { useIdentity, useMaterialsStateOf, useProjectAlerts, useProjectView } from "@/store/selectors";
 import { can } from "@/lib/permissions";
 import { generalState } from "@/lib/gerencia";
+import { closureOf } from "@/lib/tablero";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -16,9 +17,12 @@ import { GeneralStateBadge } from "./projects-table";
 import { FurniturePanel } from "./furniture-panel";
 import { HoursTab } from "./hours-tab";
 import { BillingTab } from "./billing-tab";
+import { OwnHoursButton } from "@/components/shared/own-hours";
+import { ContractTerms } from "./contract-terms";
 import { EditProjectDialog } from "./edit-project-dialog";
 import { HoursForm } from "@/components/actual-costs/hours-form";
-import { PendingAction } from "@/components/shared/data-origin";
+import { CircuitActions, CircuitBadge } from "./circuit-actions";
+import { MaterialSplitCard } from "./material-changes";
 import { MaterialsBadge } from "@/components/purchasing/purchasing-projects";
 import { EmptyState } from "@/components/shared/empty-state";
 import { StatusTimeline } from "./status-timeline";
@@ -45,11 +49,12 @@ type DialogName = "record" | "hours" | "status" | "close" | "edit" | null;
  * muebles (Diseño, etapas, BOM, archivos) y las etapas, sin importes gerenciales.
  */
 const GERENCIA_TABS = ["summary", "items", "budget", "materials", "hours", "costs", "billing", "activity"] as const;
-const ADMIN_TABS = ["items", "stages"] as const;
+const ADMIN_TABS = ["items", "contract", "stages"] as const;
 
 export function ProjectDetail({ id, tab: initialTab, purchase }: { id: string; tab?: string; purchase?: string }) {
   const view = useProjectView(id);
   const settings = useAppStore((s) => s.settings);
+  const ledger = useAppStore((s) => s.ledger);
   const alerts = useProjectAlerts(view?.project);
   const materialsOf = useMaterialsStateOf();
   const { session } = useIdentity();
@@ -73,6 +78,7 @@ export function ProjectDetail({ id, tab: initialTab, purchase }: { id: string; t
     );
   }
   const { project: p, econ, health } = view;
+  const closure = closureOf(ledger, p.id);
   const closed = p.isClosed;
   const daysLeft = daysBetween(todayISO(), p.dueDate);
   const openDialog = (d: DialogName) => () => setDialog(d);
@@ -87,6 +93,7 @@ export function ProjectDetail({ id, tab: initialTab, purchase }: { id: string; t
             <div className="flex flex-wrap items-center gap-2 text-sm text-slate-500">
               <span className="font-medium">{p.code}</span>
               <GeneralStateBadge state={generalState(p)} />
+              <CircuitBadge project={p} />
               {gerencia && health && <HealthBadge health={health} />}
               <MaterialsBadge state={materialsOf(p)} />
             </div>
@@ -100,6 +107,7 @@ export function ProjectDetail({ id, tab: initialTab, purchase }: { id: string; t
                 {!closed && <span className={daysLeft < 0 ? "text-red-700" : "text-slate-500"}> ({daysLeft < 0 ? `vencida hace ${formatDays(-daysLeft)}` : daysLeft === 0 ? "hoy" : `en ${formatDays(daysLeft)}`})</span>}
               </span>
               {closed && p.closedAt && <span>Cerrado el {formatDate(p.closedAt)}</span>}
+              {closed && closure && closure.pendingCosts.length > 0 && <span className="text-amber-800">Cerrado con costos pendientes</span>}
             </div>
           </div>
           {!closed ? (
@@ -109,9 +117,12 @@ export function ProjectDetail({ id, tab: initialTab, purchase }: { id: string; t
                   <ClipboardPen /> Registrar otro costo
                 </Button>
               ) : (
-                <Button onClick={openDialog("hours")} size="lg">
-                  <Clock /> Registrar horas
-                </Button>
+                <>
+                  <Button onClick={openDialog("hours")} size="lg">
+                    <Clock /> Registrar horas de operarios
+                  </Button>
+                  <OwnHoursButton projectId={p.id} />
+                </>
               )}
               <Button variant="outline" onClick={openDialog("edit")} size="lg">
                 <Pencil /> Editar información
@@ -124,12 +135,12 @@ export function ProjectDetail({ id, tab: initialTab, purchase }: { id: string; t
                   <Lock /> Cerrar proyecto
                 </Button>
               )}
-              {!gerencia && p.status === "quotation" && <PendingAction label="Registrar rechazo" reason="El motivo del rechazo se guarda cuando el backend lo habilite." />}
             </div>
           ) : (
             <div className="rounded-md bg-slate-100 px-3 py-2 text-sm text-slate-600">Proyecto cerrado · solo lectura</div>
           )}
         </div>
+        {!closed && <CircuitActions project={p} canClose={can(session, "closeProjects")} />}
         <StatusTimeline status={p.status} />
       </header>
 
@@ -149,6 +160,7 @@ export function ProjectDetail({ id, tab: initialTab, purchase }: { id: string; t
           ) : (
             <>
               <TabsTrigger value="items">Muebles</TabsTrigger>
+              <TabsTrigger value="contract">Contrato y pagos</TabsTrigger>
               <TabsTrigger value="stages">Etapas y notas</TabsTrigger>
             </>
           )}
@@ -157,6 +169,7 @@ export function ProjectDetail({ id, tab: initialTab, purchase }: { id: string; t
         <TabsContent value="summary" className="space-y-6">
           <EconomicSummary project={p} econ={econ} />
           <DetectedDeviationsCard project={p} />
+          <MaterialSplitCard project={p} />
           <div className="grid gap-4 lg:grid-cols-2">
             <ScheduleCard project={p} />
             <TeamCard project={p} />
@@ -197,6 +210,9 @@ export function ProjectDetail({ id, tab: initialTab, purchase }: { id: string; t
         </TabsContent>
         <TabsContent value="hours">
           <HoursTab project={p} />
+        </TabsContent>
+        <TabsContent value="contract">
+          <ContractTerms project={p} />
         </TabsContent>
         <TabsContent value="billing">
           <BillingTab project={p} />

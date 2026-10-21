@@ -35,6 +35,8 @@ export interface MaterialNeed {
   key: string;
   materialId?: string;
   description: string;
+  /** De dónde sale la necesidad: mueble y versión del BOM (o la nota de la línea cotizada). */
+  detail?: string;
   unit: string;
   needed: number;
   /** Costo unitario ESTIMADO por el Administrativo al crear el proyecto (de memoria, no real). */
@@ -123,6 +125,7 @@ export function materialNeeds(projects: Project[], orders: PurchaseOrder[], stoc
       key,
       materialId: l.materialId,
       description: l.description,
+      detail: l.notes,
       unit: l.unit,
       needed,
       estimatedUnitCost: l.unitCost,

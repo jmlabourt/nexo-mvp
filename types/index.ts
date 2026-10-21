@@ -301,7 +301,12 @@ export type ActivityKind =
   | "progress"
   | "stock"
   | "stage"
-  | "closed";
+  | "closed"
+  /** Circuito comercial (subestados de En cotización): renegociación de precio y no aprobado, con su motivo. */
+  | "negotiation"
+  | "rejected"
+  /** Administración define la entrega de un proyecto listo (retiro, flete e instalación o finalizar). */
+  | "delivery";
 
 export interface ActivityEvent {
   id: string;
@@ -611,7 +616,9 @@ export type AlertKind =
   /** Administrativo: material entregado en planta y sin cierre del día (no se sabe cuánto se consumió). */
   | "delivery_open"
   /** Administrativo: resumen con costo de un cierre del día del Jefe de planta. */
-  | "day_close";
+  | "day_close"
+  /** Compras y Gerencia: Diseño cambió la cantidad de materiales respecto de la cotización. */
+  | "design_change";
 
 export interface Alert {
   /** Determinístico: permite marcarla como resuelta. Incluye el nivel para que un agravamiento reaparezca. */
@@ -774,4 +781,195 @@ export interface CommercialRejection {
   projectId: string;
   date: string;
   reason: string;
+}
+
+// ─────────────────────────────────────────────────────────────
+// Registros de la demo integral (contratos del frontend). En el modo demostración se guardan en el navegador; la
+// persistencia real en la base es del equipo de backend (PENDIENTES_BACKEND.md). Todos los importes son sin IVA.
+// ─────────────────────────────────────────────────────────────
+
+/** Factura de venta emitida al cliente (la registra Gerencia). Facturado ≠ cobrado. */
+export interface SalesInvoice {
+  id: string;
+  projectId: string;
+  number: string;
+  /** Fecha de emisión: define el mes de facturación. */
+  date: string;
+  amount: number;
+  notes?: string;
+  createdBy: string;
+  createdAt: string;
+}
+
+/** Cobro real (fecha de ingreso). Sin factura = anticipo/seña; después se puede aplicar a una factura sin duplicarse. */
+export interface Collection {
+  id: string;
+  projectId: string;
+  /** Factura a la que se aplica; vacío = anticipo todavía sin factura. */
+  invoiceId?: string;
+  date: string;
+  amount: number;
+  notes?: string;
+  createdBy: string;
+  createdAt: string;
+}
+
+/**
+ * Pago a un proveedor, confirmado por Gerencia sobre la factura que Compras cargó en la orden de compra.
+ * Un pago no es ingreso ni un costo nuevo: el costo del material ya está en el proyecto.
+ */
+export interface SupplierPayment {
+  id: string;
+  orderId: string;
+  date: string;
+  amount: number;
+  reference: string;
+  by: string;
+  at: string;
+}
+
+/** Cambio del monto contratado vigente (Administración, con motivo). El monto original aprobado no se pisa. */
+export interface ContractRevision {
+  id: string;
+  projectId: string;
+  previous: number;
+  next: number;
+  reason: string;
+  by: string;
+  at: string;
+}
+
+/** Un cobro previsto (seña, cuota o saldo). */
+export interface ScheduledPayment {
+  id: string;
+  label: string;
+  amount: number;
+  /** Fecha prevista de cobro. */
+  date: string;
+}
+
+/** Condiciones de pago pactadas en la cotización (se usan para el gasto financiero y lo previsto de facturar). */
+export interface PaymentTerms {
+  projectId: string;
+  /** Días después de la entrega en que paga el cliente (pago único). */
+  daysAfterDelivery: number;
+  /** Seña / cuotas con importe y fecha. Vacío = pago único del total a `daysAfterDelivery` de la entrega. */
+  schedule: ScheduledPayment[];
+}
+
+/** Línea de un BOM versionado. `budgetLineId` la vincula con la línea de materiales cotizada del mismo mueble. */
+export interface BomVersionLine {
+  id: string;
+  material: string;
+  materialId?: string;
+  spec?: string;
+  quantity: number;
+  unit: string;
+  budgetLineId?: string;
+}
+
+/** BOM de un mueble. Solo la versión publicada alimenta Compras y Planta; publicar otra no pisa lo anterior. */
+export interface BomVersion {
+  id: string;
+  projectId: string;
+  itemId: string;
+  version: number;
+  status: "draft" | "published";
+  lines: BomVersionLine[];
+  notes?: string;
+  createdBy: string;
+  createdAt: string;
+  publishedAt?: string;
+}
+
+/** Entrega real al cliente (la confirma el Jefe de planta). Distinta de la entrega interna de materiales. */
+export interface ClientHandover {
+  id: string;
+  projectId: string;
+  date: string;
+  by: string;
+  notes?: string;
+}
+
+/**
+ * Horas propias de Administración, Compras o el Jefe de planta. Con `projectId` se imputan a esa OT (costo = horas ×
+ * costo por hora vigente, congelado al cargar); sin proyecto son "Trabajo interno" y no van a ninguna OT.
+ */
+export interface InternalHours {
+  id: string;
+  /** Persona que trabajó (nombre de la sesión en la demo). */
+  employeeId: string;
+  projectId?: string;
+  date: string;
+  hours: number;
+  task: string;
+  /** Costo por hora vigente al cargar (solo horas de proyecto). */
+  hourlyCost?: number;
+  createdAt: string;
+}
+
+/** Rubro del catálogo de la empresa (Gerencia lo crea, renombra o desactiva; los demás lo eligen). */
+export interface RubroCatalogEntry {
+  id: string;
+  name: string;
+  active: boolean;
+}
+
+/** Tarifa con vigencia: por rubro, o excepción de una persona (la excepción prevalece). */
+export interface RateRecord {
+  id: string;
+  /** "rubro" + id del rubro, o "employee" + id del empleado. */
+  scope: "rubro" | "employee";
+  subjectId: string;
+  hourlyRate: number;
+  validFrom: string;
+  createdBy: string;
+  createdAt: string;
+}
+
+/** Cliente del directorio (alta y edición en la demo). */
+export interface ClientEntry extends ClientRecord {
+  createdAt: string;
+}
+
+/** Proveedor del directorio compartido (alta y edición en la demo). */
+export interface SupplierEntry extends SupplierRecord {
+  website?: string;
+  active: boolean;
+  createdAt: string;
+}
+
+/** Cierre de un proyecto por Gerencia. `pendingCosts` = avisos al cerrar ("Cerrado con costos pendientes"). */
+export interface ProjectClosure {
+  projectId: string;
+  date: string;
+  by: string;
+  pendingCosts: string[];
+}
+
+/** Costo general de la empresa (alquiler, servicios…): informativo, no se imputa a ningún proyecto. */
+export interface GeneralCost {
+  id: string;
+  name: string;
+  monthlyAmount: number;
+}
+
+/** Todos los registros nuevos de la demo integral, en un solo lugar. */
+export interface Ledger {
+  salesInvoices: SalesInvoice[];
+  collections: Collection[];
+  supplierPayments: SupplierPayment[];
+  contractRevisions: ContractRevision[];
+  paymentTerms: PaymentTerms[];
+  boms: BomVersion[];
+  handovers: ClientHandover[];
+  internalHours: InternalHours[];
+  closures: ProjectClosure[];
+  generalCosts: GeneralCost[];
+  rubroCatalog: RubroCatalogEntry[];
+  rates: RateRecord[];
+  clients: ClientEntry[];
+  suppliers: SupplierEntry[];
+  /** Tasa mensual de gasto financiero (%), editable por Gerencia. Interés simple, mes de 30 días. */
+  financialMonthlyRatePct: number;
 }

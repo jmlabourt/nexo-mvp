@@ -77,3 +77,80 @@ Para que una empresa nueva vea las pantallas nuevas con contenido de ejemplo, `r
 - clientes y proveedores en sus tablas.
 
 Hoy esos ejemplos viven solo en el frontend (`lib/demo/ejemplos.ts`).
+
+## 6. Cotizador, tarifas y circuito entre sesiones (rama siguiente)
+
+Detalle del circuito y resultado de la prueba de punta a punta: `docs/CIRCUITO.md`.
+
+| Qué falta | Dato | Operación | Regla de permisos |
+| --- | --- | --- | --- |
+| Compras ve el cambio de Diseño ("Aumentó por Diseño", cantidad cotizada y motivo) | Cantidad del presupuesto base de cada línea de materiales y sus `value_corrections` de cantidad (anterior, nueva, motivo, quién, cuándo) | Lectura: sumarlos a `compras_workspace` | Rol `compras`: solo líneas de materiales; sin precio de venta |
+| El Jefe ve la cantidad real de materiales por mueble y los planos | Cantidad (sin costo) de las líneas de materiales, su mueble, y `attachments` de los muebles | Lectura: sumarlos a `planta_workspace` | Rol `jefe_planta`: sin `unit_cost` ni `total` |
+| El Jefe responde "¿Se terminó este proyecto?" | Confirmación del Jefe (quién y cuándo) | Escritura: una RPC tipo `planta_confirm_finished(project_id)` que deje un evento en el historial | Rol `jefe_planta`, solo en Producción |
+| Mueble de cada línea del presupuesto | `budget_lines.item_id` (opcional) | Al crear el proyecto desde el cotizador por mueble | Igual que `budget_lines` |
+| Subestados comerciales y decisión de entrega | Hoy van en `activity_events.kind` (`negotiation`, `rejected`, `delivery`) y en el mensaje | Conviene una columna (`commercial_state`, `delivery_choice`) para filtrar y validar | Administración escribe; Gerencia lee |
+| Objetivos de rentabilidad por defecto en Configuración | `cost_settings.materials_target_pct` y `labor_target_pct` | Hoy el cotizador arranca en 30 % y 30 % fijos (se ajustan en la cotización); el gasto financiero sí sale de Configuración | Gerencia escribe |
+| Un solo costo por hora | `operators.hourly_cost` y el historial `operator_cost` siguen en la base; `cost_settings.labor_valuation` vale `operator` por defecto | La app ya no los edita (un alta toma la tarifa de Mano de obra). Para que todos cobren lo mismo, elegir "tarifa general" en Configuración o cambiar el valor por defecto | Gerencia |
+
+## 7. Demo integral (rama `claude/epic-johnson-zn9v9u`)
+
+Guía, matriz de datos y pruebas: `docs/DEMO.md`. Todo lo nuevo vive en el frontend: un estado de demostración
+guardado en el navegador (`store/demo-local.ts`) y un `Ledger` con los registros que la base todavía no tiene
+(`types/index.ts`, `lib/ledger.ts`). Las cuentas reales no usan ese estado: ven "Pendiente de backend".
+
+### 7.1 Ruta pública de demostración
+
+El middleware (`lib/supabase/proxy.ts`) manda a `/login` todo lo que no es público, así que hoy la demo pide iniciar
+sesión. **Pedido:** una ruta pública (por ejemplo `/demo`) que abra la app con `blerp-demo:activa = 1` sin sesión,
+sin acceso a Supabase y con `noindex`. `HydrationGate` ya no consulta la base cuando la demo está activa.
+
+### 7.2 Esquema propuesto
+
+Todas con `organization_id` (FK) y `created_by`/`created_at`. Importes sin IVA, `numeric(14,2)`.
+
+| Tabla | Columnas principales | Notas |
+| --- | --- | --- |
+| `sales_invoices` | `project_id`, `number` (único por organización), `date`, `amount`, `notes` | Mes de facturación = `date`. |
+| `collections` | `project_id`, `invoice_id` (nullable = anticipo), `date`, `amount` | Check: Σ cobros de una factura ≤ importe. |
+| `supplier_payments` | `order_id`, `date`, `amount`, `reference` | Requiere orden facturada. |
+| `contract_revisions` | `project_id`, `previous`, `next`, `reason` | Solo después de aprobar; sin update ni delete. |
+| `payment_terms` / `payment_schedule` | `project_id`, `days_after_delivery` / `label`, `amount`, `date` | |
+| `bom_versions` / `bom_lines` | `project_id`, `item_id`, `version`, `status` (`draft`/`published`), `published_at` / `material`, `material_id`, `quantity`, `unit`, `budget_line_id` | Único `(item_id, version)`; una versión publicada no se modifica. Un solo borrador por mueble. |
+| `client_handovers` | `project_id` (único), `date`, `by`, `notes` | Requiere todas las unidades terminadas. |
+| `staff_hours` | `employee_id` (usuario), `project_id` nullable, `date`, `hours`, `task`, `hourly_cost` | Sin proyecto = trabajo interno. |
+| `project_closures` | `project_id`, `date`, `by`, `pending_costs` (jsonb) | Complementa `closure_snapshots`. |
+| `rubro_catalog` | `id`, `name`, `active` | Texto libre; reemplaza `ManagementParams.workRubros`. |
+| `rate_records` | `scope` (`rubro`/`employee`), `subject_id`, `hourly_rate`, `valid_from` | La excepción de la persona prevalece. |
+| `clients` (existe) / `suppliers` | contacto, teléfono, correo, dirección, notas, `active` | `suppliers` es nueva. |
+| `general_costs` | `name`, `monthly_amount` | Informativo. |
+| `material_deliveries` (existe) | + acumulados `consumed`, `waste`, `leftover` | Hoy el cierre del día cierra la entrega entera; la demo deja abierto lo que sigue en producción. |
+| `cost_settings` | + `financial_monthly_rate_pct` | Hoy `financial_pct` es % del precio; la demo lo usa como tasa mensual. |
+
+### 7.3 Permisos (RLS esperada)
+
+| Registro | Escribe | Lee |
+| --- | --- | --- |
+| Facturas, cobros, pagos a proveedores, cierre, tasa financiera, rubros, tarifas, costos generales | Gerencia | Gerencia (pagos: estado visible para Compras, sin importes de venta) |
+| Contrato vigente, condiciones de pago, BOM, clientes | Administración (y Gerencia) | Gerencia, Administración; BOM publicado también Compras y Jefe (sin costos) |
+| Proveedores | Administración, Compras | Todos menos Operario |
+| Entrega al cliente, material en producción, corrección de horas | Jefe de planta | Gerencia, Administración |
+| Horas propias | La propia persona (Administración, Compras, Jefe) | Gerencia; la persona, las suyas |
+
+### 7.4 Acciones y eventos
+
+Una RPC por acción, que valide lo mismo que las funciones puras y deje un `activity_events`:
+`register_sales_invoice`, `register_collection`, `apply_advance`, `confirm_supplier_payment`, `revise_contract`,
+`set_payment_terms`, `start_bom_draft`, `save_bom_draft`, `publish_bom`, `confirm_handover`, `close_day` (con
+arrastre), `log_staff_hours`, `close_project` (con `pending_costs`), `set_financial_rate`, `upsert_client`,
+`upsert_supplier`, `add_rate`, `add_rubro`. Las validaciones de referencia están en `lib/ledger.ts`, `lib/tablero.ts`
+(`closeCheck`) y `lib/plant-materials.ts`, con sus pruebas.
+
+### 7.5 De la demo a la base
+
+1. Crear las tablas y RPC de 7.2–7.4.
+2. Un adaptador lee la base y arma el mismo `Ledger` (`normalizeLedger`), así las pantallas no cambian.
+3. En `store/use-app-store.ts`, `recordLedger` hoy rechaza fuera de la demo: con la base lista, en vez de rechazar
+   llama a la RPC de cada acción (el `fn` puro sigue validando en el cliente).
+4. `reset_workspace` siembra el mismo escenario de `lib/demo/escenario.ts`.
+5. Pendientes de sincronización: que el cierre del día acepte arrastre (hoy la base cierra la entrega entera) y que
+   las necesidades de Compras salgan del BOM publicado también en `compras_workspace`.

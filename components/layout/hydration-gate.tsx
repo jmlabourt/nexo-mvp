@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { backfillClosures } from "@/lib/supabase/closures";
 import { loadWorkspace, replaceWorkspace } from "@/lib/supabase/workspace";
 import { demoData, useAppStore } from "@/store/use-app-store";
+import { isDemoActive } from "@/store/demo-local";
 
 type GateState = { status: "loading" } | { status: "ready" } | { status: "error"; message: string };
 
@@ -20,6 +21,12 @@ export function HydrationGate({ children }: { children: React.ReactNode }) {
     setState({ status: "loading" });
     try {
       void useAppStore.persist.rehydrate();
+      // Modo demostración local: se usa lo guardado en este navegador y no se lee ni escribe la empresa real.
+      if (isDemoActive()) {
+        useAppStore.getState().enterLocalDemo();
+        setState({ status: "ready" });
+        return;
+      }
       const db = createClient();
       let ws = await loadWorkspace(db);
       if (!ws.demoSeeded) {

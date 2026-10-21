@@ -1,71 +1,56 @@
 "use client";
-// Gerencia → Dashboard: ¿cuánto facturamos, cuánto ganamos, cuánto nos cuesta producir y qué carga de trabajo se viene?
-// Ocho bloques en el orden del pedido: resumen económico, facturación, rentabilidad por proyecto, costos reales, horas,
-// cotizaciones y carga futura, capacidad de personal y alertas. Todos los números salen de lib/gerencia.ts (funciones
-// puras) y cada uno tiene su definición (ⓘ) en Configuración → Indicadores y cálculos.
+// Gerencia → Dashboard. Más vacío que lleno: cuatro números, una lista corta de pendientes y el detalle plegado
+// (facturación, rentabilidad, costos y horas, capacidad, alertas, cómo se calcula). Todo sale de funciones puras
+// (lib/tablero.ts, lib/gerencia.ts) sobre los proyectos y los registros de la demo (lib/ledger.ts).
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { AlertTriangle, ArrowRight } from "lucide-react";
 import type { RubroCapacity } from "@/types";
 import {
-  billingByMonth,
-  billingRows,
-  billingSummary,
   capacityFromOperators,
-  capacityHours,
   capacityRows,
   costRows,
-  delayImpact,
-  filterProfit,
-  GENERAL_STATE_LABELS,
   generalState,
+  GENERAL_STATE_LABELS,
   hoursRows,
   loadByRubro,
   monthsBetween,
   opportunities,
-  overdueCollections,
   periodOf,
-  profitRows,
-  projectedTotals,
-  PROFIT_FILTER_LABELS,
   type HoursGroup,
-  type PeriodKind,
-  type ProfitFilter,
 } from "@/lib/gerencia";
-import { formatCurrency, formatDate, formatNumber, formatPercent } from "@/lib/formatting";
+import { aggregateMargin, billingByOt, billingMonths, billingTotals, capacityTimeline, overdueSchedule, profitView } from "@/lib/tablero";
+import { INDICATORS } from "@/lib/indicators";
 import { profitOverview } from "@/lib/dashboard";
+import { formatCurrency, formatNumber, formatPercent } from "@/lib/formatting";
 import { useAppStore } from "@/store/use-app-store";
 import { useAlerts, useToday } from "@/store/selectors";
-import { useInvoices, useManagementParams, useOpportunityInfo } from "@/store/session-data";
+import { useManagementParams } from "@/store/session-data";
 import { PageHeader } from "@/components/shared/page-header";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { CircuitPending } from "@/components/shared/pending-list";
 import { Badge } from "@/components/ui/badge";
-import { Input, Select } from "@/components/ui/input";
+import { Input } from "@/components/ui/input";
 import { Choice } from "@/components/ui/choice";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
-import { ColumnChart, CHART_COLORS } from "@/components/shared/column-chart";
 import { IndicatorTip, OriginTag } from "@/components/shared/data-origin";
 import { cn } from "@/lib/utils";
 
-const PERIODS: Array<{ value: PeriodKind; label: string }> = [
-  { value: "month", label: "Mes" },
-  { value: "quarter", label: "Trimestre" },
-  { value: "year", label: "Año" },
-  { value: "custom", label: "Personalizado" },
-];
-
-const NEGOTIATION = { sent: "Enviada", negotiating: "En negociación", waiting_client: "Esperando al cliente" } as const;
-const moneyShort = (n: number) => (Math.abs(n) >= 1_000_000 ? `$ ${formatNumber(n / 1_000_000, 1)} M` : formatCurrency(n));
 const hours = (n: number) => `${formatNumber(n, 0)} h`;
 
-function Kpi({ label, value, hint, ind, href, tone }: { label: string; value: React.ReactNode; hint?: React.ReactNode; ind: string; href: string; tone?: "green" | "red" | "amber" }) {
+function addMonths(iso: string, n: number): string {
+  const [y, m] = iso.split("-").map(Number);
+  const d = new Date(Date.UTC(y, m - 1 + n, 1));
+  return d.toISOString().slice(0, 10);
+}
+
+function Kpi({ label, value, hint, ind, href, tone }: { label: string; value: React.ReactNode; hint?: React.ReactNode; ind: string; href: string; tone?: "red" }) {
   return (
     <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
       <div className="flex items-center gap-1.5 text-xs font-medium text-slate-500">
         <a href={href} className="hover:text-blue-700 hover:underline">{label}</a>
         <IndicatorTip id={ind} />
       </div>
-      <a href={href} className={cn("mt-1.5 block text-2xl font-semibold tabular tracking-tight", tone === "green" ? "text-emerald-700" : tone === "red" ? "text-red-700" : tone === "amber" ? "text-amber-700" : "text-slate-900")}>
+      <a href={href} className={cn("mt-1.5 block text-2xl font-semibold tabular tracking-tight", tone === "red" ? "text-red-700" : "text-slate-900")}>
         {value}
       </a>
       {hint && <div className="mt-1 text-xs text-slate-500">{hint}</div>}
@@ -73,474 +58,386 @@ function Kpi({ label, value, hint, ind, href, tone }: { label: string; value: Re
   );
 }
 
-const marginTone = (m: number | null, expected: number | null) => (m === null ? undefined : m < 0 ? "text-red-700" : expected !== null && m < expected - 0.05 ? "text-amber-700" : "text-emerald-700");
+/** Sección plegable: el detalle está, pero no ocupa la pantalla. */
+function Section({ id, title, ind, children, open = false, tag }: { id: string; title: string; ind?: string; children: React.ReactNode; open?: boolean; tag?: React.ReactNode }) {
+  return (
+    <details id={id} open={open} className="group rounded-lg border border-slate-200 bg-white shadow-sm">
+      <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-3 text-sm font-semibold text-slate-800">
+        <ArrowRight className="size-4 text-slate-400 transition-transform group-open:rotate-90" aria-hidden />
+        {title}
+        {ind && <IndicatorTip id={ind} />}
+        {tag && <span className="ml-auto">{tag}</span>}
+      </summary>
+      <div className="border-t border-slate-100 p-4">{children}</div>
+    </details>
+  );
+}
+
+const money = (n: number | null | undefined) => (n === null || n === undefined ? "—" : formatCurrency(n));
 
 export function GerenciaDashboard() {
   const today = useToday();
   const projects = useAppStore((s) => s.projects);
+  const ledger = useAppStore((s) => s.ledger);
+  const demoLocal = useAppStore((s) => s.demoLocal);
   const operators = useAppStore((s) => s.operators);
   const hoursPerDay = useAppStore((s) => s.costSettings.hoursPerDay);
-  const laborRate = useAppStore((s) => s.hourRates.find((r) => r.category === "labor")?.hourlyRate ?? 0);
-  const deviationPct = useAppStore((s) => s.settings.categoryWarningPct);
-  const invoices = useInvoices();
-  const oppInfo = useOpportunityInfo();
   const params = useManagementParams();
   const { open } = useAlerts();
+
+  const [ref, setRef] = useState(today.slice(0, 7));
+  const [hoursGroup, setHoursGroup] = useState<HoursGroup>("project");
+  const month = periodOf("month", `${ref}-01`);
+
+  const sales = projects.filter((p) => generalState(p) !== "quotation");
+  const otRows = useMemo(() => billingByOt(projects, ledger), [projects, ledger]);
+  const totals = billingTotals(otRows);
+  const months = useMemo(() => billingMonths(projects, ledger, addMonths(month.from, -3), periodOf("month", addMonths(month.from, 3)).to), [projects, ledger, month.from]);
+  const thisMonth = months.find((m) => m.key === ref) ?? { planned: 0, invoiced: 0, collected: 0 };
+
+  const profits = useMemo(() => sales.map((p) => ({ project: p, view: profitView(p, ledger) })), [sales, ledger]);
+  const aggregate = aggregateMargin(profits.filter((x) => x.view.toDate.contract > 0).map((x) => ({ profit: x.view.toDate.profit, contract: x.view.toDate.contract })));
+  const anyPartial = profits.some((x) => x.view.toDate.partial);
   const assignments = useAppStore((s) => s.assignments);
   const dueSoonDays = useAppStore((s) => s.settings.dueSoonDays);
   const severePoints = useAppStore((s) => s.settings.marginWarningPp);
-
-  const [kind, setKind] = useState<PeriodKind>("month");
-  const [ref, setRef] = useState(today.slice(0, 7));
-  const [custom, setCustom] = useState({ from: today.slice(0, 8) + "01", to: today });
-  const [projectId, setProjectId] = useState("");
-  const [profitFilter, setProfitFilter] = useState<ProfitFilter>("all");
-  const [hoursGroup, setHoursGroup] = useState<HoursGroup>("project");
-  const [rubro, setRubro] = useState("");
-
-  const period = useMemo(() => periodOf(kind, `${ref}-01`, custom), [kind, ref, custom]);
-  const scope = projectId ? projects.filter((p) => p.id === projectId) : projects;
-  const confirmed = projects.filter((p) => generalState(p) !== "quotation");
-
-  const billing = useMemo(() => billingSummary(projects, invoices.data, period, today), [projects, invoices.data, period, today]);
-  const chartRange = kind === "month" ? { from: periodOf("month", addMonths(period.from, -3)).from, to: periodOf("month", addMonths(period.from, 3)).to } : period;
-  const byMonth = billingByMonth(projects, invoices.data, chartRange.from, chartRange.to);
-  const bRows = billingRows(scope, invoices.data);
-  const pRowsAll = useMemo(() => profitRows(projects), [projects]);
-  const totals = projectedTotals(pRowsAll);
   const overview = useMemo(() => profitOverview(projects, assignments, today, dueSoonDays, severePoints), [projects, assignments, today, dueSoonDays, severePoints]);
-  const pRows = filterProfit(projectId ? pRowsAll.filter((r) => r.project.id === projectId) : pRowsAll, profitFilter, deviationPct);
-  const costs = costRows(scope.filter((p) => generalState(p) !== "quotation"));
-  const hRows = hoursRows(scope.filter((p) => generalState(p) !== "quotation"), hoursGroup, period).filter((r) => r.budget > 0 || r.actual > 0);
-  const opps = useMemo(() => opportunities(projects, oppInfo.data), [projects, oppInfo.data]);
 
-  // Carga futura: los próximos 4 meses desde hoy, por rubro.
-  const horizon = monthsBetween(today, addMonths(today, 3));
+  // Capacidad de los próximos 3 meses: confirmado (aprobados y en proceso) y potencial (cotizaciones). Sin probabilidades.
   const capacities: RubroCapacity[] = useMemo(() => capacityFromOperators(operators, params.roleToRubro, hoursPerDay), [operators, params.roleToRubro, hoursPerDay]);
-  const loads = horizon.map((m) => ({ m, load: loadByRubro(projects, opps, m.from < today ? today : m.from, m.to, today) }));
-  const rubros = [...new Set([...capacities.map((c) => c.rubro), ...loads.flatMap(({ load }) => [...Object.keys(load.confirmed), ...Object.keys(load.potential)])])].sort();
-  const pick = (rec: Record<string, number>) => (rubro ? (rec[rubro] ?? 0) : Object.values(rec).reduce((s, x) => s + x, 0));
-  const capOf = (from: string, to: string) => capacities.filter((c) => !rubro || c.rubro === rubro).reduce((s, c) => s + capacityHours(c, from, to), 0);
-  const horizonFrom = today;
-  const horizonTo = horizon[horizon.length - 1].to;
-  const capRows = capacityRows(capacities, loadByRubro(projects, opps, horizonFrom, horizonTo, today), horizonFrom, horizonTo);
+  const opps = useMemo(() => opportunities(projects, []), [projects]);
+  const horizonTo = monthsBetween(today, addMonths(today, 2)).at(-1)!.to;
+  const capRows = useMemo(() => capacityRows(capacities, loadByRubro(projects, opps, today, horizonTo, today), today, horizonTo), [capacities, projects, opps, today, horizonTo]);
 
-  // Alertas gerenciales: pocas y accionables.
-  const overdue = overdueCollections(invoices.data, today);
-  const late = confirmed.map((p) => ({ p, d: delayImpact(p, today, laborRate, hoursPerDay) })).filter((x) => x.d.lateDays > 0);
-  const managerial = [
+  const [granularity, setGranularity] = useState<"week" | "month">("week");
+  const [capRubro, setCapRubro] = useState("");
+  const timeline = useMemo(() => capacityTimeline(capacities, projects, opps, today, granularity, capRubro || undefined), [capacities, projects, opps, today, granularity, capRubro]);
+  const overdue = overdueSchedule(projects, ledger, today);
+  const alerts = [
     ...open
-      .filter((a) => a.kind === "margin" || a.kind === "category" || a.kind === "hours" || a.kind === "due")
-      .slice(0, 4)
-      .map((a) => ({ key: a.id, title: `${a.projectCode} · ${a.title}`, detail: a.action ?? a.message, href: `/projects/${a.projectId}`, level: a.level === "critical" ? "red" : "amber" })),
-    ...capRows.filter((r) => r.status === "over").map((r) => ({ key: `cap-${r.rubro}`, title: `${r.rubro}: falta capacidad para lo confirmado`, detail: `${hours(r.confirmed)} confirmadas contra ${hours(r.capacity)} disponibles en los próximos meses.`, href: "#capacidad", level: "red" })),
-    ...late.map(({ p, d }) => ({ key: `late-${p.id}`, title: `${p.code} atrasado ${d.lateDays} días hábiles`, detail: `Impacto estimado ≈ ${formatCurrency(d.amount)} (${d.crew} operarios × jornada × tarifa). Es una estimación, no un gasto registrado.`, href: `/projects/${p.id}`, level: "amber" })),
-    ...(overdue.length ? [{ key: "cobros", title: `${overdue.length} ${overdue.length === 1 ? "cobro demorado" : "cobros demorados"}: ${formatCurrency(overdue.reduce((s, i) => s + i.amount, 0))}`, detail: "Facturas vencidas sin cobrar. Revisar con el cliente.", href: "#facturacion", level: "amber" }] : []),
-  ].slice(0, 7);
+      .filter((a) => a.kind === "margin" || a.kind === "category" || a.kind === "due" || a.kind === "hours")
+      .map((a) => ({ key: a.id, title: `${a.projectCode} · ${a.title}`, detail: a.action ?? a.message, href: `/projects/${a.projectId}`, red: a.level === "critical" })),
+    ...overdue.map(({ project, amount }) => ({ key: `cob-${project.id}`, title: `${project.code} · cobro previsto vencido`, detail: `Faltan ${formatCurrency(amount)} de lo previsto a hoy.`, href: `/projects/${project.id}?tab=facturacion`, red: false })),
+    ...capRows.filter((r) => r.status === "over").map((r) => ({ key: `cap-${r.rubro}`, title: `${r.rubro}: lo confirmado no entra`, detail: `${hours(r.confirmed)} confirmadas contra ${hours(r.capacity)} disponibles.`, href: "#capacidad", red: true })),
+  ].slice(0, 5);
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Dashboard" subtitle={`Resultados y actividad de la empresa · ${period.label}. Datos históricos y proyecciones, siempre separados.`} />
+      <PageHeader title="Dashboard" subtitle="Cuánto vendimos, facturamos y cobramos, cuánto ganamos y qué carga se viene." />
+      <CircuitPending session="gerencia" />
 
-      <div className="flex flex-wrap items-end gap-3 rounded-lg border border-slate-200 bg-white p-3" role="group" aria-label="Filtros del dashboard">
-        <Choice<PeriodKind> name="Período" value={kind} onChange={setKind} options={PERIODS} size="sm" className="min-w-72" />
-        {kind !== "custom" ? (
-          <label className="text-xs font-medium text-slate-600">
-            {kind === "year" ? "Año" : "Mes de referencia"}
-            <Input type="month" className="mt-1 w-40" value={ref} onChange={(e) => e.target.value && setRef(e.target.value)} />
-          </label>
-        ) : (
-          <>
-            <label className="text-xs font-medium text-slate-600">Desde<Input type="date" className="mt-1 w-40" value={custom.from} onChange={(e) => setCustom({ ...custom, from: e.target.value })} /></label>
-            <label className="text-xs font-medium text-slate-600">Hasta<Input type="date" className="mt-1 w-40" value={custom.to} onChange={(e) => setCustom({ ...custom, to: e.target.value })} /></label>
-          </>
-        )}
+      <div className="flex flex-wrap items-end gap-3">
         <label className="text-xs font-medium text-slate-600">
-          Proyecto
-          <Select className="mt-1 w-56" value={projectId} onChange={(e) => setProjectId(e.target.value)}>
-            <option value="">Todos</option>
-            {confirmed.map((p) => (
-              <option key={p.id} value={p.id}>{p.code} {p.name}</option>
-            ))}
-          </Select>
+          Mes
+          <Input type="month" className="mt-1 w-40" value={ref} onChange={(e) => e.target.value && setRef(e.target.value)} />
         </label>
-        {invoices.origin === "example" && <span className="ml-auto"><OriginTag origin="example" /></span>}
+        {demoLocal ? <span className="text-xs text-slate-500">Datos de ejemplo</span> : <OriginTag origin="pending" />}
       </div>
 
-      {/* 1. Resumen económico */}
-      <section aria-label="Resumen económico" className="space-y-3">
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <Kpi label={`Facturación mensual (${billing.month.label})`} value={formatCurrency(billing.monthInvoiced)} hint="Efectivamente facturado en el mes." ind="billing_month" href="#facturacion" />
-          <Kpi label="Facturación prevista" value={formatCurrency(billing.monthPlanned)} hint={`Previsto para ${billing.month.label}, todavía sin facturar.`} ind="billing_planned" href="#facturacion" />
-          <Kpi
-            label="Ganancia proyectada"
-            value={formatCurrency(totals.projectedProfit)}
-            tone={totals.projectedProfit < 0 ? "red" : undefined}
-            hint="Proyección de los proyectos aprobados y en proceso."
-            ind="profit"
-            href="#rentabilidad"
-          />
-          <Kpi label="Rentabilidad proyectada" value={formatPercent(totals.projectedMargin)} hint="Ganancia proyectada / precio de venta." ind="margin" href="#rentabilidad" />
-        </div>
-        <div className="grid gap-3 sm:grid-cols-3">
-          <Kpi label="Facturación acumulada" value={formatCurrency(billing.periodInvoiced)} hint={`En ${period.label} · total general ${formatCurrency(billing.totalInvoiced)}`} ind="billing_total" href="#facturacion" />
-          <Kpi label="Pendiente de facturar" value={formatCurrency(billing.pendingToInvoice)} hint="Ventas confirmadas todavía sin facturar." ind="billing_project" href="#facturacion" />
-          <Kpi label="Proyectos activos" value={String(totals.activeCount)} hint="Aprobados o en proceso." ind="profit" href="#rentabilidad" />
-        </div>
+      <section aria-label="Resumen" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <Kpi label={`Facturado en ${month.label}`} value={formatCurrency(thisMonth.invoiced)} hint={`Previsto en el mes: ${formatCurrency(thisMonth.planned)}`} ind="billing_month" href="#facturacion" />
+        <Kpi label={`Cobrado en ${month.label}`} value={formatCurrency(thisMonth.collected)} hint="Por fecha de ingreso." ind="collected" href="#facturacion" />
+        <Kpi label="Pendiente de cobro" value={formatCurrency(totals.pendingToCollect)} hint={`De ${formatCurrency(totals.contracted)} contratados vigentes.`} ind="collected" href="#facturacion" />
+        <Kpi
+          label={anyPartial ? "Margen agregado hasta hoy (parcial)" : "Margen agregado"}
+          value={formatPercent(aggregate.margin)}
+          tone={(aggregate.margin ?? 0) < 0 ? "red" : undefined}
+          hint={`Σ ganancias ${formatCurrency(aggregate.profit)} / Σ contratos.`}
+          ind="margin_aggregate"
+          href="#rentabilidad"
+        />
       </section>
 
-      {/* 2. Facturación */}
-      <Card id="facturacion">
-        <CardHeader>
-          <CardTitle className="flex flex-wrap items-center gap-2">
-            Facturación <IndicatorTip id="billing_project" /> <OriginTag origin={invoices.origin} />
-          </CardTitle>
-          <p className="text-sm text-slate-500">Monto de venta acordado, facturado, pendiente y previsto. Una cotización no suma: está en Cotizaciones.</p>
-        </CardHeader>
-        <CardContent className="space-y-5">
-          {invoices.origin === "pending" ? (
-            <p className="text-sm text-slate-500">Todavía no hay registros de facturación al cliente en la base. Cuando el backend los guarde, acá se ven por proyecto, por mes y en total.</p>
-          ) : (
-            <>
-              <ColumnChart
-                title="Facturación por mes"
-                series={[{ key: "issued", label: "Facturado", color: CHART_COLORS.real }, { key: "planned", label: "Previsto", color: CHART_COLORS.planned }]}
-                columns={byMonth.map((m) => ({ label: m.label, values: { issued: m.issued, planned: m.planned } }))}
-                format={moneyShort}
-              />
-              <Table>
-                <THead>
-                  <TR>
-                    <TH>Código</TH>
-                    <TH>Cliente</TH>
-                    <TH>Proyecto</TH>
-                    <TH className="text-right">Importe de venta</TH>
-                    <TH className="text-right">Facturado</TH>
-                    <TH className="text-right">Pendiente</TH>
-                    <TH>Próxima fecha prevista</TH>
-                    <TH>Estado</TH>
-                  </TR>
-                </THead>
-                <TBody>
-                  {bRows.map((r) => (
-                    <TR key={r.project.id}>
-                      <TD><Link href={`/projects/${r.project.id}?tab=billing`} className="font-medium text-blue-700 hover:underline">{r.project.code}</Link></TD>
-                      <TD>{r.project.client}</TD>
-                      <TD className="max-w-56 truncate" title={r.project.name}>{r.project.name}</TD>
-                      <TD className="text-right tabular">{formatCurrency(r.salesPrice)}</TD>
-                      <TD className="text-right tabular">{formatCurrency(r.invoiced)}</TD>
-                      <TD className="text-right tabular">{formatCurrency(r.pendingToInvoice)}</TD>
-                      <TD className="tabular">{r.nextPlannedDate ? formatDate(r.nextPlannedDate) : "—"}</TD>
-                      <TD><Badge tone={r.state === "closed" ? "gray" : "blue"}>{GENERAL_STATE_LABELS[r.state]}</Badge></TD>
-                    </TR>
-                  ))}
-                  <TR className="bg-slate-50 font-semibold">
-                    <TD colSpan={3}>Total general</TD>
-                    <TD className="text-right tabular">{formatCurrency(bRows.reduce((s, r) => s + r.salesPrice, 0))}</TD>
-                    <TD className="text-right tabular">{formatCurrency(bRows.reduce((s, r) => s + r.invoiced, 0))}</TD>
-                    <TD className="text-right tabular">{formatCurrency(bRows.reduce((s, r) => s + r.pendingToInvoice, 0))}</TD>
-                    <TD colSpan={2} />
-                  </TR>
-                </TBody>
-              </Table>
-            </>
-          )}
-        </CardContent>
-      </Card>
+      {alerts.length > 0 && (
+        <section aria-label="Pendientes" className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+          <h2 className="mb-2 text-sm font-semibold text-slate-800">Para mirar hoy</h2>
+          <ul className="space-y-2">
+            {alerts.map((a) => (
+              <li key={a.key} className="flex items-start gap-2 text-sm">
+                <AlertTriangle className={cn("mt-0.5 size-4 shrink-0", a.red ? "text-red-600" : "text-amber-600")} aria-hidden />
+                <span className="flex-1">
+                  <Link href={a.href} className="font-medium text-slate-800 hover:underline">{a.title}</Link>
+                  <span className="block text-xs text-slate-500">{a.detail}</span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
-      {/* 3. Rentabilidad y ganancias por proyecto */}
-      <Card id="rentabilidad">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">Rentabilidad y ganancias por proyecto <IndicatorTip id="margin" /></CardTitle>
-          <p className="text-sm text-slate-500">Ganancia en pesos y rentabilidad en %. Proyectada mientras está en curso; real final solo al cerrar.</p>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <Choice<ProfitFilter>
-            name="Filtrar proyectos"
-            value={profitFilter}
-            onChange={setProfitFilter}
-            size="sm"
-            className="max-w-3xl"
-            options={(Object.keys(PROFIT_FILTER_LABELS) as ProfitFilter[]).map((k) => ({ value: k, label: PROFIT_FILTER_LABELS[k] }))}
-          />
+      <Section id="facturacion" title="Facturación y cobros" ind="billing_project">
+        <div className="space-y-4">
           <Table>
             <THead>
               <TR>
-                <TH>Código</TH>
-                <TH>Cliente</TH>
-                <TH className="text-right">Precio de venta</TH>
-                <TH className="text-right">Costo real acumulado</TH>
-                <TH className="text-right">Costo proyectado final</TH>
-                <TH className="text-right">Ganancia proyectada</TH>
-                <TH className="text-right">Rentabilidad</TH>
-                <TH className="text-right">Desvío vs presupuesto</TH>
+                <TH>Mes</TH>
+                <TH className="text-right">Previsto</TH>
+                <TH className="text-right">Facturado</TH>
+                <TH className="text-right">Cobrado</TH>
               </TR>
             </THead>
             <TBody>
-              {pRows.length === 0 && (
-                <TR><TD colSpan={8} className="text-slate-500">Ningún proyecto con ese filtro.</TD></TR>
-              )}
-              {pRows.map((r) => {
-                const closed = r.state === "closed";
-                const margin = closed ? r.finalMargin : r.projectedMargin;
-                const profit = closed ? r.salesPrice - r.actualCost : r.projectedProfit;
-                return (
-                  <TR key={r.project.id}>
-                    <TD><Link href={`/projects/${r.project.id}`} className="font-medium text-blue-700 hover:underline">{r.project.code}</Link></TD>
-                    <TD>{r.project.client}</TD>
-                    <TD className="text-right tabular">{formatCurrency(r.salesPrice)}</TD>
-                    <TD className="text-right tabular">{formatCurrency(r.actualCost)}</TD>
-                    <TD className="text-right tabular">{formatCurrency(r.projectedCost)}</TD>
-                    <TD className={cn("text-right tabular", (profit ?? 0) < 0 ? "text-red-700" : "text-emerald-700")}>{profit === null ? "—" : formatCurrency(profit)}</TD>
-                    <TD className={cn("text-right tabular", marginTone(margin, r.expectedMargin))}>
-                      {formatPercent(margin)}
-                      <span className="block text-xs text-slate-500">{closed ? "real final" : `esperada ${formatPercent(r.expectedMargin)}`}</span>
-                    </TD>
-                    <TD className={cn("text-right tabular", r.deviation > 0 ? "text-red-700" : "text-slate-600")}>
-                      {r.deviation > 0 ? formatCurrency(r.deviation) : "Sin desvío"}
-                      {r.deviationPct !== null && r.deviation > 0 && <span className="block text-xs">{formatNumber(r.deviationPct, 1)} %</span>}
-                    </TD>
-                  </TR>
-                );
-              })}
-            </TBody>
-          </Table>
-          {overview.causes.length > 0 && (
-            <div className="rounded-md border border-slate-200 p-3">
-              <h3 className="text-sm font-semibold text-slate-900">¿Por qué se pierde? (proyectos en curso)</h3>
-              <ul className="mt-1 divide-y divide-slate-100 text-sm">
-                {overview.causes.slice(0, 5).map((c) => (
-                  <li key={c.key} className="flex flex-wrap justify-between gap-2 py-1.5">
-                    <span className={cn(c.kind === "detected" && "text-amber-800")}>
-                      {c.label} <span className="text-xs text-slate-500">· {c.projects.join(", ")}</span>
-                    </span>
-                    <strong className={cn("tabular", c.kind === "detected" ? "text-amber-700" : "text-slate-900")}>{formatCurrency(c.amount)}</strong>
-                  </li>
-                ))}
-              </ul>
-              {overview.detected > 0 && (
-                <p className="mt-1 text-xs text-slate-500">
-                  En naranja, desvíos detectados aún no proyectados ({formatCurrency(overview.detected)}): horas de más y facturas más caras que todavía no están en el costo proyectado. No se suman a ningún margen.
-                </p>
-              )}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      <div className="grid gap-6 xl:grid-cols-2">
-        {/* 4. Costos reales */}
-        <Card id="costos">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">Costos reales {projectId ? `· ${projects.find((p) => p.id === projectId)?.code}` : "· todos los proyectos"} <IndicatorTip id="actual_cost" /></CardTitle>
-            <p className="text-sm text-slate-500">Presupuestado vs real por tipo. Lo comprado y no consumido no es costo.</p>
-          </CardHeader>
-          <CardContent>
-            <ul className="space-y-2.5 text-sm">
-              {costs.filter((c) => c.budget > 0 || c.actual > 0).map((c) => {
-                const max = Math.max(c.budget, c.actual, 1);
-                const over = c.budget > 0 && c.actual > c.budget;
-                return (
-                  <li key={c.key} className={cn(c.label.startsWith("·") && "pl-4 text-slate-600")}>
-                    <div className="flex flex-wrap justify-between gap-2">
-                      <span>{c.label.replace(/^· /, "")}</span>
-                      <span className="tabular text-slate-600">
-                        {c.budget > 0 && <>{formatCurrency(c.budget)} → </>}
-                        <strong className={over ? "text-red-700" : "text-slate-900"}>{formatCurrency(c.actual)}</strong>
-                      </span>
-                    </div>
-                    {!c.label.startsWith("·") && (
-                      <div className="mt-1 space-y-[2px]" aria-hidden>
-                        {c.budget > 0 && <div className="h-1.5 rounded-full bg-slate-300" style={{ width: `${(c.budget / max) * 100}%` }} />}
-                        <div className={cn("h-1.5 rounded-full", over ? "bg-red-500" : "bg-blue-700")} style={{ width: `${(c.actual / max) * 100}%` }} />
-                      </div>
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
-            <p className="mt-3 text-xs text-slate-500">Barra gris: presupuestado · barra de color: real hasta hoy.</p>
-          </CardContent>
-        </Card>
-
-        {/* 5. Horas */}
-        <Card id="horas">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">Horas presupuestadas vs reales <IndicatorTip id="hours_deviation" /></CardTitle>
-            <p className="text-sm text-slate-500">Reales: cargadas en {period.label} (con las correcciones del Jefe de planta). Presupuestadas: total del proyecto.</p>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <Choice<HoursGroup> name="Agrupar horas" value={hoursGroup} onChange={setHoursGroup} size="sm" options={[{ value: "project", label: "Proyecto" }, { value: "furniture", label: "Mueble" }, { value: "rubro", label: "Rubro" }]} />
-            <Table>
-              <THead>
-                <TR>
-                  <TH>{hoursGroup === "project" ? "Proyecto" : hoursGroup === "furniture" ? "Mueble" : "Rubro"}</TH>
-                  <TH className="text-right">Presupuestadas</TH>
-                  <TH className="text-right">Reales</TH>
-                  <TH className="text-right">Desvío</TH>
-                </TR>
-              </THead>
-              <TBody>
-                {hRows.slice(0, 12).map((r) => (
-                  <TR key={r.key}>
-                    <TD className="max-w-56 truncate" title={r.label}>{r.label}</TD>
-                    <TD className="text-right tabular">{hours(r.budget)}</TD>
-                    <TD className="text-right tabular">{hours(r.actual)}</TD>
-                    <TD className={cn("text-right tabular", r.deviation > 0 ? "text-red-700" : "text-slate-600")}>
-                      {r.deviation > 0 ? "+" : ""}{hours(r.deviation)}{r.pct !== null && <span className="text-xs"> ({formatNumber(r.pct, 0)} %)</span>}
-                    </TD>
-                  </TR>
-                ))}
-              </TBody>
-            </Table>
-            <Link href="/horas" className="inline-flex items-center gap-1 text-sm text-blue-700 hover:underline">Ver todas las horas <ArrowRight className="size-4" /></Link>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* 6. Cotizaciones y carga futura */}
-      <Card id="carga">
-        <CardHeader>
-          <CardTitle className="flex flex-wrap items-center gap-2">Cotizaciones y carga futura <IndicatorTip id="load_potential" /> <OriginTag origin={oppInfo.origin} /></CardTitle>
-          <p className="text-sm text-slate-500">Confirmada (aprobados), potencial (si se aprueban las cotizaciones) y ponderada (con la probabilidad informada) por separado.</p>
-        </CardHeader>
-        <CardContent className="space-y-5">
-          <Table>
-            <THead>
-              <TR>
-                <TH>Referencia</TH>
-                <TH>Cliente</TH>
-                <TH className="text-right">Importe cotizado</TH>
-                <TH>Aprobación probable</TH>
-                <TH>Inicio → entrega tentativos</TH>
-                <TH className="text-right">Horas</TH>
-                <TH>Negociación</TH>
-                <TH className="text-right">Probabilidad</TH>
-              </TR>
-            </THead>
-            <TBody>
-              {opps.length === 0 && <TR><TD colSpan={8} className="text-slate-500">No hay cotizaciones abiertas.</TD></TR>}
-              {opps.map((o) => (
-                <TR key={o.id}>
-                  <TD>{o.projectId ? <Link href={`/projects/${o.projectId}`} className="font-medium text-blue-700 hover:underline">{o.ref}</Link> : o.ref}<span className="block text-xs text-slate-500">{o.name}</span></TD>
-                  <TD>{o.client}</TD>
-                  <TD className="text-right tabular">{formatCurrency(o.amount)}</TD>
-                  <TD className="tabular">{o.expectedApprovalDate ? formatDate(o.expectedApprovalDate) : "—"}</TD>
-                  <TD className="tabular">{o.startDate ? `${formatDate(o.startDate)} → ${o.dueDate ? formatDate(o.dueDate) : "—"}` : "Sin fecha"}</TD>
-                  <TD className="text-right tabular" title={Object.entries(o.hoursByRubro).map(([k, v]) => `${k}: ${v} h`).join(" · ")}>{hours(Object.values(o.hoursByRubro).reduce((s, x) => s + x, 0))}</TD>
-                  <TD>{NEGOTIATION[o.negotiation]}</TD>
-                  <TD className="text-right tabular">{o.probability === null ? <span className="text-slate-500">Sin estimar</span> : `${o.probability} %`}</TD>
+              {months.map((m) => (
+                <TR key={m.key} className={m.key === ref ? "bg-slate-50 font-medium" : undefined}>
+                  <TD>{m.label}</TD>
+                  <TD className="text-right tabular">{formatCurrency(m.planned)}</TD>
+                  <TD className="text-right tabular">{formatCurrency(m.invoiced)}</TD>
+                  <TD className="text-right tabular">{formatCurrency(m.collected)}</TD>
                 </TR>
               ))}
             </TBody>
           </Table>
-          <div className="flex flex-wrap items-end justify-between gap-2">
-            <h3 className="text-sm font-semibold text-slate-900">Carga por mes{rubro ? ` · ${rubro}` : " · todos los rubros"}</h3>
-            <label className="text-xs font-medium text-slate-600">
-              Rubro
-              <Select className="mt-1 w-56" value={rubro} onChange={(e) => setRubro(e.target.value)}>
-                <option value="">Todos</option>
-                {rubros.map((r) => (
-                  <option key={r} value={r}>{r}</option>
-                ))}
-              </Select>
-            </label>
-          </div>
-          <ColumnChart
-            title="Horas confirmadas y potenciales por mes, con la capacidad disponible"
-            mode="stacked"
-            series={[{ key: "confirmed", label: "Confirmadas", color: CHART_COLORS.real }, { key: "potential", label: "Potenciales", color: CHART_COLORS.planned }]}
-            columns={loads.map(({ m, load }) => ({
-              label: m.label,
-              values: { confirmed: pick(load.confirmed), potential: pick(load.potential) },
-              reference: capOf(m.from < today ? today : m.from, m.to),
-            }))}
-            referenceLabel="Capacidad"
-            format={hours}
-          />
-          <p className="text-xs text-slate-500">
-            Ponderada (con probabilidad informada): {hours(loads.reduce((s, { load }) => s + pick(load.weighted), 0))} en los próximos meses. Las cotizaciones sin probabilidad no suman a la ponderada.
-          </p>
-        </CardContent>
-      </Card>
-
-      <div className="grid gap-6 xl:grid-cols-3">
-        {/* 7. Capacidad y necesidades de personal */}
-        <Card id="capacidad" className="xl:col-span-2">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">Capacidad y necesidades de personal <IndicatorTip id="capacity_gap" /></CardTitle>
-            <p className="text-sm text-slate-500">
-              De hoy al {formatDate(horizonTo)}. Capacidad: personal activo, cada persona una vez en su rubro principal (<Link href="/settings#capacidad" className="text-blue-700 hover:underline">Configuración</Link>).
-            </p>
-          </CardHeader>
-          <CardContent>
-            <Table>
-              <THead>
-                <TR>
-                  <TH>Rubro</TH>
-                  <TH className="text-right">Capacidad</TH>
-                  <TH className="text-right">Confirmada</TH>
-                  <TH className="text-right">Potencial</TH>
-                  <TH className="text-right">Brecha</TH>
-                  <TH>Situación</TH>
+          <Table>
+            <THead>
+              <TR>
+                <TH>OT</TH>
+                <TH className="text-right">Contrato vigente</TH>
+                <TH className="text-right">Previsto</TH>
+                <TH className="text-right">Facturado</TH>
+                <TH className="text-right">Cobrado</TH>
+                <TH className="text-right">Pendiente de cobro</TH>
+              </TR>
+            </THead>
+            <TBody>
+              {otRows.map((r) => (
+                <TR key={r.project.id}>
+                  <TD>
+                    <Link href={`/projects/${r.project.id}?tab=facturacion`} className="font-medium hover:underline">{r.project.code}</Link>
+                    <span className="block text-xs text-slate-500">{r.project.name}</span>
+                    {r.overInvoiced > 0 && <Badge tone="yellow">Facturado de más: {formatCurrency(r.overInvoiced)}</Badge>}
+                  </TD>
+                  <TD className="text-right tabular">{formatCurrency(r.contracted)}</TD>
+                  <TD className="text-right tabular">{formatCurrency(r.planned)}</TD>
+                  <TD className="text-right tabular">{formatCurrency(r.invoiced)}</TD>
+                  <TD className="text-right tabular">{formatCurrency(r.collected)}</TD>
+                  <TD className="text-right tabular">{formatCurrency(r.pendingToCollect)}</TD>
                 </TR>
-              </THead>
-              <TBody>
-                {capRows.map((r) => (
-                  <TR key={r.rubro}>
-                    <TD>{r.rubro}</TD>
-                    <TD className="text-right tabular">{hours(r.capacity)}</TD>
-                    <TD className="text-right tabular">{hours(r.confirmed)}</TD>
-                    <TD className="text-right tabular">{hours(r.potential)}</TD>
-                    <TD className={cn("text-right tabular", r.gapPotential > 0 ? "text-red-700" : "text-emerald-700")}>
-                      {r.gapPotential > 0 ? `faltan ${hours(r.gapPotential)}` : `sobran ${hours(-r.gapPotential)}`}
-                      {r.extraPeople > 0 && <span className="block text-xs text-slate-500">≈ {r.extraPeople} {r.extraPeople === 1 ? "persona" : "personas"} más (estimación)</span>}
-                    </TD>
-                    <TD>
-                      <Badge tone={r.status === "over" ? "red" : r.status === "risk" ? "yellow" : "green"}>
-                        {r.status === "over" ? "No entra lo confirmado" : r.status === "risk" ? "Entra si no se aprueba todo" : "Entra todo"}
-                      </Badge>
-                    </TD>
+              ))}
+              <TR className="font-semibold">
+                <TD>Total</TD>
+                <TD className="text-right tabular">{formatCurrency(totals.contracted)}</TD>
+                <TD className="text-right tabular">{formatCurrency(totals.planned)}</TD>
+                <TD className="text-right tabular">{formatCurrency(totals.invoiced)}</TD>
+                <TD className="text-right tabular">{formatCurrency(totals.collected)}</TD>
+                <TD className="text-right tabular">{formatCurrency(totals.pendingToCollect)}</TD>
+              </TR>
+            </TBody>
+          </Table>
+        </div>
+      </Section>
+
+      <Section id="rentabilidad" title="Rentabilidad por proyecto" ind="profit_views">
+        <Table>
+          <THead>
+            <TR>
+              <TH>Proyecto</TH>
+              <TH className="text-right">Presupuestada</TH>
+              <TH className="text-right">Hasta hoy</TH>
+              <TH className="text-right">Final</TH>
+            </TR>
+          </THead>
+          <TBody>
+            {profits.map(({ project, view }) => (
+              <TR key={project.id}>
+                <TD>
+                  <Link href={`/projects/${project.id}`} className="font-medium hover:underline">{project.code}</Link>
+                  <span className="block text-xs text-slate-500">{GENERAL_STATE_LABELS[generalState(project)]}</span>
+                </TD>
+                <TD className="text-right tabular">
+                  {view.budgeted ? (
+                    <>
+                      {formatPercent(view.budgeted.margin)}
+                      <span className="block text-xs text-slate-500">{money(view.budgeted.profit)}</span>
+                    </>
+                  ) : (
+                    <span className="text-xs text-slate-500">No calculable</span>
+                  )}
+                </TD>
+                <TD className="text-right tabular">
+                  {formatPercent(view.toDate.margin)}
+                  <span className="block text-xs text-slate-500">
+                    {money(view.toDate.profit)}
+                    {view.toDate.partial && " · PARCIAL"}
+                  </span>
+                </TD>
+                <TD className="text-right tabular">
+                  {view.final ? (
+                    <>
+                      {formatPercent(view.final.margin)}
+                      <span className="block text-xs text-slate-500">{money(view.final.profit)}</span>
+                    </>
+                  ) : (
+                    <span className="text-xs text-slate-500" title={view.finalReason ?? undefined}>No calculable</span>
+                  )}
+                </TD>
+              </TR>
+            ))}
+          </TBody>
+        </Table>
+        {overview.causes.length > 0 && (
+          <div className="mt-4 rounded-md border border-slate-200 p-3">
+            <h3 className="text-sm font-semibold text-slate-900">¿Por qué se pierde? (proyectos en curso)</h3>
+            <ul className="mt-1 divide-y divide-slate-100 text-sm">
+              {overview.causes.slice(0, 5).map((c) => (
+                <li key={c.key} className="flex flex-wrap justify-between gap-2 py-1.5">
+                  <span className={cn(c.kind === "detected" && "text-amber-800")}>
+                    {c.label} <span className="text-xs text-slate-500">· {c.projects.join(", ")}</span>
+                  </span>
+                  <strong className={cn("tabular", c.kind === "detected" ? "text-amber-700" : "text-slate-900")}>{formatCurrency(c.amount)}</strong>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        <p className="mt-2 text-xs text-slate-500">
+          Hasta hoy = contrato vigente − costo real cargado: es parcial mientras falten costos. La final aparece al cerrar el proyecto sin costos pendientes.
+        </p>
+      </Section>
+
+      <Section id="costos" title="Costos y horas" ind="actual_cost">
+        <div className="space-y-4">
+          <Table>
+            <THead>
+              <TR>
+                <TH>Costo</TH>
+                <TH className="text-right">Presupuestado</TH>
+                <TH className="text-right">Real cargado</TH>
+              </TR>
+            </THead>
+            <TBody>
+              {costRows(sales).map((r) => (
+                <TR key={r.key}>
+                  <TD className={r.label.startsWith("·") ? "pl-6 text-slate-500" : undefined}>{r.label.replace(/^· /, "")}</TD>
+                  <TD className="text-right tabular">{r.budget ? formatCurrency(r.budget) : "—"}</TD>
+                  <TD className="text-right tabular">{formatCurrency(r.actual)}</TD>
+                </TR>
+              ))}
+            </TBody>
+          </Table>
+          <Choice<HoursGroup>
+            name="Horas por"
+            value={hoursGroup}
+            onChange={setHoursGroup}
+            size="sm"
+            options={[
+              { value: "project", label: "Proyecto" },
+              { value: "furniture", label: "Mueble" },
+              { value: "rubro", label: "Rubro" },
+            ]}
+          />
+          <Table>
+            <THead>
+              <TR>
+                <TH>{hoursGroup === "project" ? "Proyecto" : hoursGroup === "furniture" ? "Mueble" : "Rubro"}</TH>
+                <TH className="text-right">Presupuestadas</TH>
+                <TH className="text-right">Reales</TH>
+                <TH className="text-right">Desvío</TH>
+              </TR>
+            </THead>
+            <TBody>
+              {hoursRows(sales, hoursGroup)
+                .filter((r) => r.budget > 0 || r.actual > 0)
+                .map((r) => (
+                  <TR key={r.key}>
+                    <TD>{r.label}</TD>
+                    <TD className="text-right tabular">{hours(r.budget)}</TD>
+                    <TD className="text-right tabular">{hours(r.actual)}</TD>
+                    <TD className={cn("text-right tabular", r.deviation > 0 && "text-red-700")}>{r.deviation > 0 ? "+" : ""}{hours(r.deviation)}</TD>
                   </TR>
                 ))}
-              </TBody>
-            </Table>
-          </CardContent>
-        </Card>
+            </TBody>
+          </Table>
+        </div>
+      </Section>
 
-        {/* 8. Alertas gerenciales */}
-        <Card id="alertas">
-          <CardHeader>
-            <CardTitle>Alertas</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {managerial.length === 0 ? (
-              <p className="text-sm text-slate-500">Nada importante para revisar.</p>
-            ) : (
-              <ul className="divide-y divide-slate-100 text-sm">
-                {managerial.map((a) => (
-                  <li key={a.key} className="py-2">
-                    <a href={a.href} className="flex items-start gap-2 hover:text-blue-700">
-                      <AlertTriangle className={cn("mt-0.5 size-4 shrink-0", a.level === "red" ? "text-red-600" : "text-amber-600")} aria-hidden />
-                      <span>
-                        <span className="font-medium text-slate-900">{a.title}</span>
-                        <span className="block text-xs text-slate-500">{a.detail}</span>
-                      </span>
-                    </a>
-                  </li>
-                ))}
-              </ul>
-            )}
-            <Link href="/alerts" className="mt-2 inline-flex items-center gap-1 text-sm text-blue-700 hover:underline">Ver todas las alertas <ArrowRight className="size-4" /></Link>
-          </CardContent>
-        </Card>
-      </div>
+      <Section id="capacidad" title="Capacidad" ind="capacity">
+        <div className="mb-3 flex flex-wrap items-end gap-3">
+          <Choice<"week" | "month">
+            name="Ver por"
+            value={granularity}
+            onChange={setGranularity}
+            size="sm"
+            options={[
+              { value: "week", label: "Semana" },
+              { value: "month", label: "Mes" },
+            ]}
+          />
+          <label className="text-xs font-medium text-slate-600">
+            Rubro
+            <select className="mt-1 block rounded-md border border-slate-300 px-2 py-1.5 text-sm" value={capRubro} onChange={(e) => setCapRubro(e.target.value)}>
+              <option value="">Todos</option>
+              {capRows.map((r) => (
+                <option key={r.rubro} value={r.rubro}>{r.rubro}</option>
+              ))}
+            </select>
+          </label>
+        </div>
+        <Table>
+          <THead>
+            <TR>
+              <TH>{granularity === "week" ? "Semana" : "Mes"}</TH>
+              <TH className="text-right">Disponible</TH>
+              <TH className="text-right">CONFIRMADO</TH>
+              <TH className="text-right">POTENCIAL</TH>
+              <TH className="text-right">Libre si se aprueba todo</TH>
+            </TR>
+          </THead>
+          <TBody>
+            {timeline.map((b) => (
+              <TR key={b.from}>
+                <TD>{b.label}</TD>
+                <TD className="text-right tabular">{hours(b.capacity)}</TD>
+                <TD className={cn("text-right tabular", b.confirmed > b.capacity && "text-red-700")}>{hours(b.confirmed)}</TD>
+                <TD className="text-right tabular">{hours(b.potential)}</TD>
+                <TD className={cn("text-right tabular", b.capacity - b.confirmed - b.potential < 0 && "text-amber-700")}>{hours(b.capacity - b.confirmed - b.potential)}</TD>
+              </TR>
+            ))}
+          </TBody>
+        </Table>
+        <h3 className="mb-1 mt-4 text-sm font-semibold text-slate-800">Por rubro (próximos 3 meses)</h3>
+        <Table>
+          <THead>
+            <TR>
+              <TH>Rubro</TH>
+              <TH className="text-right">Disponible</TH>
+              <TH className="text-right">CONFIRMADO</TH>
+              <TH className="text-right">POTENCIAL</TH>
+              <TH>Estado</TH>
+            </TR>
+          </THead>
+          <TBody>
+            {capRows.map((r) => (
+              <TR key={r.rubro}>
+                <TD>{r.rubro}</TD>
+                <TD className="text-right tabular">{hours(r.capacity)}</TD>
+                <TD className="text-right tabular">{hours(r.confirmed)}</TD>
+                <TD className="text-right tabular">{hours(r.potential)}</TD>
+                <TD>
+                  <Badge tone={r.status === "over" ? "red" : r.status === "risk" ? "yellow" : "green"}>
+                    {r.status === "over" ? "No entra lo confirmado" : r.status === "risk" ? "Entra lo confirmado" : "Entra todo"}
+                  </Badge>
+                </TD>
+              </TR>
+            ))}
+          </TBody>
+        </Table>
+        <p className="mt-2 text-xs text-slate-500">
+          Confirmado: lo que falta de los proyectos aprobados y en proceso. Potencial: las cotizaciones abiertas, si se aprobaran todas (sin probabilidades).
+          Las horas se reparten entre hoy y la entrega: es una distribución estimada. Cada persona cuenta una sola vez, en su rubro principal.
+        </p>
+      </Section>
+
+      <Section id="calculo" title="Cómo se calcula">
+        <dl className="grid gap-3 text-sm sm:grid-cols-2">
+          {INDICATORS.filter((i) => ["contract_current", "billing_month", "collected", "profit_views", "margin_aggregate", "capacity", "financial_cost"].includes(i.id)).map((i) => (
+            <div key={i.id}>
+              <dt className="font-medium text-slate-800">{i.name}</dt>
+              <dd className="text-xs text-slate-600">{i.formula}</dd>
+              <dd className="text-xs text-slate-500">{i.limits}</dd>
+            </div>
+          ))}
+        </dl>
+      </Section>
     </div>
   );
-}
-
-function addMonths(iso: string, n: number): string {
-  const [y, m] = iso.split("-").map(Number);
-  const d = new Date(Date.UTC(y, m - 1 + n, 1));
-  return d.toISOString().slice(0, 10);
 }

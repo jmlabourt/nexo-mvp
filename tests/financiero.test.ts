@@ -1,0 +1,96 @@
+import { describe, expect, it } from "vitest";
+import { financialCost, quoteFinancialPct, quoteSchedule } from "@/lib/financial";
+import { EMPTY_LEDGER, updatedFinancialInput } from "@/lib/ledger";
+import type { Ledger } from "@/types";
+
+describe("gasto financiero", () => {
+  it("$1.000.000, 30 días de producción + 30 de pago, 5 % mensual → $100.000", () => {
+    const r = financialCost({ price: 1_000_000, monthlyRatePct: 5, startDate: "2026-11-01", deliveryDate: "2026-12-01", daysAfterDelivery: 30 });
+    expect(r).toMatchObject({ ok: true, amount: 100_000, financedDays: 60, productionDays: 30 });
+  });
+
+  it("con seña del 50 % al inicio se financia solo el saldo", () => {
+    const r = financialCost({
+      price: 1_000_000,
+      monthlyRatePct: 5,
+      startDate: "2026-11-01",
+      deliveryDate: "2026-12-01",
+      daysAfterDelivery: 30,
+      schedule: [{ amount: 500_000, date: "2026-11-01" }],
+    });
+    expect(r.ok && r.amount).toBe(50_000);
+  });
+
+  it("por tramos: cada cuota baja el saldo desde su fecha", () => {
+    // 1.000.000 durante 30 días, 600.000 durante 30 días más (cuota de 400.000 a la entrega), saldo a 30 días.
+    const r = financialCost({
+      price: 1_000_000,
+      monthlyRatePct: 3,
+      startDate: "2026-11-01",
+      deliveryDate: "2026-12-01",
+      daysAfterDelivery: 30,
+      schedule: [{ amount: 400_000, date: "2026-12-01" }],
+    });
+    expect(r.ok && r.tranches.map((t) => [t.balance, t.days, t.amount])).toEqual([
+      [1_000_000, 30, 30_000],
+      [600_000, 30, 18_000],
+    ]);
+    expect(r.ok && r.amount).toBe(48_000);
+  });
+
+  it("sin datos suficientes no inventa: explica qué falta", () => {
+    expect(financialCost({ price: 0, monthlyRatePct: 5, startDate: "2026-11-01", deliveryDate: "2026-12-01", daysAfterDelivery: 0 })).toMatchObject({ ok: false });
+    expect(financialCost({ price: 10, monthlyRatePct: 5, startDate: "", deliveryDate: "2026-12-01", daysAfterDelivery: 0 })).toMatchObject({ ok: false });
+    expect(financialCost({ price: 10, monthlyRatePct: 5, startDate: "2026-12-02", deliveryDate: "2026-12-01", daysAfterDelivery: 0 })).toMatchObject({ ok: false });
+    expect(financialCost({ price: 10, monthlyRatePct: 5, startDate: "2026-11-01", deliveryDate: "2026-12-01", daysAfterDelivery: 0, schedule: [{ amount: 20, date: "2026-11-01" }] })).toMatchObject({ ok: false });
+  });
+});
+
+describe("gasto financiero en la cotización", () => {
+  const base = { startDate: "2026-11-01", deliveryDate: "2026-12-01", daysAfterDelivery: 30, seniaPct: 0, installments: 1 };
+  it("sin seña ni cuotas: 5 % mensual × 60 días = 10 % del precio", () => {
+    const r = quoteFinancialPct(base, 5);
+    expect(r.ok && r.amount).toBe(10);
+  });
+  it("seña del 50 % y saldo en 2 cuotas: por tramos sobre el saldo", () => {
+    const s = quoteSchedule(1_000_000, { ...base, seniaPct: 50, installments: 2 });
+    expect(s).toEqual([
+      { label: "Seña 50 %", amount: 500_000, date: "2026-11-01" },
+      { label: "Cuota 1 de 2", amount: 250_000, date: "2026-12-31" },
+      { label: "Cuota 2 de 2", amount: 250_000, date: "2027-01-30" },
+    ]);
+    // 500.000 × 60 días + 250.000 × 30 días, al 5 % mensual = 50.000 + 12.500.
+    expect(financialCost({ price: 1_000_000, monthlyRatePct: 5, ...base, schedule: s })).toMatchObject({ ok: true, amount: 62_500 });
+    const pct = quoteFinancialPct({ ...base, seniaPct: 50, installments: 2 }, 5);
+    expect(pct.ok && pct.amount).toBe(6.25);
+  });
+});
+
+describe("gasto financiero actualizado (atrasos y cobros reales)", () => {
+  // $1.000.000, 30 días de producción, pago único a 30 días de la entrega, 5 % mensual → $100.000 aprobado.
+  const project = { id: "p", startDate: "2026-09-01", dueDate: "2026-10-01", salesPrice: 1_000_000, baseline: undefined, status: "production" as const };
+  const ledger = { ...EMPTY_LEDGER, financialMonthlyRatePct: 5, paymentTerms: [{ projectId: "p", daysAfterDelivery: 30, schedule: [] }] };
+  const cost = (l: Ledger, today: string) => financialCost(updatedFinancialInput(project, l, today));
+
+  it("sin atrasos coincide con lo aprobado", () => {
+    expect(cost(ledger, "2026-09-15")).toMatchObject({ ok: true, amount: 100_000 });
+  });
+  it("entrega 15 días tarde: se financian 15 días más (sin duplicar)", () => {
+    const l = { ...ledger, handovers: [{ id: "h", projectId: "p", date: "2026-10-16", by: "Jefe" }] };
+    expect(cost(l, "2026-10-16")).toMatchObject({ ok: true, amount: 125_000 });
+  });
+  it("pago tardío: lo vencido se lleva a hoy", () => {
+    // Entrega a tiempo; debía pagar el 31/10 y hoy es 15/11 sin cobrar: 75 días financiados.
+    const l = { ...ledger, handovers: [{ id: "h", projectId: "p", date: "2026-10-01", by: "Jefe" }] };
+    expect(cost(l, "2026-11-15")).toMatchObject({ ok: true, amount: 125_000 });
+  });
+  it("pago parcial real: el saldo baja desde la fecha de ingreso", () => {
+    // Cobra 400.000 el 01/10 (a la entrega); el resto a 30 días: 1.000.000 × 30 d + 600.000 × 30 d = 50.000 + 30.000.
+    const l = {
+      ...ledger,
+      handovers: [{ id: "h", projectId: "p", date: "2026-10-01", by: "Jefe" }],
+      collections: [{ id: "c", projectId: "p", date: "2026-10-01", amount: 400_000, createdBy: "x", createdAt: "" }],
+    };
+    expect(cost(l, "2026-10-05")).toMatchObject({ ok: true, amount: 80_000 });
+  });
+});

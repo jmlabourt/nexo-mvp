@@ -11,6 +11,7 @@ import { GENERAL_STATE_LABELS, generalState } from "@/lib/gerencia";
 import { formatDate } from "@/lib/formatting";
 import { useAppStore } from "@/store/use-app-store";
 import { useExampleData } from "@/store/session-data";
+import { LedgerDirectory } from "./ledger-directory";
 import { PageHeader } from "@/components/shared/page-header";
 import { OriginTag, PendingAction } from "@/components/shared/data-origin";
 import { Card, CardContent } from "@/components/ui/card";
@@ -21,6 +22,11 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { normalizeName } from "@/lib/directory";
 
 export function ClientsPage() {
+  const demoLocal = useAppStore((s) => s.demoLocal);
+  return demoLocal ? <LedgerDirectory kind="clients" /> : <ExampleClientsPage />;
+}
+
+function ExampleClientsPage() {
   const projects = useAppStore((s) => s.projects);
   const example = useExampleData();
   const clients = useMemo(() => clientsFrom(projects), [projects]);

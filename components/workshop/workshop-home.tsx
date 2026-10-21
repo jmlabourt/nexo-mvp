@@ -1,7 +1,7 @@
 "use client";
 import { useConfirmedAction } from "@/store/confirmed-action";
 // "Mi día" del Operario (Lote 6): lo mínimo posible, pensado para el celular.
-// Solo lo asignado a esa persona para HOY: proyecto, mueble y rubro, con un único campo de horas y "Guardar".
+// Solo lo asignado a esa persona para HOY: proyecto, mueble y rubro, con un único campo de horas y "Registrar horas".
 // Sin horas estimadas ni planificadas, sin plata, sin materiales, sin incidencias, sin otros proyectos y sin alertas.
 import { useMemo, useRef, useState } from "react";
 import { CheckCircle2 } from "lucide-react";
@@ -16,6 +16,7 @@ import { parseDecimal } from "@/lib/schemas";
 import { useAppStore } from "@/store/use-app-store";
 import { useIdentity } from "@/store/selectors";
 import { ModeSwitch } from "@/components/layout/mode-switch";
+import { LocalDemoBar } from "@/components/layout/local-demo";
 import { Button } from "@/components/ui/button";
 import { Input, Select } from "@/components/ui/input";
 
@@ -87,7 +88,8 @@ export function WorkshopHome() {
       )}
 
       {!isRealOperator && isDemo && (
-        <div className="mt-8 border-t border-slate-200 pt-4">
+        <div className="mt-8 space-y-3 border-t border-slate-200 pt-4">
+          <LocalDemoBar />
           <ModeSwitch />
         </div>
       )}
@@ -95,7 +97,7 @@ export function WorkshopHome() {
   );
 }
 
-/** Una asignación de hoy: proyecto, mueble y rubro; un solo campo de horas y Guardar. */
+/** Una asignación de hoy: proyecto, mueble y rubro; un solo campo de horas y "Registrar horas". */
 function AssignmentCard({ item, onSaved }: { item: MyDayItem; onSaved: (msg: string) => void }) {
   const logHours = useConfirmedAction("logHours");
   const hoursPerDay = useAppStore((s) => s.costSettings.hoursPerDay);
@@ -148,7 +150,7 @@ function AssignmentCard({ item, onSaved }: { item: MyDayItem; onSaved: (msg: str
             <label htmlFor={id} className="mb-1 block text-xs font-medium text-slate-600">{item.logged > 0 ? "Agregar horas" : "Horas trabajadas"}</label>
             <Input id={id} inputMode="decimal" value={hours} onChange={(e) => setHours(e.target.value)} aria-invalid={!!error} />
           </div>
-          <Button type="submit" size="lg" className="flex-1" disabled={busy}>{busy ? "Guardando…" : "Guardar"}</Button>
+          <Button type="submit" size="lg" className="flex-1" disabled={busy}>{busy ? "Guardando…" : "Registrar horas"}</Button>
         </form>
       {error && <p role="alert" className="mt-2 text-sm text-red-600">{error}</p>}
       {warn && !error && (

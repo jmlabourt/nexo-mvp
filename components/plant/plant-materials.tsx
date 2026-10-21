@@ -6,7 +6,7 @@ import { PackageOpen, ClipboardCheck } from "lucide-react";
 import type { MaterialDelivery, Project } from "@/types";
 import { activeOperators } from "@/lib/operators";
 import { formatDate, formatQty } from "@/lib/formatting";
-import { closeDayError, deliveryError, deliveryOptions, openDeliveries, type CloseDeliveryInput } from "@/lib/plant-materials";
+import { closeDayError, deliveryError, deliveryOptions, inProduction, openDeliveries, type CloseDeliveryInput } from "@/lib/plant-materials";
 import { parseDecimal } from "@/lib/schemas";
 import { useAppStore } from "@/store/use-app-store";
 import { useConfirmedAction } from "@/store/confirmed-action";
@@ -54,7 +54,8 @@ export function ProjectMaterials({ project }: { project: Project }) {
           {open.map((d) => (
             <li key={d.id} className="flex flex-wrap justify-between gap-2 py-1.5">
               <span>
-                <strong className="tabular">{formatQty(d.quantity, d.unit)}</strong> de {d.materialName} → {itemName(d.itemId)}
+                <strong className="tabular">{formatQty(inProduction(d), d.unit)}</strong> de {d.materialName} en producción → {itemName(d.itemId)}
+                {inProduction(d) < d.quantity && <span className="text-xs text-slate-500"> (de {formatQty(d.quantity, d.unit)} liberados)</span>}
                 {who(d.operatorId) ? ` · ${who(d.operatorId)}` : ""}
               </span>
               <span className="text-xs text-slate-500">
@@ -183,8 +184,9 @@ function CloseDayForm({ project, open, onDone }: { project: Project; open: Mater
   const today = useToday();
   const deliveries = useAppStore((s) => s.deliveries);
   const close = useConfirmedAction("closeDay");
+  const carryOver = useAppStore((s) => s.demoLocal);
   // Por defecto: todo lo entregado se consumió (lo más común); se corrige lo que sobró o se desperdició.
-  const [drafts, setDrafts] = useState<Record<string, Draft>>(() => Object.fromEntries(open.map((d) => [d.id, { consumed: String(d.quantity).replace(".", ","), waste: "0", leftover: "0" }])));
+  const [drafts, setDrafts] = useState<Record<string, Draft>>(() => Object.fromEntries(open.map((d) => [d.id, { consumed: String(inProduction(d)).replace(".", ","), waste: "0", leftover: "0" }])));
   const [error, setError] = useState("");
   const input = {
     projectId: project.id,
@@ -225,11 +227,11 @@ function CloseDayForm({ project, open, onDone }: { project: Project; open: Mater
         {open.length === 0 && <p className="text-sm text-slate-500">No hay material entregado sin cerrar.</p>}
         {open.map((d) => {
           const c = drafts[d.id];
-          const rest = d.quantity - (qty(c.consumed) || 0) - (qty(c.waste) || 0) - (qty(c.leftover) || 0);
+          const rest = inProduction(d) - (qty(c.consumed) || 0) - (qty(c.waste) || 0) - (qty(c.leftover) || 0);
           return (
             <fieldset key={d.id} className="rounded-md border border-slate-200 p-2">
               <legend className="px-1 text-sm font-medium text-slate-800">
-                {formatQty(d.quantity, d.unit)} de {d.materialName} ({formatDate(d.date)})
+                {formatQty(inProduction(d), d.unit)} de {d.materialName} en producción (liberado el {formatDate(d.date)})
               </legend>
               <div className="grid grid-cols-3 gap-2">
                 <Field label="Consumido" htmlFor={`cl-c-${d.id}`}>
@@ -238,12 +240,17 @@ function CloseDayForm({ project, open, onDone }: { project: Project; open: Mater
                 <Field label="Desperdicio" htmlFor={`cl-w-${d.id}`}>
                   <Input id={`cl-w-${d.id}`} inputMode="decimal" value={c.waste} onChange={(e) => set(d.id, { waste: e.target.value })} />
                 </Field>
-                <Field label="Sobrante reutilizable" htmlFor={`cl-l-${d.id}`}>
+                <Field label="Devuelto al depósito" htmlFor={`cl-l-${d.id}`}>
                   <Input id={`cl-l-${d.id}`} inputMode="decimal" value={c.leftover} onChange={(e) => set(d.id, { leftover: e.target.value })} />
                 </Field>
               </div>
               <p className="mt-1 text-xs text-slate-500">
-                {rest > 1e-6 ? `Sigue en planta: ${formatQty(rest, d.unit)} (no es costo todavía).` : "Se cierra todo lo entregado."} El sobrante vuelve al depósito.
+                {rest > 1e-6
+                  ? carryOver
+                    ? `Sigue en producción: ${formatQty(rest, d.unit)} (se rinde otro día; no es costo todavía).`
+                    : `Queda asignado al proyecto: ${formatQty(rest, d.unit)} (no es costo todavía).`
+                  : "Se rinde todo lo liberado."}{" "}
+                Lo devuelto vuelve al depósito como sobrante reutilizable (no al proveedor).
               </p>
             </fieldset>
           );

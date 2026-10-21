@@ -7,6 +7,7 @@ import { CATEGORY_LABELS } from "@/lib/constants";
 import { projectEconomics } from "@/lib/calculations";
 import { projectMaterialFlow, unresolvedMaterial } from "@/lib/material-flow";
 import { closingSummary } from "@/lib/insights";
+import { closeCheck } from "@/lib/tablero";
 import { formatCurrency, formatCurrencyOrDash, formatMarginPoints, formatPercent, formatQty, formatSignedCurrency, todayISO } from "@/lib/formatting";
 import { useAppStore } from "@/store/use-app-store";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -22,6 +23,13 @@ export function CloseDialog({ project, open, onOpenChange }: { project: Project;
   const [error, setError] = useState("");
   const [act, setAct] = useState<{ action: StockAction; target: StockTarget } | null>(null);
   const loose = useMemo(() => unresolvedMaterial(stock, project.id), [stock, project.id]);
+  // Modo demostración: además del material, el cierre pide unidades terminadas y la entrega real del Jefe.
+  const demoLocal = useAppStore((s) => s.demoLocal);
+  const ledger = useAppStore((s) => s.ledger);
+  const orders = useAppStore((s) => s.orders);
+  const deliveries = useAppStore((s) => s.deliveries);
+  const check = useMemo(() => (demoLocal ? closeCheck(project, ledger, stock, orders, deliveries) : { blockers: [], warnings: [] }), [demoLocal, project, ledger, stock, orders, deliveries]);
+  const otherBlockers = check.blockers.filter((b) => !b.startsWith("Hay materiales sin rendir"));
   const flow = useMemo(() => projectMaterialFlow(stock, project.id), [stock, project.id]);
   const target = (h: (typeof loose)[number]): StockTarget => ({
     materialId: h.lot.materialId,
@@ -84,6 +92,27 @@ export function CloseDialog({ project, open, onOpenChange }: { project: Project;
                   </li>
                 ))}
               </ul>
+            )}
+            {otherBlockers.length > 0 && (
+              <div className="rounded-md bg-amber-50 p-3 text-sm text-amber-900" role="alert">
+                <div className="font-medium">Todavía no se puede cerrar</div>
+                <ul className="mt-1 list-disc pl-5">
+                  {otherBlockers.map((b) => (
+                    <li key={b}>{b}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {check.warnings.length > 0 && (
+              <div className="rounded-md bg-slate-50 p-3 text-sm text-slate-700">
+                <div className="font-medium">Costos pendientes (no bloquean)</div>
+                <ul className="mt-1 list-disc pl-5">
+                  {check.warnings.map((w) => (
+                    <li key={w}>{w}</li>
+                  ))}
+                </ul>
+                <p className="mt-1 text-xs">Si cerrás igual, queda &quot;Cerrado con costos pendientes&quot; y la rentabilidad final no se calcula hasta completarlos.</p>
+              </div>
             )}
             {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
             {act && <StockActionDialog action={act.action} target={act.target} open onOpenChange={(o) => { if (!o) setAct(null); }} />}
@@ -151,7 +180,7 @@ export function CloseDialog({ project, open, onOpenChange }: { project: Project;
           {step === 0 ? (
             <>
               <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-              <Button disabled={loose.length > 0} onClick={() => setStep(1)}>Continuar</Button>
+              <Button disabled={loose.length > 0 || otherBlockers.length > 0} onClick={() => setStep(1)}>Continuar</Button>
             </>
           ) : (
             <>

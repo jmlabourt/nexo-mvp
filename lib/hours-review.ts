@@ -43,3 +43,61 @@ export function dailyHoursReviews(projects: Project[], assignments: WorkAssignme
   }
   return result;
 }
+
+export interface HoursCorrectionInput {
+  entryId: string;
+  reason: string;
+  /** Cómo se reparten las horas del registro entre las asignaciones del día (el total se mantiene). */
+  allocations: Array<{ assignmentId: string; hours: number }>;
+}
+
+/**
+ * Corrección del Jefe de planta (modo demostración; en una empresa real lo hace planta_correct_hours): reparte las
+ * horas de un registro entre las asignaciones del día, con motivo. El total no cambia y el costo se reparte en la
+ * misma proporción (la tarifa del registro no se recalcula). Queda en el historial de cada proyecto tocado.
+ */
+export function correctHours(
+  projects: Project[],
+  assignments: WorkAssignment[],
+  input: HoursCorrectionInput,
+  ctx: { actor: string; now: string; id: () => string },
+): Project[] {
+  const source = projects.find((p) => p.actualEntries.some((e) => e.id === input.entryId));
+  const entry = source?.actualEntries.find((e) => e.id === input.entryId);
+  if (!source || !entry?.labor) throw new Error("Registro de horas no encontrado.");
+  if (input.reason.trim().length < 3) throw new Error("Escribí el motivo de la corrección.");
+  const total = entry.labor.hours;
+  const parts = input.allocations.filter((a) => a.hours > 0);
+  const sum = parts.reduce((s, a) => s + a.hours, 0);
+  if (parts.length === 0 || Math.abs(sum - total) > 1e-6) throw new Error(`El reparto tiene que sumar ${total} h (suma ${Math.round(sum * 100) / 100} h).`);
+  const note = `Corregido por ${ctx.actor}: ${input.reason.trim()}`;
+  const added = new Map<string, Project["actualEntries"]>();
+  for (const a of parts) {
+    const asg = assignments.find((x) => x.id === a.assignmentId);
+    if (!asg) throw new Error("Asignación no encontrada.");
+    const share = a.hours / total;
+    const next = {
+      ...entry,
+      id: ctx.id(),
+      projectId: asg.projectId,
+      itemId: asg.itemId ?? entry.itemId,
+      rubro: asg.rubro,
+      assignmentId: asg.id,
+      amount: Math.round(entry.amount * share * 100) / 100,
+      labor: { ...entry.labor, hours: a.hours },
+      notes: [entry.notes, note].filter(Boolean).join(" · "),
+    };
+    added.set(asg.projectId, [...(added.get(asg.projectId) ?? []), next]);
+  }
+  return projects.map((p) => {
+    const keep = p.id === source.id ? p.actualEntries.filter((e) => e.id !== entry.id) : p.actualEntries;
+    const extra = added.get(p.id) ?? [];
+    if (p.id !== source.id && extra.length === 0) return p;
+    return {
+      ...p,
+      actualEntries: [...keep, ...extra],
+      updatedAt: ctx.now,
+      activity: [...p.activity, { id: ctx.id(), kind: "cost" as const, actor: ctx.actor, message: `Horas corregidas por el Jefe de planta (${total} h): ${input.reason.trim()}`, at: ctx.now }],
+    };
+  });
+}

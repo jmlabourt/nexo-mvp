@@ -34,7 +34,7 @@ export const openDeliveries = (deliveries: MaterialDelivery[], projectId: string
 
 /** Cantidad entregada y sin cerrar de un material en un proyecto. */
 function openDelivered(deliveries: MaterialDelivery[], projectId: string, materialId: string): number {
-  return r3(openDeliveries(deliveries, projectId).filter((d) => d.materialId === materialId).reduce((s, d) => s + d.quantity, 0));
+  return r3(openDeliveries(deliveries, projectId).filter((d) => d.materialId === materialId).reduce((s, d) => s + inProduction(d), 0));
 }
 
 export interface DeliveryOption {
@@ -136,6 +136,16 @@ export function deliverMaterial(
   };
 }
 
+/** Lo que sigue en producción de una entrega: liberado − consumido − desperdiciado − devuelto. */
+export function inProduction(d: Pick<MaterialDelivery, "quantity" | "consumed" | "waste" | "leftover">): number {
+  return r3(d.quantity - (d.consumed ?? 0) - (d.waste ?? 0) - (d.leftover ?? 0));
+}
+
+/** Balance de una entrega: liberado = consumido + desperdiciado + devuelto + en producción (siempre cierra). */
+export function deliveryBalance(d: MaterialDelivery): { released: number; consumed: number; waste: number; returned: number; inProduction: number } {
+  return { released: d.quantity, consumed: d.consumed ?? 0, waste: d.waste ?? 0, returned: d.leftover ?? 0, inProduction: inProduction(d) };
+}
+
 export interface CloseDeliveryInput {
   id: string;
   consumed: number;
@@ -165,8 +175,9 @@ export function closeDayError(project: Project, deliveries: MaterialDelivery[], 
     if (!d) return "Entrega no encontrada en este proyecto.";
     if (d.closedAt) return `La entrega de ${d.materialName} ya está cerrada.`;
     if (!(c.consumed >= 0) || !(c.waste >= 0) || !(c.leftover >= 0)) return "Las cantidades no pueden ser negativas.";
-    if (c.consumed + c.waste + c.leftover - d.quantity > EPS) {
-      return `De ${d.materialName} se entregaron ${formatQty(d.quantity, d.unit)}: consumo, desperdicio y sobrante no pueden sumar más.`;
+    const left = inProduction(d);
+    if (c.consumed + c.waste + c.leftover - left > EPS) {
+      return `De ${d.materialName} quedan ${formatQty(left, d.unit)} en producción: consumo, desperdicio y devuelto no pueden sumar más.`;
     }
   }
   if (input.units.length === 0 && input.deliveries.length === 0) return "No hay nada para cerrar.";
@@ -192,7 +203,7 @@ export function closeDay(
   stock: StockState,
   deliveries: MaterialDelivery[],
   input: CloseDayInput,
-  ctx: StockCtx & { today: string },
+  ctx: StockCtx & { today: string; carryOver?: boolean },
 ): CloseDayResult {
   const error = closeDayError(project, deliveries, input, ctx.today);
   if (error) throw new DomainError(error);
@@ -236,10 +247,13 @@ export function closeDay(
       change.movements.push(...left.movements);
     }
   }
-  const closedIds = new Set(input.deliveries.map((c) => c.id));
   const closed = deliveries.map((d) => {
     const c = input.deliveries.find((x) => x.id === d.id);
-    return closedIds.has(d.id) && c ? { ...d, closedAt: ctx.now, closeId, consumed: r3(c.consumed), waste: r3(c.waste), leftover: r3(c.leftover) } : d;
+    if (!c) return d;
+    const next = { ...d, consumed: r3((d.consumed ?? 0) + c.consumed), waste: r3((d.waste ?? 0) + c.waste), leftover: r3((d.leftover ?? 0) + c.leftover) };
+    // Sin arrastre (empresa real: así lo guarda la base), la entrega se cierra entera. Con arrastre (demo), lo no
+    // rendido sigue "en producción" y se rinde otro día.
+    return !ctx.carryOver || inProduction(next) <= EPS ? { ...next, closedAt: ctx.now, closeId } : next;
   });
   const items = project.items.map((i) => {
     const u = input.units.find((x) => x.itemId === i.id);
