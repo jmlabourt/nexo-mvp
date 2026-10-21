@@ -28,6 +28,7 @@ import { cn } from "@/lib/utils";
 import { APP_NAME, APP_SUBTITLE } from "@/lib/constants";
 import { useAppStore } from "@/store/use-app-store";
 import { DemoBanner } from "./demo-banner";
+import { LocalDemoBar, OpenLocalDemoButton } from "./local-demo";
 import { useAlertCount } from "@/store/selectors";
 import { Button } from "@/components/ui/button";
 import { ModeSwitch } from "./mode-switch";
@@ -121,6 +122,7 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
             </div>
           </div>
         </div>
+        <OpenLocalDemoButton />
         <form action="/auth/signout" method="post">
           <Button type="submit" variant="ghost" size="sm" className="w-full justify-start text-slate-500">
             <LogOut /> Cerrar sesión
@@ -187,6 +189,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { session } = useIdentity();
   const isDemo = useAppStore((s) => s.isDemo);
+  const demoLocal = useAppStore((s) => s.demoLocal);
   const realRole = useAppStore((s) => s.role);
   const [menuOpen, setMenuOpen] = useState(false);
   useTrackNavigation();
@@ -213,7 +216,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <div className="min-w-0 lg:pl-60">
         <Header onMenu={() => setMenuOpen(true)} />
         <main className="mx-auto max-w-7xl px-4 py-6 lg:px-8 lg:py-8">
-          {isDemo && (realRole === "owner" || realRole === "member") && <DemoBanner />}
+          <LocalDemoBar />
+          {isDemo && !demoLocal && (realRole === "owner" || realRole === "member") && <DemoBanner />}
           {allowed ? children : <NoAccess home={homeFor(session)} />}
         </main>
       </div>

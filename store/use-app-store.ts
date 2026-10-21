@@ -27,6 +27,7 @@ import type {
   StockLot,
   ValueCorrection,
   WorkAssignment,
+  Ledger,
 } from "@/types";
 import { DEFAULT_HOUR_RATES, DEFAULT_SETTINGS, DEMO_USERS } from "@/lib/constants";
 import { resolveSession, roleKeyOf, sessionRole, type RoleKey, type SessionKey } from "@/lib/permissions";
@@ -34,6 +35,9 @@ import { costSettingsError, hourRatesError } from "@/lib/cost-settings";
 import { buildSeed } from "@/lib/seed-data";
 import * as ops from "@/lib/project-operations";
 import * as circuit from "@/lib/circuit";
+import { EMPTY_LEDGER, normalizeLedger } from "@/lib/ledger";
+import { demoScenario } from "@/lib/demo/escenario";
+import { demoDataChanged, pickDemoData, readDemo, setDemoActive, writeDemo } from "./demo-local";
 import type { DeliveryChoice } from "@/lib/circuit";
 import * as people from "@/lib/operators";
 import { createId } from "@/lib/activity";
@@ -62,7 +66,7 @@ import {
 } from "@/lib/purchasing";
 import { todayISO } from "@/lib/formatting";
 import { hourRatesAt, laborCostAt, OVERTIME_SUBJECT, priceChange, priceChangeError, valueAt } from "@/lib/price-history";
-import { applyCorrection, correctionError, type CorrectionInput } from "@/lib/corrections";
+import { applyCorrection, correctionError, type CorrectionInput, type CorrectionReceipt } from "@/lib/corrections";
 import { assignmentError, type AssignmentInput } from "@/lib/plant";
 import { closeDay, closeDayPayload, deliverMaterial, deliveryPayload, type CloseDayInput, type DeliveryInput } from "@/lib/plant-materials";
 
@@ -96,6 +100,13 @@ interface AppState {
   corrections: ValueCorrection[];
   /** La empresa tiene los datos de demostración (solo entonces se ofrece "Restaurar datos demo"). */
   isDemo: boolean;
+  /**
+   * Modo demostración local: el estado es el escenario de prueba guardado en este navegador (store/demo-local.ts).
+   * No hay empresa cargada (organizationId null): nada se escribe en la base.
+   */
+  demoLocal: boolean;
+  /** Registros de la demo integral (facturas, cobros, BOM, contrato vigente…). Ver lib/ledger.ts. */
+  ledger: Ledger;
   /**
    * Sesión elegida (Gerencia, Administración, Compras, Jefe de planta, Operario). En la demo, un Administrativo mira
    * cualquiera de las cinco; en una empresa real, un Administrativo elige entre Gerencia y Administración.
@@ -236,6 +247,12 @@ interface AppState {
   correctValue: (projectId: string, input: CorrectionInput) => Promise<Result>;
   /** Reemplaza los datos de la empresa por la demo de Madera Sur. */
   resetDemo: () => Promise<Result>;
+  /** Abre el modo demostración local (con lo guardado en este navegador, o el escenario de prueba). */
+  enterLocalDemo: () => void;
+  /** Vuelve el modo demostración local al escenario de prueba. No toca ninguna empresa real. */
+  restoreLocalDemo: () => void;
+  /** Sale del modo demostración local; la app vuelve a cargar la empresa real. */
+  exitLocalDemo: () => void;
   /** Borra todos los datos de la empresa para empezar de cero. */
   clearData: () => Promise<Result>;
   dismissSyncError: () => void;
@@ -243,6 +260,22 @@ interface AppState {
 
 function errorMessage(e: unknown): string {
   return e instanceof Error ? e.message : "Ocurrió un error inesperado.";
+}
+
+/** Demostración local (sin empresa): el mismo registro de la corrección que haría la base, hecho en memoria. */
+function localCorrectionReceipt(project: Project, input: CorrectionInput, actor: string): CorrectionReceipt {
+  const line = project.budgetLines.find((l) => l.id === input.lineId);
+  const description = input.target === "sales_price" ? "Precio de venta" : (line?.description ?? "Línea");
+  const oldValue = input.target === "sales_price" ? project.salesPrice : input.field === "quantity" ? (line?.quantity ?? null) : (line?.unitCost ?? null);
+  return {
+    id: createId("cor"),
+    correctedAt: new Date().toISOString(),
+    correctedBy: actor,
+    oldValue,
+    description,
+    activityId: createId("act"),
+    message: `Corrección de ${description.toLowerCase()}: ${oldValue ?? "—"} → ${input.newValue}. Motivo: ${input.reason.trim()}`,
+  };
 }
 
 export interface ManualHoursInput {
@@ -254,6 +287,27 @@ export interface ManualHoursInput {
   hours: number;
   comment?: string;
   confirmHighHours?: boolean;
+}
+
+/**
+ * Escenario de prueba de la demostración local: los datos de la demo más sus registros (ledger), la configuración de
+ * costos y las tarifas por defecto. Es editable y se puede restaurar.
+ */
+export function demoFixture(): Record<string, unknown> {
+  const data = demoData();
+  const scenario = demoScenario({ projects: data.projects, stock: data.stock, orders: data.orders });
+  return {
+    ...data,
+    projects: scenario.projects,
+    dayExceptions: data.dayExceptions ?? [],
+    deliveries: [],
+    reviewedHoursKeys: [],
+    costSettings: { ...DEFAULT_COST_SETTINGS },
+    hourRates: DEFAULT_HOUR_RATES.map((r) => ({ ...r })),
+    priceHistory: [],
+    corrections: [],
+    ledger: scenario.ledger,
+  };
 }
 
 export function demoData(): WorkspaceData {
@@ -466,6 +520,8 @@ export const useAppStore = create<AppState>()(
         reviewedHoursKeys: [],
         dayExceptions: [],
         deliveries: [],
+        demoLocal: false,
+        ledger: EMPTY_LEDGER,
         costSettings: { ...DEFAULT_COST_SETTINGS },
         hourRates: DEFAULT_HOUR_RATES.map((r) => ({ ...r })),
         priceHistory: [],
@@ -525,6 +581,9 @@ export const useAppStore = create<AppState>()(
             priceHistory: ws.priceHistory,
             corrections: ws.corrections,
             isDemo: ws.isDemo,
+            // Una empresa real nunca usa los datos de la demostración local.
+            demoLocal: false,
+            ledger: EMPTY_LEDGER,
             resolvedAlertIds: ws.resolvedAlertIds,
             organizationId: ws.organizationId,
             organizationName: ws.organizationName,
@@ -1060,7 +1119,7 @@ export const useAppStore = create<AppState>()(
           try {
             // Primero se terminan de guardar los cambios pendientes; la corrección la registra el servidor.
             await queue;
-            const receipt = await remote.correctValue(createClient(), projectId, input);
+            const receipt = get().organizationId ? await remote.correctValue(createClient(), projectId, input) : localCorrectionReceipt(project, input, effectiveIdentity(get()).actor);
             const current = get().projects.find((p) => p.id === projectId) ?? project;
             const res = applyCorrection(current, input, receipt);
             // Ya está guardado en la base: se actualiza la memoria sin volver a escribir.
@@ -1071,8 +1130,37 @@ export const useAppStore = create<AppState>()(
           }
         },
 
-        resetDemo: () => replaceAll(demoData(), true),
+        resetDemo: () => (get().demoLocal ? (get().restoreLocalDemo(), Promise.resolve({ ok: true, value: undefined })) : replaceAll(demoData(), true)),
         clearData: () => replaceAll({ ...EMPTY_DATA, settings: { ...DEFAULT_SETTINGS } }, false),
+        enterLocalDemo: () => {
+          const saved = readDemo();
+          const fixture = demoFixture();
+          const data = saved ? { ...fixture, ...saved, ledger: normalizeLedger(saved.ledger as Ledger | undefined) } : fixture;
+          set({
+            ...(data as Partial<AppState>),
+            demoLocal: true,
+            isDemo: true,
+            organizationId: null,
+            organizationName: "Madera Sur (demostración)",
+            userId: null,
+            userName: "Usuario de demostración",
+            userEmail: "",
+            role: "owner",
+            syncStatus: "idle",
+            syncError: null,
+          });
+          setDemoActive(true);
+          if (!saved) writeDemo(pickDemoData(get() as unknown as Record<string, unknown>));
+        },
+        restoreLocalDemo: () => {
+          if (!get().demoLocal) return;
+          set({ ...(demoFixture() as Partial<AppState>), currentMode: "gerencia", actingOperatorId: null });
+          writeDemo(pickDemoData(get() as unknown as Record<string, unknown>));
+        },
+        exitLocalDemo: () => {
+          setDemoActive(false);
+          set({ demoLocal: false });
+        },
         dismissSyncError: () => { void refreshWorkspace().catch(() => undefined); },
       };
     },
@@ -1092,6 +1180,16 @@ export const useAppStore = create<AppState>()(
     },
   ),
 );
+
+// Modo demostración local: cada cambio de datos se guarda en este navegador (nunca en una empresa real).
+if (typeof window !== "undefined") {
+  useAppStore.subscribe((next, prev) => {
+    if (!next.demoLocal || !prev.demoLocal) return;
+    if (demoDataChanged(next as unknown as Record<string, unknown>, prev as unknown as Record<string, unknown>)) {
+      writeDemo(pickDemoData(next as unknown as Record<string, unknown>));
+    }
+  });
+}
 
 export function useProject(id: string): Project | undefined {
   return useAppStore((s) => s.projects.find((p) => p.id === id));

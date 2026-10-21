@@ -782,3 +782,169 @@ export interface CommercialRejection {
   date: string;
   reason: string;
 }
+
+// ─────────────────────────────────────────────────────────────
+// Registros de la demo integral (contratos del frontend). En el modo demostración se guardan en el navegador; la
+// persistencia real en la base es del equipo de backend (PENDIENTES_BACKEND.md). Todos los importes son sin IVA.
+// ─────────────────────────────────────────────────────────────
+
+/** Factura de venta emitida al cliente (la registra Gerencia). Facturado ≠ cobrado. */
+export interface SalesInvoice {
+  id: string;
+  projectId: string;
+  number: string;
+  /** Fecha de emisión: define el mes de facturación. */
+  date: string;
+  amount: number;
+  notes?: string;
+  createdBy: string;
+  createdAt: string;
+}
+
+/** Cobro real (fecha de ingreso). Sin factura = anticipo/seña; después se puede aplicar a una factura sin duplicarse. */
+export interface Collection {
+  id: string;
+  projectId: string;
+  /** Factura a la que se aplica; vacío = anticipo todavía sin factura. */
+  invoiceId?: string;
+  date: string;
+  amount: number;
+  notes?: string;
+  createdBy: string;
+  createdAt: string;
+}
+
+/** Factura de un proveedor (la registra Compras) y su pago (lo confirma Gerencia). Un pago no es ingreso ni costo nuevo. */
+export interface SupplierInvoice {
+  id: string;
+  orderId: string;
+  number: string;
+  date: string;
+  amount: number;
+  createdBy: string;
+  createdAt: string;
+  /** Pago confirmado por Gerencia. */
+  payment?: { date: string; amount: number; reference: string; by: string; at: string };
+}
+
+/** Cambio del monto contratado vigente (Administración, con motivo). El monto original aprobado no se pisa. */
+export interface ContractRevision {
+  id: string;
+  projectId: string;
+  previous: number;
+  next: number;
+  reason: string;
+  by: string;
+  at: string;
+}
+
+/** Un cobro previsto (seña, cuota o saldo). */
+export interface ScheduledPayment {
+  id: string;
+  label: string;
+  amount: number;
+  /** Fecha prevista de cobro. */
+  date: string;
+}
+
+/** Condiciones de pago pactadas en la cotización (se usan para el gasto financiero y lo previsto de facturar). */
+export interface PaymentTerms {
+  projectId: string;
+  /** Días después de la entrega en que paga el cliente (pago único). */
+  daysAfterDelivery: number;
+  /** Seña / cuotas con importe y fecha. Vacío = pago único del total a `daysAfterDelivery` de la entrega. */
+  schedule: ScheduledPayment[];
+}
+
+/** Línea de un BOM versionado. `budgetLineId` la vincula con la línea de materiales cotizada del mismo mueble. */
+export interface BomVersionLine {
+  id: string;
+  material: string;
+  materialId?: string;
+  spec?: string;
+  quantity: number;
+  unit: string;
+  budgetLineId?: string;
+}
+
+/** BOM de un mueble. Solo la versión publicada alimenta Compras y Planta; publicar otra no pisa lo anterior. */
+export interface BomVersion {
+  id: string;
+  projectId: string;
+  itemId: string;
+  version: number;
+  status: "draft" | "published";
+  lines: BomVersionLine[];
+  notes?: string;
+  createdBy: string;
+  createdAt: string;
+  publishedAt?: string;
+}
+
+/** Entrega real al cliente (la confirma el Jefe de planta). Distinta de la entrega interna de materiales. */
+export interface ClientHandover {
+  id: string;
+  projectId: string;
+  date: string;
+  by: string;
+  notes?: string;
+}
+
+/** Horas propias sin proyecto ("Trabajo interno"): no se imputan a ninguna OT. */
+export interface InternalHours {
+  id: string;
+  employeeId: string;
+  date: string;
+  hours: number;
+  task: string;
+  createdAt: string;
+}
+
+/** Rubro del catálogo de la empresa (Gerencia lo crea, renombra o desactiva; los demás lo eligen). */
+export interface RubroCatalogEntry {
+  id: string;
+  name: string;
+  active: boolean;
+}
+
+/** Tarifa con vigencia: por rubro, o excepción de una persona (la excepción prevalece). */
+export interface RateRecord {
+  id: string;
+  /** "rubro" + id del rubro, o "employee" + id del empleado. */
+  scope: "rubro" | "employee";
+  subjectId: string;
+  hourlyRate: number;
+  validFrom: string;
+  createdBy: string;
+  createdAt: string;
+}
+
+/** Cliente del directorio (alta y edición en la demo). */
+export interface ClientEntry extends ClientRecord {
+  createdAt: string;
+}
+
+/** Proveedor del directorio compartido (alta y edición en la demo). */
+export interface SupplierEntry extends SupplierRecord {
+  website?: string;
+  active: boolean;
+  createdAt: string;
+}
+
+/** Todos los registros nuevos de la demo integral, en un solo lugar. */
+export interface Ledger {
+  salesInvoices: SalesInvoice[];
+  collections: Collection[];
+  supplierInvoices: SupplierInvoice[];
+  contractRevisions: ContractRevision[];
+  paymentTerms: PaymentTerms[];
+  boms: BomVersion[];
+  handovers: ClientHandover[];
+  internalHours: InternalHours[];
+  rubroCatalog: RubroCatalogEntry[];
+  rates: RateRecord[];
+  clients: ClientEntry[];
+  suppliers: SupplierEntry[];
+  /** Tasa mensual de gasto financiero (%), editable por Gerencia. Interés simple, mes de 30 días. */
+  financialMonthlyRatePct: number;
+}

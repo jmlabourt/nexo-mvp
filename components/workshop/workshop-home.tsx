@@ -16,6 +16,7 @@ import { parseDecimal } from "@/lib/schemas";
 import { useAppStore } from "@/store/use-app-store";
 import { useIdentity } from "@/store/selectors";
 import { ModeSwitch } from "@/components/layout/mode-switch";
+import { LocalDemoBar } from "@/components/layout/local-demo";
 import { Button } from "@/components/ui/button";
 import { Input, Select } from "@/components/ui/input";
 
@@ -87,7 +88,8 @@ export function WorkshopHome() {
       )}
 
       {!isRealOperator && isDemo && (
-        <div className="mt-8 border-t border-slate-200 pt-4">
+        <div className="mt-8 space-y-3 border-t border-slate-200 pt-4">
+          <LocalDemoBar />
           <ModeSwitch />
         </div>
       )}
