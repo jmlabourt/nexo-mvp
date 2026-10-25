@@ -14,6 +14,8 @@ const eslintConfig = defineConfig([
     "next-env.d.ts",
     // Copia vieja de la calculadora subida a mano: no forma parte de la app.
     "arreglo-calculadora/**",
+    // Carpeta local de los videos demo (fuera de git).
+    "demo-video/**",
   ]),
 ]);
 

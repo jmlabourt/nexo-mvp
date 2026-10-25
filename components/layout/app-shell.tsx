@@ -38,6 +38,8 @@ import { useTrackNavigation } from "./back-button";
 import { breadcrumbTrail, type Crumb } from "@/lib/navigation";
 import { can, canAccess, homeFor, navFor, SESSION_LABELS, type NavIcon } from "@/lib/permissions";
 import { useIdentity } from "@/store/selectors";
+import { useDemoAlertCount, useDemoOt } from "@/components/demo/shell";
+import { MiDiaDemo } from "@/components/demo/operario/mi-dia";
 
 const ICONS: Record<NavIcon, LucideIcon> = {
   dashboard: LayoutDashboard,
@@ -69,15 +71,19 @@ function activeHref(pathname: string, hrefs: string[]): string | undefined {
 function useBreadcrumb(): Crumb[] {
   const pathname = usePathname();
   const projects = useAppStore((s) => s.projects);
-  return breadcrumbTrail(pathname, (id) => projects.find((p) => p.id === id)?.code);
+  const demoOt = useDemoOt();
+  return breadcrumbTrail(pathname, (id) => (demoOt ? demoOt(id) : projects.find((p) => p.id === id)?.code));
 }
 
 function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
   const { roleKey, session, actor } = useIdentity();
-  const count = useAlertCount(roleKey);
+  const realCount = useAlertCount(roleKey);
+  const demoCount = useDemoAlertCount(session);
+  const count = demoCount ?? realCount;
   const userEmail = useAppStore((s) => s.userEmail);
   const organizationName = useAppStore((s) => s.organizationName);
+  const demoLocalSide = useAppStore((s) => s.demoLocal);
 
   return (
     <div className="flex h-full flex-col">
@@ -122,6 +128,11 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
             </div>
           </div>
         </div>
+        {demoLocalSide && (
+          <Link href="/aclaraciones" onClick={onNavigate} className="block text-xs text-slate-500 hover:text-blue-700 hover:underline">
+            Aclaraciones del sistema
+          </Link>
+        )}
         <OpenLocalDemoButton />
         <form action="/auth/signout" method="post">
           <Button type="submit" variant="ghost" size="sm" className="w-full justify-start text-slate-500">
@@ -136,6 +147,7 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
 function Header({ onMenu }: { onMenu: () => void }) {
   const crumbs = useBreadcrumb();
   const { session } = useIdentity();
+  const demoLocal = useAppStore((s) => s.demoLocal);
   return (
     <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-slate-200 bg-white/95 px-4 backdrop-blur lg:px-8">
       <Button variant="ghost" size="icon" className="lg:hidden" onClick={onMenu} aria-label="Abrir menú">
@@ -155,10 +167,10 @@ function Header({ onMenu }: { onMenu: () => void }) {
           </span>
         ))}
       </nav>
-      {session === "gerencia" || session === "administracion" ? <GlobalSearch /> : <div className="flex-1" />}
+      {!demoLocal && (session === "gerencia" || session === "administracion") ? <GlobalSearch /> : <div className="flex-1" />}
       {can(session, "createProjects") && (
         <Button asChild className="hidden sm:inline-flex">
-          <Link href="/projects/new">
+          <Link href={demoLocal ? "/quotes?nuevo=1" : "/projects/new"}>
             <Plus /> Nuevo proyecto
           </Link>
         </Button>
@@ -194,7 +206,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [menuOpen, setMenuOpen] = useState(false);
   useTrackNavigation();
 
-  if (session === "operario") return <WorkshopHome />;
+  if (session === "operario") return demoLocal ? <MiDiaDemo /> : <WorkshopHome />;
   const allowed = canAccess(session, pathname);
 
   return (

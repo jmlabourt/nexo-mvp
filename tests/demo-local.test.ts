@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
-// Modo demostración local: guardado versionado en el navegador, un único estado compartido, restaurar y salir sin
-// tocar ninguna empresa real.
+// Modo demostración local (esquema 3): un único estado de dominio (lib/core) compartido por las cinco sesiones,
+// guardado versionado en el navegador, restaurar exacto y salir sin tocar ninguna empresa real.
 import { beforeEach, describe, expect, it } from "vitest";
 import { DEMO_ACTIVE_KEY, DEMO_DATA_KEY, DEMO_SCHEMA_VERSION, demoDataChanged, isDemoActive, pickDemoData, readDemo, writeDemo, type DemoStorage } from "@/store/demo-local";
 import { useAppStore } from "@/store/use-app-store";
-import type { Ledger } from "@/types";
+import { buildDemoWorld } from "@/lib/core/seed";
+import * as op from "@/lib/core/ops";
 
 const memory = (): DemoStorage & { map: Map<string, string> } => {
   const map = new Map<string, string>();
@@ -14,9 +15,9 @@ const memory = (): DemoStorage & { map: Map<string, string> } => {
 describe("almacenamiento de la demo (funciones puras)", () => {
   it("guarda con versión de esquema y descarta copias de otra versión o dañadas", () => {
     const st = memory();
-    expect(writeDemo({ projects: [] }, st, "2026-10-21T00:00:00Z")).toBe(true);
+    expect(writeDemo({ core: { schema: 3 } }, st, "2026-10-21T00:00:00Z")).toBe(true);
     expect(JSON.parse(st.map.get(DEMO_DATA_KEY)!).version).toBe(DEMO_SCHEMA_VERSION);
-    expect(readDemo(st)).toEqual({ projects: [] });
+    expect(readDemo(st)).toEqual({ core: { schema: 3 } });
     st.setItem(DEMO_DATA_KEY, JSON.stringify({ version: DEMO_SCHEMA_VERSION - 1, data: { projects: [1] } }));
     expect(readDemo(st)).toBeNull();
     st.setItem(DEMO_DATA_KEY, "{roto");
@@ -24,74 +25,66 @@ describe("almacenamiento de la demo (funciones puras)", () => {
     expect(readDemo(null)).toBeNull();
   });
 
-  it("solo guarda datos (nunca identidad ni sesión) y detecta cambios por referencia", () => {
-    const projects: unknown[] = [];
-    const state = { projects, userEmail: "persona@empresa.com", organizationId: "org", currentMode: "gerencia" };
-    expect(pickDemoData(state)).toEqual({ projects });
+  it("solo guarda el estado de la demo (nunca identidad ni sesión) y detecta cambios por referencia", () => {
+    const core = { schema: 3 };
+    const state = { core, projects: [], userEmail: "persona@empresa.com", organizationId: "org", currentMode: "gerencia" };
+    expect(pickDemoData(state)).toEqual({ core });
     expect(demoDataChanged({ ...state }, state)).toBe(false);
-    expect(demoDataChanged({ ...state, projects: [] }, state)).toBe(true);
+    expect(demoDataChanged({ ...state, core: { schema: 3 } }, state)).toBe(true);
   });
 });
 
 describe("modo demostración en la app", () => {
   beforeEach(() => {
     window.localStorage.clear();
-    useAppStore.setState({ demoLocal: false, organizationId: "org-real", projects: [], role: "compras", isDemo: false });
+    useAppStore.setState({ demoLocal: false, core: null, organizationId: "org-real", projects: [], role: "owner", isDemo: false, currentMode: "gerencia" });
   });
 
-  it("al abrirlo carga el escenario de prueba, sin empresa (nada va a la base) y lo guarda en el navegador", () => {
+  it("al abrirlo carga el escenario base, sin empresa (nada va a la base) y lo guarda en el navegador", () => {
     useAppStore.getState().enterLocalDemo();
     const s = useAppStore.getState();
     expect(s.demoLocal).toBe(true);
     expect(s.organizationId).toBeNull();
-    expect(s.role).toBe("owner");
-    expect(s.projects.length).toBeGreaterThanOrEqual(5);
-    expect(s.ledger.salesInvoices.length).toBeGreaterThan(0);
+    expect(s.core?.projects.length).toBe(11);
+    expect(s.core?.config.asOf).toBe("2026-10-20");
     expect(isDemoActive()).toBe(true);
     expect(window.localStorage.getItem(DEMO_ACTIVE_KEY)).toBe("1");
-    expect(readDemo()).not.toBeNull();
+    expect(readDemo()?.core).toBeTruthy();
   });
 
-  it("un cambio sigue ahí después de 'recargar' (volver a abrir la demo)", () => {
+  it("un cambio de una sesión se ve en las otras y sigue ahí después de recargar", () => {
     useAppStore.getState().enterLocalDemo();
-    const id = useAppStore.getState().projects.find((p) => p.status === "quotation")!.id;
-    expect(useAppStore.getState().updateProject(id, { name: "Proyecto editado en la demo" }).ok).toBe(true);
-    // Recarga: el estado en memoria se pierde y se vuelve a abrir desde el navegador.
-    useAppStore.setState({ demoLocal: false, projects: [] });
+    useAppStore.setState({ currentMode: "administracion" });
+    const r = useAppStore.getState().coreAct((w, ctx) => op.upsertClient(w, { name: "Cliente nuevo de prueba" }, ctx));
+    expect(r.ok).toBe(true);
+    useAppStore.setState({ currentMode: "gerencia" });
+    expect(useAppStore.getState().core!.clients.some((c) => c.name === "Cliente nuevo de prueba")).toBe(true);
+    useAppStore.setState({ demoLocal: false, core: null });
     useAppStore.getState().enterLocalDemo();
-    expect(useAppStore.getState().projects.find((p) => p.id === id)?.name).toBe("Proyecto editado en la demo");
+    expect(useAppStore.getState().core!.clients.some((c) => c.name === "Cliente nuevo de prueba")).toBe(true);
   });
 
-  it("restaurar vuelve al escenario inicial; salir apaga la demo", () => {
+  it("cada sesión hace solo lo suyo: Compras no aprueba cotizaciones", () => {
     useAppStore.getState().enterLocalDemo();
-    const id = useAppStore.getState().projects[0].id;
-    const original = useAppStore.getState().projects[0].name;
-    useAppStore.getState().updateProject(id, { name: "Cambio" });
+    useAppStore.setState({ currentMode: "compras" });
+    const r = useAppStore.getState().coreAct((w, ctx) => op.approveQuote(w, "ot-4309", ctx));
+    expect(r).toEqual({ ok: false, error: "Esta acción no corresponde a tu sesión." });
+  });
+
+  it("restaurar vuelve exactamente al escenario base; salir apaga la demo", () => {
+    useAppStore.getState().enterLocalDemo();
+    useAppStore.setState({ currentMode: "administracion" });
+    useAppStore.getState().coreAct((w, ctx) => op.upsertClient(w, { name: "Otro cliente" }, ctx));
     useAppStore.getState().restoreLocalDemo();
-    expect(useAppStore.getState().projects.find((p) => p.id === id)?.name).toBe(original);
+    expect(JSON.stringify(useAppStore.getState().core)).toBe(JSON.stringify(buildDemoWorld()));
     useAppStore.getState().exitLocalDemo();
     expect(useAppStore.getState().demoLocal).toBe(false);
+    expect(useAppStore.getState().core).toBeNull();
     expect(isDemoActive()).toBe(false);
   });
 
-  it("los registros nuevos (ledger) se guardan solo en la demo y respetan la sesión", () => {
-    const add = (l: Ledger) => ({ ...l, internalHours: [...l.internalHours, { id: "h1", employeeId: "e", date: "2026-10-21", hours: 2, task: "Orden", createdAt: "" }] });
-    expect(useAppStore.getState().recordLedger(["gerencia"], add)).toMatchObject({ ok: false, error: expect.stringMatching(/Pendiente de backend/) });
-    useAppStore.getState().enterLocalDemo();
-    useAppStore.setState({ currentMode: "operario" });
-    expect(useAppStore.getState().recordLedger(["gerencia"], add).ok).toBe(false);
-    useAppStore.setState({ currentMode: "gerencia" });
-    expect(useAppStore.getState().recordLedger(["gerencia"], add).ok).toBe(true);
-    useAppStore.setState({ demoLocal: false, ledger: { ...useAppStore.getState().ledger, internalHours: [] } });
-    useAppStore.getState().enterLocalDemo();
-    expect(useAppStore.getState().ledger.internalHours.map((h) => h.id)).toContain("h1");
-  });
-
-  it("una empresa real que carga nunca usa los datos de la demo", () => {
-    useAppStore.getState().enterLocalDemo();
-    const ws = { ...useAppStore.getState(), organizationId: "org-real", isDemo: false, corrections: [] } as unknown as Parameters<ReturnType<typeof useAppStore.getState>["loadWorkspace"]>[0];
-    useAppStore.getState().loadWorkspace(ws);
-    expect(useAppStore.getState().demoLocal).toBe(false);
-    expect(useAppStore.getState().ledger.salesInvoices).toEqual([]);
+  it("fuera de la demo las operaciones nuevas no hacen nada (pendiente de backend)", () => {
+    const r = useAppStore.getState().coreAct((w) => w);
+    expect(r.ok).toBe(false);
   });
 });

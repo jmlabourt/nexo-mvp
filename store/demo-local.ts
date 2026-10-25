@@ -9,7 +9,7 @@
 export const DEMO_DATA_KEY = "blerp-demo:datos";
 export const DEMO_ACTIVE_KEY = "blerp-demo:activa";
 /** Subir este número cuando cambie la forma de los datos guardados: una copia vieja se descarta y se restaura el fixture. */
-export const DEMO_SCHEMA_VERSION = 2;
+export const DEMO_SCHEMA_VERSION = 3;
 
 /** Lo que se guarda: los datos de la demo, sin identidad de usuario ni estado de sincronización. */
 export type DemoData = Record<string, unknown>;
@@ -90,25 +90,11 @@ export function clearDemo(storage: DemoStorage | null = browserStorage()): void 
   }
 }
 
-/** Claves del estado que forman los datos de la demo (todo lo demás es sesión, identidad o interfaz). */
-export const DEMO_DATA_FIELDS = [
-  "projects",
-  "assignments",
-  "orders",
-  "dayExceptions",
-  "deliveries",
-  "operators",
-  "stock",
-  "requests",
-  "settings",
-  "resolvedAlertIds",
-  "reviewedHoursKeys",
-  "costSettings",
-  "hourRates",
-  "priceHistory",
-  "corrections",
-  "ledger",
-] as const;
+/**
+ * Claves del estado que forman los datos de la demo (todo lo demás es sesión, identidad o interfaz). Desde el esquema 3
+ * es un único estado de dominio (lib/core): el mismo para las cinco sesiones.
+ */
+export const DEMO_DATA_FIELDS = ["core"] as const;
 
 /** Toma del estado solo los datos de la demo. */
 export function pickDemoData(state: Record<string, unknown>): DemoData {

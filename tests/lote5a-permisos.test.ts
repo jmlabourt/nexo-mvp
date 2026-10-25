@@ -28,24 +28,24 @@ describe("cada sesión ve exactamente sus pestañas (23 en total)", () => {
   it("Gerencia: 5", () => {
     expect(menu("gerencia")).toEqual(["Dashboard", "Proyectos", "Personal", "Stock", "Configuración"]);
   });
-  it("Administración / Comercial / Diseño: 7", () => {
-    expect(menu("administracion")).toEqual(["Dashboard", "Proyectos", "Cotizador", "Stock", "Clientes", "Proveedores", "Configuración"]);
+  it("Administración / Comercial / Diseño: 8 (con Registrar mis horas)", () => {
+    expect(menu("administracion")).toEqual(["Dashboard", "Proyectos", "Cotizador", "Stock", "Clientes", "Proveedores", "Configuración", "Registrar mis horas"]);
   });
-  it("Compras: 6", () => {
-    expect(menu("compras")).toEqual(["Dashboard", "Necesidades", "Órdenes de compra", "Stock", "Alertas", "Proveedores"]);
+  it("Compras: 7 («Por comprar» y Registrar mis horas)", () => {
+    expect(menu("compras")).toEqual(["Dashboard", "Por comprar", "Órdenes de compra", "Stock", "Alertas", "Proveedores", "Registrar mis horas"]);
   });
-  it("Jefe de planta: 4 (las asignaciones están dentro de Operarios)", () => {
-    expect(menu("jefe_planta")).toEqual(["Dashboard", "Proyectos", "Operarios", "Alertas"]);
+  it("Jefe de planta: 4, sin Dashboard (las asignaciones están dentro de Operarios)", () => {
+    expect(menu("jefe_planta")).toEqual(["Proyectos", "Operarios", "Alertas", "Registrar mis horas"]);
   });
   it("Operario: 1", () => {
     expect(menu("operario")).toEqual(["Mi día"]);
   });
-  it("total: 23 pestañas", () => {
-    expect(SESSION_KEYS.reduce((s, k) => s + navFor(k).length, 0)).toBe(23);
+  it("total: 25 pestañas (5 + 8 + 7 + 4 + 1)", () => {
+    expect(SESSION_KEYS.reduce((s, k) => s + navFor(k).length, 0)).toBe(25);
   });
   it("el inicio de cada sesión es su primera pestaña; el de un rol de la base, el de su primera sesión", () => {
-    expect(SESSION_KEYS.map(homeFor)).toEqual(["/dashboard", "/administracion", "/compras", "/planta", "/taller"]);
-    expect(ROLE_KEYS.map(homeFor)).toEqual(["/dashboard", "/compras", "/planta", "/taller"]);
+    expect(SESSION_KEYS.map(homeFor)).toEqual(["/dashboard", "/administracion", "/compras", "/planta/proyectos", "/taller"]);
+    expect(ROLE_KEYS.map(homeFor)).toEqual(["/dashboard", "/compras", "/planta/proyectos", "/taller"]);
   });
 });
 

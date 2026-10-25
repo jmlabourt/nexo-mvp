@@ -5,6 +5,7 @@ import { Choice } from "@/components/ui/choice";
 import { DEMO_USERS } from "@/lib/constants";
 import { homeFor, roleKeyOf, SESSION_KEYS, SESSION_LABELS, sessionsFor, type SessionKey } from "@/lib/permissions";
 import { useIdentity } from "@/store/selectors";
+import { DemoPerson } from "@/components/demo/shell";
 
 /**
  * Sesión con la que se trabaja.
@@ -19,6 +20,7 @@ export function ModeSwitch({ onSwitch }: { onSwitch?: () => void } = {}) {
   const { session } = useIdentity();
   const router = useRouter();
   const operatorName = useAppStore((s) => s.operators.find((o) => o.id === s.actingOperatorId)?.name);
+  const demoLocal = useAppStore((s) => s.demoLocal);
   const real = roleKeyOf(role);
   if (real !== "admin") return null;
   const options = isDemo ? SESSION_KEYS : sessionsFor(real);
@@ -45,7 +47,7 @@ export function ModeSwitch({ onSwitch }: { onSwitch?: () => void } = {}) {
         columns={2}
         options={options.map((k) => ({ value: k, label: SESSION_LABELS[k] }))}
       />
-      {isDemo && <p className="mt-1.5 text-xs text-slate-500">Usuario de ejemplo: {who[session]}.</p>}
+      {demoLocal ? <DemoPerson session={session} /> : isDemo && <p className="mt-1.5 text-xs text-slate-500">Usuario de ejemplo: {who[session]}.</p>}
     </div>
   );
 }

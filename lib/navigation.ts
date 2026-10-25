@@ -22,7 +22,7 @@ export const SECTION_LABELS: Record<string, string> = {
   clientes: "Clientes",
   proveedores: "Proveedores",
   compras: "Compras",
-  "compras/proyectos": "Necesidades",
+  "compras/proyectos": "Por comprar",
   "compras/ordenes": "Órdenes de compra",
   "compras/alertas": "Alertas",
   "compras/proveedores": "Proveedores",
@@ -32,6 +32,8 @@ export const SECTION_LABELS: Record<string, string> = {
   "planta/operarios": "Operarios",
   "planta/alertas": "Alertas",
   horas: "Mano de obra",
+  "mis-horas": "Registrar mis horas",
+  aclaraciones: "Aclaraciones del sistema",
   taller: "Mi día",
 };
 

@@ -157,12 +157,14 @@ export function useIdentity() {
   const userEmail = useAppStore((s) => s.userEmail);
   const actingOperatorId = useAppStore((s) => s.actingOperatorId);
   const userName = useAppStore((s) => s.userName);
+  const core = useAppStore((s) => s.core);
+  const demoLocal = useAppStore((s) => s.demoLocal);
   return useMemo(
     () => {
-      const id = effectiveIdentity({ role, currentMode, isDemo, operators, userId, userEmail, actingOperatorId, userName });
+      const id = effectiveIdentity({ role, currentMode, isDemo, operators, userId, userEmail, actingOperatorId, userName, core, demoLocal });
       return { ...id, isManager: isManager(id.role), isBuyer: isBuyer(id.role), realRole: role };
     },
-    [role, currentMode, isDemo, operators, userId, userEmail, actingOperatorId, userName],
+    [role, currentMode, isDemo, operators, userId, userEmail, actingOperatorId, userName, core, demoLocal],
   );
 }
 

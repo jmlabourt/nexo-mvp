@@ -72,6 +72,10 @@ import { hourRatesAt, laborCostAt, OVERTIME_SUBJECT, priceChange, priceChangeErr
 import { applyCorrection, correctionError, type CorrectionInput, type CorrectionReceipt } from "@/lib/corrections";
 import { assignmentError, type AssignmentInput } from "@/lib/plant";
 import { closeDay, closeDayPayload, deliverMaterial, deliveryPayload, type CloseDayInput, type DeliveryInput } from "@/lib/plant-materials";
+import type { CoreWorld, OpCtx } from "@/lib/core/types";
+import { buildDemoWorld } from "@/lib/core/seed";
+import { sessionPerson } from "@/lib/core/lookup";
+import { CoreError } from "@/lib/core/util";
 
 export type Result<T = undefined> = { ok: true; value: T } | { ok: false; error: string };
 
@@ -108,8 +112,13 @@ interface AppState {
    * No hay empresa cargada (organizationId null): nada se escribe en la base.
    */
   demoLocal: boolean;
-  /** Registros de la demo integral (facturas, cobros, BOM, contrato vigente…). Ver lib/ledger.ts. */
+  /** Registros de la demo integral anterior (esquema 2). La demo actual usa `core`. */
   ledger: Ledger;
+  /**
+   * Estado único del modo demostración (esquema 3, lib/core): catálogos, OTs, compras, stock por lote, planta, horas y
+   * dinero. Lo leen y escriben las cinco sesiones; se guarda en este navegador. null fuera de la demo.
+   */
+  core: CoreWorld | null;
   /**
    * Sesión elegida (Gerencia, Administración, Compras, Jefe de planta, Operario). En la demo, un Administrativo mira
    * cualquiera de las cinco; en una empresa real, un Administrativo elige entre Gerencia y Administración.
@@ -262,6 +271,11 @@ interface AppState {
    * `sessions` = sesiones que pueden hacerlo.
    */
   recordLedger: (sessions: SessionKey[], fn: (ledger: Ledger, ctx: LedgerCtx, state: AppState) => Ledger) => Result;
+  /**
+   * Demo: aplica una operación pura de lib/core/ops.ts con la sesión y la persona activas y la fecha de la demo.
+   * Devuelve el valor de la operación (si devuelve [valor, estado]) o el error de la regla de negocio.
+   */
+  coreAct: <T = undefined>(fn: (w: CoreWorld, ctx: OpCtx) => CoreWorld | [T, CoreWorld]) => Result<T | undefined>;
   /** Demo: el Jefe confirma que la jornada está bien (en una empresa real, planta_confirm_hours). */
   confirmHoursLocal: (key: string) => Result;
   /** Demo: el Jefe redistribuye horas con motivo (en una empresa real, planta_correct_hours). */
@@ -355,7 +369,7 @@ const EMPTY_DATA: WorkspaceData = {
  * (con su usuario de ejemplo; como Operario, el operario elegido).
  */
 export function effectiveIdentity(
-  s: Pick<AppState, "role" | "currentMode" | "isDemo" | "operators" | "userId" | "userEmail" | "actingOperatorId" | "userName">,
+  s: Pick<AppState, "role" | "currentMode" | "isDemo" | "operators" | "userId" | "userEmail" | "actingOperatorId" | "userName"> & Partial<Pick<AppState, "core" | "demoLocal">>,
 ): {
   role: AppRole;
   /** Rol de la base con el que se escribe. */
@@ -370,6 +384,13 @@ export function effectiveIdentity(
     return { role: "operator", roleKey: "operario", session: "operario", operator, actor: operator?.name ?? s.userName };
   }
   const real = roleKeyOf(s.role);
+  if (s.demoLocal && s.core && real === "admin") {
+    // Modo demostración: la persona es la de la sesión en Usuarios y permisos (o el operario elegido).
+    const view = s.currentMode ?? "gerencia";
+    const person = sessionPerson(s.core, view, s.actingOperatorId);
+    const role: AppRole = view === "operario" ? "operator" : view === "compras" || view === "jefe_planta" ? view : s.role;
+    return { role, roleKey: sessionRole(view), session: view, operator: undefined, actor: person?.name ?? s.userName };
+  }
   // Demo: un Administrativo mira cualquiera de las cinco sesiones. Empresa real: las de su rol (Gerencia / Administración).
   const view: SessionKey = real === "admin" && s.isDemo && s.currentMode ? s.currentMode : resolveSession(real, s.currentMode);
   if (view === "operario") {
@@ -535,6 +556,7 @@ export const useAppStore = create<AppState>()(
         deliveries: [],
         demoLocal: false,
         ledger: EMPTY_LEDGER,
+        core: null,
         costSettings: { ...DEFAULT_COST_SETTINGS },
         hourRates: DEFAULT_HOUR_RATES.map((r) => ({ ...r })),
         priceHistory: [],
@@ -597,6 +619,7 @@ export const useAppStore = create<AppState>()(
             // Una empresa real nunca usa los datos de la demostración local.
             demoLocal: false,
             ledger: EMPTY_LEDGER,
+            core: null,
             resolvedAlertIds: ws.resolvedAlertIds,
             organizationId: ws.organizationId,
             organizationName: ws.organizationName,
@@ -1157,14 +1180,18 @@ export const useAppStore = create<AppState>()(
         clearData: () => replaceAll({ ...EMPTY_DATA, settings: { ...DEFAULT_SETTINGS } }, false),
         enterLocalDemo: () => {
           const saved = readDemo();
-          const fixture = demoFixture();
-          const data = saved ? { ...fixture, ...saved, ledger: normalizeLedger(saved.ledger as Ledger | undefined) } : fixture;
+          const savedCore = saved?.core as CoreWorld | undefined;
+          const core = savedCore && savedCore.schema === 3 ? savedCore : buildDemoWorld();
           set({
-            ...(data as Partial<AppState>),
+            ...EMPTY_DATA,
+            dayExceptions: [],
+            deliveries: [],
+            ledger: EMPTY_LEDGER,
+            core,
             demoLocal: true,
             isDemo: true,
             organizationId: null,
-            organizationName: "Madera Sur (demostración)",
+            organizationName: core.config.companyName,
             userId: null,
             userName: "Usuario de demostración",
             userEmail: "",
@@ -1173,17 +1200,38 @@ export const useAppStore = create<AppState>()(
             syncError: null,
           });
           setDemoActive(true);
-          if (!saved) writeDemo(pickDemoData(get() as unknown as Record<string, unknown>));
+          if (!savedCore) writeDemo(pickDemoData(get() as unknown as Record<string, unknown>));
         },
         restoreLocalDemo: () => {
           if (!get().demoLocal) return;
-          set({ ...(demoFixture() as Partial<AppState>), currentMode: "gerencia", actingOperatorId: null });
+          set({ core: buildDemoWorld(), currentMode: "gerencia", actingOperatorId: null });
           writeDemo(pickDemoData(get() as unknown as Record<string, unknown>));
         },
         exitLocalDemo: () => {
           setDemoActive(false);
-          set({ demoLocal: false });
+          set({ demoLocal: false, core: null });
         },
+        coreAct: (fn) =>
+          run(() => {
+            const state = get();
+            const w = state.core;
+            if (!state.demoLocal || !w) throw new ops.DomainError("Disponible en el modo demostración: la base real todavía no guarda estos datos (pendiente de backend).");
+            const session = effectiveIdentity(state).session;
+            const person = sessionPerson(w, session, state.actingOperatorId);
+            const ctx: OpCtx = { session, actor: person?.name ?? state.userName, actorId: person?.id, now: new Date().toISOString(), today: w.config.asOf };
+            try {
+              const out = fn(w, ctx);
+              if (Array.isArray(out)) {
+                set({ core: out[1] });
+                return out[0];
+              }
+              set({ core: out });
+              return undefined;
+            } catch (e) {
+              if (e instanceof CoreError) throw new ops.DomainError(e.message);
+              throw e;
+            }
+          }),
         confirmHoursLocal: (key) =>
           run(() => {
             if (!get().demoLocal) throw new ops.DomainError("Solo en el modo demostración.");
@@ -1232,7 +1280,7 @@ export const useAppStore = create<AppState>()(
 // Modo demostración local: cada cambio de datos se guarda en este navegador (nunca en una empresa real).
 if (typeof window !== "undefined") {
   useAppStore.subscribe((next, prev) => {
-    if (next.ledger.rubroCatalog !== prev.ledger.rubroCatalog || next.demoLocal !== prev.demoLocal) setRubroNames(next.demoLocal ? next.ledger.rubroCatalog : []);
+    if (next.ledger.rubroCatalog !== prev.ledger.rubroCatalog || next.demoLocal !== prev.demoLocal) setRubroNames([]);
     if (!next.demoLocal || !prev.demoLocal) return;
     if (demoDataChanged(next as unknown as Record<string, unknown>, prev as unknown as Record<string, unknown>)) {
       writeDemo(pickDemoData(next as unknown as Record<string, unknown>));

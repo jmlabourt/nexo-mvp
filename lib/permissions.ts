@@ -102,7 +102,10 @@ export function resolveSession(role: RoleKey, wanted: string | null | undefined)
   return allowed.includes(wanted as SessionKey) ? (wanted as SessionKey) : allowed[0];
 }
 
-/** Exactamente las pestañas de cada sesión: 5 + 7 + 6 + 4 + 1 = 23. */
+/**
+ * Pestañas de cada sesión (decisiones del 24/10/2026): Gerencia 5 · Administración 8 · Compras 7 · Jefe de planta 4
+ * (sin Dashboard) · Operario 1 (Mi día). "Registrar mis horas" es para todo el personal que no es operario.
+ */
 const NAV: Record<SessionKey, NavItem[]> = {
   gerencia: [
     { href: "/dashboard", label: "Dashboard", icon: "dashboard" },
@@ -119,33 +122,35 @@ const NAV: Record<SessionKey, NavItem[]> = {
     { href: "/clientes", label: "Clientes", icon: "clients" },
     { href: "/proveedores", label: "Proveedores", icon: "suppliers" },
     { href: "/settings", label: "Configuración", icon: "settings" },
+    { href: "/mis-horas", label: "Registrar mis horas", icon: "hours" },
   ],
   compras: [
     { href: "/compras", label: "Dashboard", icon: "dashboard" },
-    { href: "/compras/proyectos", label: "Necesidades", icon: "needs" },
+    { href: "/compras/proyectos", label: "Por comprar", icon: "needs" },
     { href: "/compras/ordenes", label: "Órdenes de compra", icon: "orders" },
     { href: "/compras/stock", label: "Stock", icon: "stock" },
     { href: "/compras/alertas", label: "Alertas", icon: "alerts" },
     { href: "/compras/proveedores", label: "Proveedores", icon: "suppliers" },
+    { href: "/mis-horas", label: "Registrar mis horas", icon: "hours" },
   ],
   jefe_planta: [
-    { href: "/planta", label: "Dashboard", icon: "dashboard" },
     { href: "/planta/proyectos", label: "Proyectos", icon: "projects" },
     { href: "/planta/operarios", label: "Operarios", icon: "operators" },
     { href: "/planta/alertas", label: "Alertas", icon: "alerts" },
+    { href: "/mis-horas", label: "Registrar mis horas", icon: "hours" },
   ],
   operario: [{ href: "/taller", label: "Mi día", icon: "day" }],
 };
 
 /**
- * Pantallas a las que se llega desde el contenido (no son pestañas): el detalle de un proyecto, las alertas y la mano
- * de obra completas de Gerencia, el alta de un proyecto en Administración.
+ * Pantallas a las que se llega desde el contenido (no son pestañas): las alertas y la mano de obra completas de
+ * Gerencia y sus horas propias (opcionales, desde Personal).
  */
 const DRILL_DOWN: Record<SessionKey, string[]> = {
-  gerencia: ["/alerts", "/horas"],
-  administracion: [],
-  compras: [],
-  jefe_planta: [],
+  gerencia: ["/alerts", "/horas", "/mis-horas", "/aclaraciones"],
+  administracion: ["/aclaraciones"],
+  compras: ["/aclaraciones"],
+  jefe_planta: ["/aclaraciones"],
   operario: [],
 };
 
@@ -159,6 +164,7 @@ export function navFor(session: SessionKey): NavItem[] {
  */
 export function projectHref(session: SessionKey | RoleKey, projectId: string, tab?: string): string {
   if (session === "compras") return `/compras/proyectos?p=${encodeURIComponent(projectId)}`;
+  if (session === "jefe_planta") return `/planta/proyectos?p=${encodeURIComponent(projectId)}`;
   return `/projects/${projectId}${tab ? `?tab=${tab}` : ""}`;
 }
 
