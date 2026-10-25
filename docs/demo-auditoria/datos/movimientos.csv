@@ -1,0 +1,170 @@
+id,lote,material,fecha,cantidad,desde,hacia,tipo,registro
+mov-0002,lote-0001,Melamina blanca 18 mm,2026-06-01,5,supplier,free,opening,inventario-inicial
+mov-0004,lote-0003,Tornillo 4×40 (caja de 100),2026-06-01,20,supplier,free,opening,inventario-inicial
+mov-0006,lote-0005,Laca nitro,2026-06-01,6,supplier,free,opening,inventario-inicial
+mov-0008,lote-0007,Tapacanto PVC 22 mm,2026-06-01,200,supplier,free,opening,inventario-inicial
+mov-0010,lote-0009,Bisagra cazoleta,2026-06-01,40,supplier,free,opening,inventario-inicial
+mov-0039,lote-0037,Placa MDF 18 mm,2026-06-15,12,supplier,asg:ot-4301,receipt,rec-0038
+mov-0042,lote-0040,Enchapado roble 18 mm,2026-06-15,3,supplier,asg:ot-4301,receipt,rec-0041
+mov-0046,lote-0044,Caño estructural 40×40,2026-06-17,2,supplier,asg:ot-4301,receipt,rec-0045
+mov-0049,lote-0047,Laca nitro,2026-06-15,6,supplier,asg:ot-4301,receipt,rec-0048
+mov-0054,lote-0007,Tapacanto PVC 22 mm,2026-06-15,80,free,asg:ot-4301,assign,asig-0053
+mov-0057,lote-0005,Laca nitro,2026-06-15,4,free,asg:ot-4301,assign,asig-0056
+mov-0060,lote-0037,Placa MDF 18 mm,2026-06-15,12,asg:ot-4301,prod:ent-0059,release,ent-0059
+mov-0062,lote-0007,Tapacanto PVC 22 mm,2026-06-15,80,asg:ot-4301,prod:ent-0061,release,ent-0061
+mov-0064,lote-0007,Tapacanto PVC 22 mm,2026-06-26,74,prod:ent-0061,cons:ot-4301,consume,rend-0063
+mov-0065,lote-0007,Tapacanto PVC 22 mm,2026-06-26,6,prod:ent-0061,waste:ot-4301,waste,rend-0063
+mov-0067,lote-0037,Placa MDF 18 mm,2026-06-26,9.5,prod:ent-0059,cons:ot-4301,consume,rend-0066
+mov-0068,lote-0037,Placa MDF 18 mm,2026-06-26,0.5,prod:ent-0059,waste:ot-4301,waste,rend-0066
+mov-0069,lote-0037,Placa MDF 18 mm,2026-06-26,2,prod:ent-0059,free,return,rend-0066
+mov-0071,lote-0040,Enchapado roble 18 mm,2026-06-29,3,asg:ot-4301,prod:ent-0070,release,ent-0070
+mov-0073,lote-0040,Enchapado roble 18 mm,2026-07-03,2.75,prod:ent-0070,cons:ot-4301,consume,rend-0072
+mov-0074,lote-0040,Enchapado roble 18 mm,2026-07-03,0.25,prod:ent-0070,waste:ot-4301,waste,rend-0072
+mov-0076,lote-0044,Caño estructural 40×40,2026-06-29,2,asg:ot-4301,prod:ent-0075,release,ent-0075
+mov-0078,lote-0044,Caño estructural 40×40,2026-07-01,1.8,prod:ent-0075,cons:ot-4301,consume,rend-0077
+mov-0079,lote-0044,Caño estructural 40×40,2026-07-01,0.2,prod:ent-0075,waste:ot-4301,waste,rend-0077
+mov-0081,lote-0005,Laca nitro,2026-07-06,4,asg:ot-4301,prod:ent-0080,release,ent-0080
+mov-0082,lote-0047,Laca nitro,2026-07-06,6,asg:ot-4301,prod:ent-0080,release,ent-0080
+mov-0084,lote-0005,Laca nitro,2026-07-09,4,prod:ent-0080,cons:ot-4301,consume,rend-0083
+mov-0085,lote-0047,Laca nitro,2026-07-09,5,prod:ent-0080,cons:ot-4301,consume,rend-0083
+mov-0086,lote-0047,Laca nitro,2026-07-09,0.5,prod:ent-0080,waste:ot-4301,waste,rend-0083
+mov-0087,lote-0047,Laca nitro,2026-07-09,0.5,prod:ent-0080,free,return,rend-0083
+mov-0153,lote-0151,Placa MDF 18 mm,2026-07-06,6,supplier,asg:ot-4302,receipt,rec-0152
+mov-0156,lote-0154,Multilaminado fenólico 18 mm,2026-07-06,2,supplier,asg:ot-4302,receipt,rec-0155
+mov-0160,lote-0158,Caño estructural 40×40,2026-07-10,4,supplier,asg:ot-4302,receipt,rec-0159
+mov-0163,lote-0161,Planchuela 1½″ × 3/16″,2026-07-10,2,supplier,asg:ot-4302,receipt,rec-0162
+mov-0166,lote-0164,Caño estructural 40×40,2026-07-10,6,supplier,asg:ot-4302,receipt,rec-0165
+mov-0169,lote-0167,Espuma alta densidad 5 cm,2026-08-05,2,supplier,asg:ot-4302,receipt,rec-0168
+mov-0172,lote-0170,Tela tapicería antimanchas,2026-08-05,6,supplier,asg:ot-4302,receipt,rec-0171
+mov-0175,lote-0173,Pintura poliuretánica,2026-08-10,6,supplier,asg:ot-4302,receipt,rec-0174
+mov-0178,lote-0176,Pintura poliuretánica,2026-08-10,4,supplier,asg:ot-4302,receipt,rec-0177
+mov-0184,lote-0151,Placa MDF 18 mm,2026-07-06,6,asg:ot-4302,prod:ent-0183,release,ent-0183
+mov-0186,lote-0151,Placa MDF 18 mm,2026-07-15,5.5,prod:ent-0183,cons:ot-4302,consume,rend-0185
+mov-0187,lote-0151,Placa MDF 18 mm,2026-07-15,0.5,prod:ent-0183,waste:ot-4302,waste,rend-0185
+mov-0189,lote-0154,Multilaminado fenólico 18 mm,2026-07-06,2,asg:ot-4302,prod:ent-0188,release,ent-0188
+mov-0191,lote-0154,Multilaminado fenólico 18 mm,2026-07-15,2,prod:ent-0188,cons:ot-4302,consume,rend-0190
+mov-0193,lote-0158,Caño estructural 40×40,2026-07-13,4,asg:ot-4302,prod:ent-0192,release,ent-0192
+mov-0195,lote-0158,Caño estructural 40×40,2026-07-22,3.6,prod:ent-0192,cons:ot-4302,consume,rend-0194
+mov-0196,lote-0158,Caño estructural 40×40,2026-07-22,0.4,prod:ent-0192,waste:ot-4302,waste,rend-0194
+mov-0198,lote-0161,Planchuela 1½″ × 3/16″,2026-07-13,2,asg:ot-4302,prod:ent-0197,release,ent-0197
+mov-0200,lote-0161,Planchuela 1½″ × 3/16″,2026-07-22,2,prod:ent-0197,cons:ot-4302,consume,rend-0199
+mov-0202,lote-0164,Caño estructural 40×40,2026-07-23,6,asg:ot-4302,prod:ent-0201,release,ent-0201
+mov-0204,lote-0164,Caño estructural 40×40,2026-08-05,5.5,prod:ent-0201,cons:ot-4302,consume,rend-0203
+mov-0205,lote-0164,Caño estructural 40×40,2026-08-05,0.5,prod:ent-0201,waste:ot-4302,waste,rend-0203
+mov-0207,lote-0167,Espuma alta densidad 5 cm,2026-08-10,2,asg:ot-4302,prod:ent-0206,release,ent-0206
+mov-0209,lote-0167,Espuma alta densidad 5 cm,2026-08-13,1.75,prod:ent-0206,cons:ot-4302,consume,rend-0208
+mov-0210,lote-0167,Espuma alta densidad 5 cm,2026-08-13,0.25,prod:ent-0206,waste:ot-4302,waste,rend-0208
+mov-0212,lote-0170,Tela tapicería antimanchas,2026-08-10,6,asg:ot-4302,prod:ent-0211,release,ent-0211
+mov-0214,lote-0170,Tela tapicería antimanchas,2026-08-13,5.5,prod:ent-0211,cons:ot-4302,consume,rend-0213
+mov-0215,lote-0170,Tela tapicería antimanchas,2026-08-13,0.5,prod:ent-0211,waste:ot-4302,waste,rend-0213
+mov-0217,lote-0173,Pintura poliuretánica,2026-08-17,6,asg:ot-4302,prod:ent-0216,release,ent-0216
+mov-0219,lote-0173,Pintura poliuretánica,2026-08-18,5.5,prod:ent-0216,cons:ot-4302,consume,rend-0218
+mov-0220,lote-0173,Pintura poliuretánica,2026-08-18,0.5,prod:ent-0216,waste:ot-4302,waste,rend-0218
+mov-0222,lote-0176,Pintura poliuretánica,2026-08-19,4,asg:ot-4302,prod:ent-0221,release,ent-0221
+mov-0224,lote-0176,Pintura poliuretánica,2026-08-20,4,prod:ent-0221,cons:ot-4302,consume,rend-0223
+mov-0293,lote-0291,Melamina blanca 18 mm,2026-08-17,15,supplier,asg:ot-4303,receipt,rec-0292
+mov-0297,lote-0295,Caño estructural 40×40,2026-08-14,8,supplier,asg:ot-4303,receipt,rec-0296
+mov-0300,lote-0298,Pintura poliuretánica,2026-09-10,5,supplier,asg:ot-4303,receipt,rec-0299
+mov-0304,lote-0001,Melamina blanca 18 mm,2026-08-17,5,free,asg:ot-4303,assign,asig-0303
+mov-0307,lote-0007,Tapacanto PVC 22 mm,2026-08-17,60,free,asg:ot-4303,assign,asig-0306
+mov-0310,lote-0009,Bisagra cazoleta,2026-08-24,16,free,asg:ot-4303,assign,asig-0309
+mov-0313,lote-0003,Tornillo 4×40 (caja de 100),2026-10-05,6,free,asg:ot-4303,assign,asig-0312
+mov-0316,lote-0001,Melamina blanca 18 mm,2026-08-17,5,asg:ot-4303,prod:ent-0315,release,ent-0315
+mov-0317,lote-0291,Melamina blanca 18 mm,2026-08-17,7,asg:ot-4303,prod:ent-0315,release,ent-0315
+mov-0319,lote-0001,Melamina blanca 18 mm,2026-09-04,5,prod:ent-0315,cons:ot-4303,consume,rend-0318
+mov-0320,lote-0291,Melamina blanca 18 mm,2026-09-04,6,prod:ent-0315,cons:ot-4303,consume,rend-0318
+mov-0321,lote-0291,Melamina blanca 18 mm,2026-09-04,1,prod:ent-0315,waste:ot-4303,waste,rend-0318
+mov-0323,lote-0007,Tapacanto PVC 22 mm,2026-08-17,60,asg:ot-4303,prod:ent-0322,release,ent-0322
+mov-0325,lote-0007,Tapacanto PVC 22 mm,2026-09-04,56,prod:ent-0322,cons:ot-4303,consume,rend-0324
+mov-0326,lote-0007,Tapacanto PVC 22 mm,2026-09-04,4,prod:ent-0322,waste:ot-4303,waste,rend-0324
+mov-0328,lote-0295,Caño estructural 40×40,2026-08-17,8,asg:ot-4303,prod:ent-0327,release,ent-0327
+mov-0330,lote-0295,Caño estructural 40×40,2026-08-28,7.5,prod:ent-0327,cons:ot-4303,consume,rend-0329
+mov-0331,lote-0295,Caño estructural 40×40,2026-08-28,0.5,prod:ent-0327,waste:ot-4303,waste,rend-0329
+mov-0333,lote-0291,Melamina blanca 18 mm,2026-08-24,8,asg:ot-4303,prod:ent-0332,release,ent-0332
+mov-0335,lote-0291,Melamina blanca 18 mm,2026-09-04,6,prod:ent-0332,cons:ot-4303,consume,rend-0334
+mov-0336,lote-0291,Melamina blanca 18 mm,2026-09-04,0.5,prod:ent-0332,waste:ot-4303,waste,rend-0334
+mov-0338,lote-0009,Bisagra cazoleta,2026-08-24,16,asg:ot-4303,prod:ent-0337,release,ent-0337
+mov-0340,lote-0009,Bisagra cazoleta,2026-09-04,16,prod:ent-0337,cons:ot-4303,consume,rend-0339
+mov-0342,lote-0298,Pintura poliuretánica,2026-09-14,5,asg:ot-4303,prod:ent-0341,release,ent-0341
+mov-0344,lote-0298,Pintura poliuretánica,2026-09-22,4.5,prod:ent-0341,cons:ot-4303,consume,rend-0343
+mov-0345,lote-0298,Pintura poliuretánica,2026-09-22,0.25,prod:ent-0341,waste:ot-4303,waste,rend-0343
+mov-0346,lote-0298,Pintura poliuretánica,2026-09-22,0.25,prod:ent-0341,free,return,rend-0343
+mov-0348,lote-0003,Tornillo 4×40 (caja de 100),2026-10-05,4,asg:ot-4303,prod:ent-0347,release,ent-0347
+mov-0350,lote-0003,Tornillo 4×40 (caja de 100),2026-10-09,4,prod:ent-0347,cons:ot-4303,consume,rend-0349
+mov-0426,lote-0424,Placa MDF 18 mm,2026-08-24,6,supplier,asg:ot-4304,receipt,rec-0425
+mov-0429,lote-0427,Enchapado roble 18 mm,2026-08-24,2,supplier,asg:ot-4304,receipt,rec-0428
+mov-0432,lote-0430,Placa MDF 18 mm,2026-08-24,8,supplier,asg:ot-4304,receipt,rec-0431
+mov-0436,lote-0005,Laca nitro,2026-09-21,2,free,asg:ot-4304,assign,asig-0435
+mov-0437,lote-0047,Laca nitro,2026-09-21,0.5,free,asg:ot-4304,assign,asig-0435
+mov-0443,lote-0441,Laca nitro,2026-09-21,5,supplier,asg:ot-4304,receipt,rec-0442
+mov-0445,lote-0424,Placa MDF 18 mm,2026-08-24,6,asg:ot-4304,prod:ent-0444,release,ent-0444
+mov-0447,lote-0424,Placa MDF 18 mm,2026-09-04,5.5,prod:ent-0444,cons:ot-4304,consume,rend-0446
+mov-0448,lote-0424,Placa MDF 18 mm,2026-09-04,0.5,prod:ent-0444,waste:ot-4304,waste,rend-0446
+mov-0450,lote-0427,Enchapado roble 18 mm,2026-08-24,2,asg:ot-4304,prod:ent-0449,release,ent-0449
+mov-0452,lote-0427,Enchapado roble 18 mm,2026-09-04,2,prod:ent-0449,cons:ot-4304,consume,rend-0451
+mov-0454,lote-0430,Placa MDF 18 mm,2026-09-07,8,asg:ot-4304,prod:ent-0453,release,ent-0453
+mov-0456,lote-0430,Placa MDF 18 mm,2026-09-18,5.5,prod:ent-0453,cons:ot-4304,consume,rend-0455
+mov-0457,lote-0430,Placa MDF 18 mm,2026-09-18,0.5,prod:ent-0453,waste:ot-4304,waste,rend-0455
+mov-0458,lote-0430,Placa MDF 18 mm,2026-09-18,2,prod:ent-0453,free,return,rend-0455
+mov-0460,lote-0005,Laca nitro,2026-09-21,2,asg:ot-4304,prod:ent-0459,release,ent-0459
+mov-0461,lote-0047,Laca nitro,2026-09-21,0.5,asg:ot-4304,prod:ent-0459,release,ent-0459
+mov-0462,lote-0441,Laca nitro,2026-09-21,1,asg:ot-4304,prod:ent-0459,release,ent-0459
+mov-0464,lote-0005,Laca nitro,2026-09-25,2,prod:ent-0459,cons:ot-4304,consume,rend-0463
+mov-0465,lote-0047,Laca nitro,2026-09-25,0.5,prod:ent-0459,cons:ot-4304,consume,rend-0463
+mov-0466,lote-0441,Laca nitro,2026-09-25,0.75,prod:ent-0459,cons:ot-4304,consume,rend-0463
+mov-0467,lote-0441,Laca nitro,2026-09-25,0.25,prod:ent-0459,waste:ot-4304,waste,rend-0463
+mov-0469,lote-0441,Laca nitro,2026-09-23,4,asg:ot-4304,prod:ent-0468,release,ent-0468
+mov-0471,lote-0441,Laca nitro,2026-09-25,3.75,prod:ent-0468,cons:ot-4304,consume,rend-0470
+mov-0472,lote-0441,Laca nitro,2026-09-25,0.25,prod:ent-0468,waste:ot-4304,waste,rend-0470
+mov-0537,lote-0535,Enchapado roble 18 mm,2026-08-31,3,supplier,asg:ot-4305,receipt,rec-0536
+mov-0540,lote-0538,Placa MDF 18 mm,2026-08-31,3,supplier,asg:ot-4305,receipt,rec-0539
+mov-0543,lote-0541,Melamina blanca 18 mm,2026-08-31,6,supplier,asg:ot-4305,receipt,rec-0542
+mov-0547,lote-0545,Corredera telescópica 45 cm,2026-09-04,8,supplier,asg:ot-4305,receipt,rec-0546
+mov-0550,lote-0548,Caño estructural 40×40,2026-09-14,3,supplier,asg:ot-4305,receipt,rec-0549
+mov-0557,lote-0555,Laca nitro,2026-10-08,3,supplier,asg:ot-4305,receipt,rec-0556
+mov-0559,lote-0535,Enchapado roble 18 mm,2026-09-07,3,asg:ot-4305,prod:ent-0558,release,ent-0558
+mov-0561,lote-0535,Enchapado roble 18 mm,2026-10-02,2.5,prod:ent-0558,cons:ot-4305,consume,rend-0560
+mov-0562,lote-0535,Enchapado roble 18 mm,2026-10-02,0.25,prod:ent-0558,waste:ot-4305,waste,rend-0560
+mov-0564,lote-0538,Placa MDF 18 mm,2026-09-07,3,asg:ot-4305,prod:ent-0563,release,ent-0563
+mov-0566,lote-0538,Placa MDF 18 mm,2026-10-02,2.5,prod:ent-0563,cons:ot-4305,consume,rend-0565
+mov-0567,lote-0538,Placa MDF 18 mm,2026-10-02,0.5,prod:ent-0563,waste:ot-4305,waste,rend-0565
+mov-0569,lote-0541,Melamina blanca 18 mm,2026-09-21,6,asg:ot-4305,prod:ent-0568,release,ent-0568
+mov-0571,lote-0541,Melamina blanca 18 mm,2026-10-09,3,prod:ent-0568,cons:ot-4305,consume,rend-0570
+mov-0572,lote-0541,Melamina blanca 18 mm,2026-10-09,0.25,prod:ent-0568,waste:ot-4305,waste,rend-0570
+mov-0574,lote-0548,Caño estructural 40×40,2026-09-14,3,asg:ot-4305,prod:ent-0573,release,ent-0573
+mov-0576,lote-0548,Caño estructural 40×40,2026-09-25,2.75,prod:ent-0573,cons:ot-4305,consume,rend-0575
+mov-0577,lote-0548,Caño estructural 40×40,2026-09-25,0.25,prod:ent-0573,waste:ot-4305,waste,rend-0575
+mov-0579,lote-0545,Corredera telescópica 45 cm,2026-10-13,8,asg:ot-4305,prod:ent-0578,release,ent-0578
+mov-0581,lote-0545,Corredera telescópica 45 cm,2026-10-16,4,prod:ent-0578,cons:ot-4305,consume,rend-0580
+mov-0583,lote-0555,Laca nitro,2026-10-15,1.5,asg:ot-4305,prod:ent-0582,release,ent-0582
+mov-0655,lote-0653,Espuma alta densidad 5 cm,2026-10-08,1,supplier,asg:ot-4305,receipt,rec-0654
+mov-0658,lote-0656,Tela tapicería antimanchas,2026-10-08,4,supplier,asg:ot-4305,receipt,rec-0657
+mov-0693,lote-0037,Placa MDF 18 mm,2026-09-22,2,free,asg:ot-4306,assign,asig-0692
+mov-0697,lote-0007,Tapacanto PVC 22 mm,2026-09-22,30,free,asg:ot-4306,assign,asig-0696
+mov-0701,lote-0699,Caño estructural 40×40,2026-09-25,10,supplier,asg:ot-4306,receipt,rec-0700
+mov-0704,lote-0702,Caño estructural 40×40,2026-09-25,4,supplier,asg:ot-4306,receipt,rec-0703
+mov-0707,lote-0705,Espuma alta densidad 5 cm,2026-09-26,3,supplier,asg:ot-4306,receipt,rec-0706
+mov-0710,lote-0708,Tela tapicería antimanchas,2026-09-26,9,supplier,asg:ot-4306,receipt,rec-0709
+mov-0754,lote-0752,Multilaminado fenólico 18 mm,2026-10-13,6,supplier,asg:ot-4306,receipt,rec-0753
+mov-0755,lote-0752,Multilaminado fenólico 18 mm,2026-10-13,6,asg:ot-4306,supplier,receipt_reversal,rec-0753
+mov-0759,lote-0757,Multilaminado fenólico 18 mm,2026-10-13,4,supplier,asg:ot-4306,receipt,rec-0758
+mov-0765,lote-0037,Placa MDF 18 mm,2026-10-01,2,asg:ot-4306,prod:ent-0764,release,ent-0764
+mov-0767,lote-0037,Placa MDF 18 mm,2026-10-02,1.75,prod:ent-0764,cons:ot-4306,consume,rend-0766
+mov-0768,lote-0037,Placa MDF 18 mm,2026-10-02,0.25,prod:ent-0764,waste:ot-4306,waste,rend-0766
+mov-0770,lote-0007,Tapacanto PVC 22 mm,2026-10-05,30,asg:ot-4306,prod:ent-0769,release,ent-0769
+mov-0772,lote-0007,Tapacanto PVC 22 mm,2026-10-09,18,prod:ent-0769,cons:ot-4306,consume,rend-0771
+mov-0773,lote-0007,Tapacanto PVC 22 mm,2026-10-09,2,prod:ent-0769,waste:ot-4306,waste,rend-0771
+mov-0775,lote-0699,Caño estructural 40×40,2026-09-28,10,asg:ot-4306,prod:ent-0774,release,ent-0774
+mov-0777,lote-0699,Caño estructural 40×40,2026-10-09,9,prod:ent-0774,cons:ot-4306,consume,rend-0776
+mov-0778,lote-0699,Caño estructural 40×40,2026-10-09,0.5,prod:ent-0774,waste:ot-4306,waste,rend-0776
+mov-0780,lote-0702,Caño estructural 40×40,2026-10-12,4,asg:ot-4306,prod:ent-0779,release,ent-0779
+mov-0782,lote-0702,Caño estructural 40×40,2026-10-16,2,prod:ent-0779,cons:ot-4306,consume,rend-0781
+mov-0784,lote-0705,Espuma alta densidad 5 cm,2026-10-12,3,asg:ot-4306,prod:ent-0783,release,ent-0783
+mov-0786,lote-0705,Espuma alta densidad 5 cm,2026-10-16,1.5,prod:ent-0783,cons:ot-4306,consume,rend-0785
+mov-0787,lote-0705,Espuma alta densidad 5 cm,2026-10-16,0.25,prod:ent-0783,waste:ot-4306,waste,rend-0785
+mov-0789,lote-0708,Tela tapicería antimanchas,2026-10-12,9,asg:ot-4306,prod:ent-0788,release,ent-0788
+mov-0791,lote-0708,Tela tapicería antimanchas,2026-10-16,6,prod:ent-0788,cons:ot-4306,consume,rend-0790
+mov-0792,lote-0708,Tela tapicería antimanchas,2026-10-16,0.75,prod:ent-0788,waste:ot-4306,waste,rend-0790
+mov-0794,lote-0757,Multilaminado fenólico 18 mm,2026-10-14,4,asg:ot-4306,prod:ent-0793,release,ent-0793
+mov-0796,lote-0757,Multilaminado fenólico 18 mm,2026-10-16,1.5,prod:ent-0793,cons:ot-4306,consume,rend-0795
+mov-0797,lote-0757,Multilaminado fenólico 18 mm,2026-10-16,0.25,prod:ent-0793,waste:ot-4306,waste,rend-0795

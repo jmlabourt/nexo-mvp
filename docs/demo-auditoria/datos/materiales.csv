@@ -1,0 +1,15 @@
+id,nombre,unidad,rubro,costo_referencia
+mat-mdf,Placa MDF 18 mm,placa,Carpintería,62000
+mat-mel,Melamina blanca 18 mm,placa,Carpintería,58000
+mat-fen,Multilaminado fenólico 18 mm,placa,Carpintería,95000
+mat-rob,Enchapado roble 18 mm,placa,Carpintería,120000
+mat-tap,Tapacanto PVC 22 mm,m,Carpintería,900
+mat-bis,Bisagra cazoleta,unidad,Carpintería,2600
+mat-cor,Corredera telescópica 45 cm,par,Carpintería,11000
+mat-can,Caño estructural 40×40,barra 6 m,Herrería,38000
+mat-pla,Planchuela 1½″ × 3/16″,barra 6 m,Herrería,21000
+mat-pol,Pintura poliuretánica,litro,Pintura y lustre,24000
+mat-lac,Laca nitro,litro,Pintura y lustre,14000
+mat-esp,Espuma alta densidad 5 cm,plancha,Tapicería,46000
+mat-tel,Tela tapicería antimanchas,m,Tapicería,28000
+mat-tor,Tornillo 4×40 (caja de 100),caja,Armado y montaje,5500

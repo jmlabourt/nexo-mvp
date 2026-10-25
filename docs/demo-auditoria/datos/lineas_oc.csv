@@ -1,0 +1,38 @@
+id,oc,ot,mueble,material,cantidad,precio_unitario
+ocl-0030,OC-0001,OT4301,Estantería alta,Placa MDF 18 mm,12,61000
+ocl-0031,OC-0001,OT4301,Mesa de exhibición,Enchapado roble 18 mm,3,118000
+ocl-0033,OC-0002,OT4301,Mesa de exhibición,Caño estructural 40×40,2,37500
+ocl-0035,OC-0003,OT4301,Estantería alta,Laca nitro,6,14200
+ocl-0138,OC-0004,OT4302,Barra,Placa MDF 18 mm,6,61500
+ocl-0139,OC-0004,OT4302,Barra,Multilaminado fenólico 18 mm,2,96000
+ocl-0141,OC-0005,OT4302,Barra,Caño estructural 40×40,4,38500
+ocl-0142,OC-0005,OT4302,Barra,Planchuela 1½″ × 3/16″,2,21000
+ocl-0143,OC-0005,OT4302,Banqueta,Caño estructural 40×40,6,38500
+ocl-0145,OC-0006,OT4302,Banqueta,Espuma alta densidad 5 cm,2,47000
+ocl-0146,OC-0006,OT4302,Banqueta,Tela tapicería antimanchas,6,27500
+ocl-0148,OC-0007,OT4302,Barra,Pintura poliuretánica,6,24500
+ocl-0149,OC-0007,OT4302,Banqueta,Pintura poliuretánica,4,24500
+ocl-0285,OC-0008,OT4303,Escritorio,Melamina blanca 18 mm,15,57500
+ocl-0287,OC-0009,OT4303,Escritorio,Caño estructural 40×40,8,39000
+ocl-0289,OC-0010,OT4303,Escritorio,Pintura poliuretánica,5,25000
+ocl-0420,OC-0011,OT4304,Mostrador,Placa MDF 18 mm,6,63000
+ocl-0421,OC-0011,OT4304,Mostrador,Enchapado roble 18 mm,2,121000
+ocl-0422,OC-0011,OT4304,Exhibidor de pared,Placa MDF 18 mm,8,63000
+ocl-0439,OC-0012,OT4304,Exhibidor de pared,Laca nitro,5,14500
+ocl-0527,OC-0013,OT4305,Mostrador de recepción,Enchapado roble 18 mm,3,122000
+ocl-0528,OC-0013,OT4305,Mostrador de recepción,Placa MDF 18 mm,3,63500
+ocl-0529,OC-0013,OT4305,Mueble de guardado,Melamina blanca 18 mm,6,58500
+ocl-0531,OC-0014,OT4305,Mueble de guardado,Corredera telescópica 45 cm,8,11200
+ocl-0533,OC-0015,OT4305,Sillón de espera,Caño estructural 40×40,3,39500
+ocl-0553,OC-0016,OT4305,Mostrador de recepción,Laca nitro,3,14800
+ocl-0650,OC-0017,OT4305,Sillón de espera,Espuma alta densidad 5 cm,1,48000
+ocl-0651,OC-0017,OT4305,Sillón de espera,Tela tapicería antimanchas,4,28500
+ocl-0686,OC-0018,OT4306,Silla,Caño estructural 40×40,10,39500
+ocl-0687,OC-0018,OT4306,Mesa,Caño estructural 40×40,4,39500
+ocl-0689,OC-0019,OT4306,Silla,Espuma alta densidad 5 cm,3,48000
+ocl-0690,OC-0019,OT4306,Silla,Tela tapicería antimanchas,9,28500
+ocl-0748,OC-0020,OT4306,Mesa,Multilaminado fenólico 18 mm,6,97000
+ocl-0749,OC-0020,OT4307,Biblioteca,Melamina blanca 18 mm,8,59000
+ocl-0750,OC-0020,OT4307,Escritorio,Enchapado roble 18 mm,2,123000
+ocl-0761,OC-0021,OT4307,Biblioteca,Bisagra cazoleta,8,2700
+ocl-0762,OC-0021,OT4307,Escritorio,Corredera telescópica 45 cm,3,11500

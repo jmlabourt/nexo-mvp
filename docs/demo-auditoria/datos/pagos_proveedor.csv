@@ -1,0 +1,16 @@
+id,oc,fecha,importe,ot_explicita,referencia
+pag-0050,OC-0001,2026-06-30,1086000,,Transferencia 30/6
+pag-0051,OC-0002,2026-06-30,75000,,Transferencia 30/6
+pag-0052,OC-0003,2026-07-10,85200,,Cheque
+pag-0179,OC-0004,2026-07-20,561000,,Transferencia
+pag-0180,OC-0005,2026-07-31,427000,,Transferencia
+pag-0181,OC-0006,2026-08-20,259000,,Transferencia
+pag-0182,OC-0007,2026-08-31,245000,,Cheque
+pag-0301,OC-0008,2026-09-01,862500,,Transferencia
+pag-0302,OC-0009,2026-08-31,312000,,Transferencia
+pag-0434,OC-0011,2026-09-08,1124000,,Transferencia
+pag-0551,OC-0013,2026-09-15,907500,,Transferencia
+pag-0552,OC-0014,2026-09-15,89600,,Transferencia
+pag-0711,OC-0018,2026-10-09,553000,,Transferencia
+pag-0760,OC-0020,2026-10-16,700000,,Anticipo al proveedor (se reparte por valor de línea)
+pag-0941,OC-0021,2026-10-16,20000,OT4307,Seña al proveedor

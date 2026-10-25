@@ -1,0 +1,120 @@
+id,ot,mueble,rubro,tipo,material,cantidad,unidad,costo_unitario
+ot-4311-ql01,OT4311,Alacena,Carpintería,material,Melamina blanca 18 mm,5,placa,58000
+ot-4311-ql02,OT4311,Alacena,Carpintería,horas,,20,h,8500
+ot-4310-ql01,OT4310,Mesa exterior,Herrería,material,Caño estructural 40×40,8,barra 6 m,38000
+ot-4310-ql02,OT4310,Mesa exterior,Herrería,horas,,48,h,9000
+ot-4310-ql03,OT4310,Mesa exterior,Carpintería,material,Multilaminado fenólico 18 mm,4,placa,95000
+ot-4310-ql04,OT4310,Mesa exterior,Carpintería,horas,,24,h,8500
+ot-4310-ql05,OT4310,Mesa exterior,Pintura y lustre,material,Pintura poliuretánica,6,litro,24000
+ot-4310-ql06,OT4310,Mesa exterior,Pintura y lustre,horas,,20,h,8000
+ot-4309-ql01,OT4309,Atril,Herrería,material,Caño estructural 40×40,6,barra 6 m,38000
+ot-4309-ql02,OT4309,Atril,Herrería,horas,,40,h,9000
+ot-4309-ql03,OT4309,Atril,Pintura y lustre,material,Pintura poliuretánica,4,litro,24000
+ot-4309-ql04,OT4309,Atril,Pintura y lustre,horas,,16,h,8000
+ot-4309-ql05,OT4309,Banco de piano,Carpintería,material,Enchapado roble 18 mm,2,placa,120000
+ot-4309-ql06,OT4309,Banco de piano,Carpintería,horas,,24,h,8500
+ot-4309-ql07,OT4309,Banco de piano,Tapicería,material,Espuma alta densidad 5 cm,1,plancha,46000
+ot-4309-ql08,OT4309,Banco de piano,Tapicería,material,Tela tapicería antimanchas,3,m,28000
+ot-4309-ql09,OT4309,Banco de piano,Tapicería,horas,,8,h,8200
+ot-4308-ql01,OT4308,Respaldo de cama,Carpintería,material,Placa MDF 18 mm,8,placa,62000
+ot-4308-ql02,OT4308,Respaldo de cama,Carpintería,horas,,36,h,8500
+ot-4308-ql03,OT4308,Respaldo de cama,Tapicería,material,Espuma alta densidad 5 cm,6,plancha,46000
+ot-4308-ql04,OT4308,Respaldo de cama,Tapicería,material,Tela tapicería antimanchas,18,m,28000
+ot-4308-ql05,OT4308,Respaldo de cama,Tapicería,horas,,48,h,8200
+ot-4308-ql06,OT4308,Mesa de luz,Carpintería,material,Melamina blanca 18 mm,14,placa,58000
+ot-4308-ql07,OT4308,Mesa de luz,Carpintería,material,Corredera telescópica 45 cm,24,par,11000
+ot-4308-ql08,OT4308,Mesa de luz,Carpintería,horas,,96,h,8500
+ot-4308-ql09,OT4308,Mesa de luz,Herrería,material,Caño estructural 40×40,12,barra 6 m,38000
+ot-4308-ql10,OT4308,Mesa de luz,Herrería,horas,,72,h,9000
+ot-4308-ql11,OT4308,Mesa de luz,Pintura y lustre,material,Pintura poliuretánica,8,litro,24000
+ot-4308-ql12,OT4308,Mesa de luz,Pintura y lustre,horas,,36,h,8000
+ot-4307-ql01,OT4307,Biblioteca,Carpintería,material,Melamina blanca 18 mm,6,placa,58000
+ot-4307-ql02,OT4307,Biblioteca,Carpintería,material,Placa MDF 18 mm,3,placa,62000
+ot-4307-ql03,OT4307,Biblioteca,Carpintería,horas,,40,h,8500
+ot-4307-ql04,OT4307,Biblioteca,Pintura y lustre,material,Laca nitro,4,litro,14000
+ot-4307-ql05,OT4307,Biblioteca,Pintura y lustre,horas,,10,h,8000
+ot-4307-ql06,OT4307,Escritorio,Carpintería,material,Enchapado roble 18 mm,2,placa,120000
+ot-4307-ql07,OT4307,Escritorio,Carpintería,material,Placa MDF 18 mm,2,placa,62000
+ot-4307-ql08,OT4307,Escritorio,Carpintería,material,Corredera telescópica 45 cm,3,par,11000
+ot-4307-ql09,OT4307,Escritorio,Carpintería,horas,,20,h,8500
+ot-4307-ql10,OT4307,Escritorio,Herrería,material,Caño estructural 40×40,3,barra 6 m,38000
+ot-4307-ql11,OT4307,Escritorio,Herrería,horas,,24,h,9000
+ot-4307-ql12,OT4307,Escritorio,Pintura y lustre,horas,,6,h,8000
+ot-4306-ql01,OT4306,Barra,Carpintería,material,Placa MDF 18 mm,5,placa,62000
+ot-4306-ql02,OT4306,Barra,Carpintería,material,Tapacanto PVC 22 mm,30,m,900
+ot-4306-ql03,OT4306,Barra,Carpintería,horas,,48,h,8500
+ot-4306-ql04,OT4306,Barra,Pintura y lustre,material,Pintura poliuretánica,4,litro,24000
+ot-4306-ql05,OT4306,Barra,Pintura y lustre,horas,,12,h,8000
+ot-4306-ql06,OT4306,Mesa,Carpintería,material,Multilaminado fenólico 18 mm,6,placa,95000
+ot-4306-ql07,OT4306,Mesa,Carpintería,horas,,40,h,8500
+ot-4306-ql08,OT4306,Mesa,Herrería,material,Caño estructural 40×40,4,barra 6 m,38000
+ot-4306-ql09,OT4306,Mesa,Herrería,horas,,24,h,9000
+ot-4306-ql10,OT4306,Silla,Herrería,material,Caño estructural 40×40,10,barra 6 m,38000
+ot-4306-ql11,OT4306,Silla,Herrería,horas,,48,h,9000
+ot-4306-ql12,OT4306,Silla,Tapicería,material,Espuma alta densidad 5 cm,3,plancha,46000
+ot-4306-ql13,OT4306,Silla,Tapicería,material,Tela tapicería antimanchas,9,m,28000
+ot-4306-ql14,OT4306,Silla,Tapicería,horas,,36,h,8200
+ot-4306-ql15,OT4306,Silla,Pintura y lustre,material,Pintura poliuretánica,3,litro,24000
+ot-4306-ql16,OT4306,Silla,Pintura y lustre,horas,,18,h,8000
+ot-4305-ql01,OT4305,Mostrador de recepción,Carpintería,material,Enchapado roble 18 mm,3,placa,120000
+ot-4305-ql02,OT4305,Mostrador de recepción,Carpintería,material,Placa MDF 18 mm,3,placa,62000
+ot-4305-ql03,OT4305,Mostrador de recepción,Carpintería,horas,,56,h,8500
+ot-4305-ql04,OT4305,Mostrador de recepción,Pintura y lustre,material,Laca nitro,3,litro,14000
+ot-4305-ql05,OT4305,Mostrador de recepción,Pintura y lustre,horas,,10,h,8000
+ot-4305-ql06,OT4305,Mueble de guardado,Carpintería,material,Melamina blanca 18 mm,6,placa,58000
+ot-4305-ql07,OT4305,Mueble de guardado,Carpintería,material,Corredera telescópica 45 cm,8,par,11000
+ot-4305-ql08,OT4305,Mueble de guardado,Carpintería,horas,,40,h,8500
+ot-4305-ql09,OT4305,Mueble de guardado,Pintura y lustre,horas,,8,h,8000
+ot-4305-ql10,OT4305,Sillón de espera,Herrería,material,Caño estructural 40×40,3,barra 6 m,38000
+ot-4305-ql11,OT4305,Sillón de espera,Herrería,horas,,18,h,9000
+ot-4305-ql12,OT4305,Sillón de espera,Pintura y lustre,material,Pintura poliuretánica,2,litro,24000
+ot-4305-ql13,OT4305,Sillón de espera,Pintura y lustre,horas,,6,h,8000
+ot-4304-ql01,OT4304,Mostrador,Carpintería,material,Placa MDF 18 mm,6,placa,62000
+ot-4304-ql02,OT4304,Mostrador,Carpintería,material,Enchapado roble 18 mm,2,placa,120000
+ot-4304-ql03,OT4304,Mostrador,Carpintería,horas,,32,h,8500
+ot-4304-ql04,OT4304,Mostrador,Pintura y lustre,material,Laca nitro,4,litro,14000
+ot-4304-ql05,OT4304,Mostrador,Pintura y lustre,horas,,12,h,8000
+ot-4304-ql06,OT4304,Mostrador,Armado y montaje,horas,,8,h,8000
+ot-4304-ql07,OT4304,Exhibidor de pared,Carpintería,material,Placa MDF 18 mm,6,placa,62000
+ot-4304-ql08,OT4304,Exhibidor de pared,Carpintería,horas,,42,h,8500
+ot-4304-ql09,OT4304,Exhibidor de pared,Pintura y lustre,material,Laca nitro,3,litro,14000
+ot-4304-ql10,OT4304,Exhibidor de pared,Pintura y lustre,horas,,18,h,8000
+ot-4303-ql01,OT4303,Escritorio,Carpintería,material,Melamina blanca 18 mm,12,placa,58000
+ot-4303-ql02,OT4303,Escritorio,Carpintería,material,Tapacanto PVC 22 mm,60,m,900
+ot-4303-ql03,OT4303,Escritorio,Carpintería,horas,,80,h,8500
+ot-4303-ql04,OT4303,Escritorio,Herrería,material,Caño estructural 40×40,8,barra 6 m,38000
+ot-4303-ql05,OT4303,Escritorio,Herrería,horas,,40,h,9000
+ot-4303-ql06,OT4303,Escritorio,Pintura y lustre,material,Pintura poliuretánica,5,litro,24000
+ot-4303-ql07,OT4303,Escritorio,Pintura y lustre,horas,,20,h,8000
+ot-4303-ql08,OT4303,Escritorio,Armado y montaje,material,Tornillo 4×40 (caja de 100),4,caja,5500
+ot-4303-ql09,OT4303,Escritorio,Armado y montaje,horas,,16,h,8000
+ot-4303-ql10,OT4303,Locker,Carpintería,material,Melamina blanca 18 mm,8,placa,58000
+ot-4303-ql11,OT4303,Locker,Carpintería,material,Bisagra cazoleta,16,unidad,2600
+ot-4303-ql12,OT4303,Locker,Carpintería,horas,,40,h,8500
+ot-4303-ql13,OT4303,Locker,Pintura y lustre,horas,,8,h,8000
+ot-4302-ql01,OT4302,Barra,Carpintería,material,Placa MDF 18 mm,6,placa,62000
+ot-4302-ql02,OT4302,Barra,Carpintería,material,Multilaminado fenólico 18 mm,2,placa,95000
+ot-4302-ql03,OT4302,Barra,Carpintería,horas,,40,h,8500
+ot-4302-ql04,OT4302,Barra,Herrería,material,Caño estructural 40×40,4,barra 6 m,38000
+ot-4302-ql05,OT4302,Barra,Herrería,material,Planchuela 1½″ × 3/16″,2,barra 6 m,21000
+ot-4302-ql06,OT4302,Barra,Herrería,horas,,24,h,9000
+ot-4302-ql07,OT4302,Barra,Pintura y lustre,material,Pintura poliuretánica,6,litro,24000
+ot-4302-ql08,OT4302,Barra,Pintura y lustre,horas,,12,h,8000
+ot-4302-ql09,OT4302,Banqueta,Herrería,material,Caño estructural 40×40,6,barra 6 m,38000
+ot-4302-ql10,OT4302,Banqueta,Herrería,horas,,32,h,9000
+ot-4302-ql11,OT4302,Banqueta,Tapicería,material,Espuma alta densidad 5 cm,2,plancha,46000
+ot-4302-ql12,OT4302,Banqueta,Tapicería,material,Tela tapicería antimanchas,6,m,28000
+ot-4302-ql13,OT4302,Banqueta,Tapicería,horas,,16,h,8200
+ot-4302-ql14,OT4302,Banqueta,Pintura y lustre,material,Pintura poliuretánica,4,litro,24000
+ot-4302-ql15,OT4302,Banqueta,Pintura y lustre,horas,,8,h,8000
+ot-4301-ql01,OT4301,Estantería alta,Carpintería,material,Placa MDF 18 mm,10,placa,62000
+ot-4301-ql02,OT4301,Estantería alta,Carpintería,material,Tapacanto PVC 22 mm,80,m,900
+ot-4301-ql03,OT4301,Estantería alta,Carpintería,horas,,64,h,8500
+ot-4301-ql04,OT4301,Estantería alta,Pintura y lustre,material,Laca nitro,8,litro,14000
+ot-4301-ql05,OT4301,Estantería alta,Pintura y lustre,horas,,16,h,8000
+ot-4301-ql06,OT4301,Mesa de exhibición,Carpintería,material,Enchapado roble 18 mm,3,placa,120000
+ot-4301-ql07,OT4301,Mesa de exhibición,Carpintería,horas,,24,h,8500
+ot-4301-ql08,OT4301,Mesa de exhibición,Herrería,material,Caño estructural 40×40,2,barra 6 m,38000
+ot-4301-ql09,OT4301,Mesa de exhibición,Herrería,horas,,10,h,9000
+ot-4301-ql10,OT4301,Mesa de exhibición,Pintura y lustre,material,Laca nitro,2,litro,14000
+ot-4301-ql11,OT4301,Mesa de exhibición,Pintura y lustre,horas,,6,h,8000

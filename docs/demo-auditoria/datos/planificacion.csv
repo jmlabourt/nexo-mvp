@@ -1,0 +1,43 @@
+id,fecha,ot,mueble,rubro,horas
+plan-0874,2026-10-16,OT4305,Sillón de espera,Pintura y lustre,4
+plan-0876,2026-10-19,OT4306,Barra,Carpintería,4
+plan-0877,2026-10-20,OT4306,Barra,Carpintería,4
+plan-0878,2026-10-21,OT4306,Barra,Carpintería,4
+plan-0879,2026-10-22,OT4306,Barra,Carpintería,4
+plan-0880,2026-10-23,OT4306,Barra,Carpintería,4
+plan-0881,2026-10-19,OT4306,Mesa,Carpintería,8
+plan-0882,2026-10-20,OT4306,Mesa,Carpintería,8
+plan-0883,2026-10-21,OT4306,Mesa,Carpintería,8
+plan-0884,2026-10-22,OT4306,Mesa,Carpintería,8
+plan-0885,2026-10-23,OT4306,Mesa,Carpintería,8
+plan-0886,2026-10-19,OT4306,Mesa,Herrería,6
+plan-0887,2026-10-20,OT4306,Mesa,Herrería,6
+plan-0888,2026-10-21,OT4306,Mesa,Herrería,6
+plan-0889,2026-10-19,OT4306,Silla,Tapicería,6
+plan-0890,2026-10-20,OT4306,Silla,Tapicería,6
+plan-0891,2026-10-21,OT4306,Silla,Tapicería,6
+plan-0892,2026-10-22,OT4306,Silla,Tapicería,6
+plan-0893,2026-10-23,OT4306,Silla,Tapicería,6
+plan-0894,2026-10-21,OT4306,Silla,Pintura y lustre,4
+plan-0895,2026-10-22,OT4306,Silla,Pintura y lustre,4
+plan-0896,2026-10-23,OT4306,Silla,Pintura y lustre,4
+plan-0897,2026-10-19,OT4305,Mostrador de recepción,Carpintería,4
+plan-0898,2026-10-20,OT4305,Mostrador de recepción,Carpintería,4
+plan-0899,2026-10-21,OT4305,Mostrador de recepción,Carpintería,4
+plan-0900,2026-10-22,OT4305,Mostrador de recepción,Carpintería,4
+plan-0901,2026-10-23,OT4305,Mostrador de recepción,Carpintería,4
+plan-0902,2026-10-19,OT4305,Mueble de guardado,Carpintería,6
+plan-0903,2026-10-20,OT4305,Mueble de guardado,Carpintería,6
+plan-0904,2026-10-21,OT4305,Mueble de guardado,Carpintería,6
+plan-0905,2026-10-22,OT4305,Mueble de guardado,Carpintería,6
+plan-0906,2026-10-19,OT4305,Sillón de espera,Tapicería,2
+plan-0907,2026-10-20,OT4305,Sillón de espera,Tapicería,2
+plan-0908,2026-10-23,OT4305,Mueble de guardado,Pintura y lustre,6
+plan-0909,2026-10-26,OT4306,Mesa,Carpintería,8
+plan-0910,2026-10-27,OT4306,Mesa,Carpintería,8
+plan-0911,2026-10-28,OT4306,Mesa,Carpintería,8
+plan-0912,2026-10-29,OT4306,Mesa,Carpintería,8
+plan-0913,2026-10-30,OT4306,Mesa,Carpintería,8
+plan-0914,2026-10-26,OT4306,Silla,Tapicería,6
+plan-0915,2026-10-27,OT4306,Silla,Tapicería,6
+plan-0916,2026-10-28,OT4306,Silla,Tapicería,6

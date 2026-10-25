@@ -1,0 +1,76 @@
+bom,ot,version,estado,publicado,linea,mueble,rubro,material,cantidad
+bom-0016,OT4301,1,published,2026-06-09,boml-0017,Estantería alta,Carpintería,Placa MDF 18 mm,10
+bom-0016,OT4301,1,published,2026-06-09,boml-0018,Estantería alta,Carpintería,Tapacanto PVC 22 mm,80
+bom-0016,OT4301,1,published,2026-06-09,boml-0019,Estantería alta,Pintura y lustre,Laca nitro,8
+bom-0016,OT4301,1,published,2026-06-09,boml-0020,Mesa de exhibición,Carpintería,Enchapado roble 18 mm,3
+bom-0016,OT4301,1,published,2026-06-09,boml-0021,Mesa de exhibición,Herrería,Caño estructural 40×40,2
+bom-0016,OT4301,1,published,2026-06-09,boml-0022,Mesa de exhibición,Pintura y lustre,Laca nitro,2
+bom-0124,OT4302,1,published,2026-07-02,boml-0125,Barra,Carpintería,Placa MDF 18 mm,6
+bom-0124,OT4302,1,published,2026-07-02,boml-0126,Barra,Carpintería,Multilaminado fenólico 18 mm,2
+bom-0124,OT4302,1,published,2026-07-02,boml-0127,Barra,Herrería,Caño estructural 40×40,4
+bom-0124,OT4302,1,published,2026-07-02,boml-0128,Barra,Herrería,Planchuela 1½″ × 3/16″,2
+bom-0124,OT4302,1,published,2026-07-02,boml-0129,Barra,Pintura y lustre,Pintura poliuretánica,6
+bom-0124,OT4302,1,published,2026-07-02,boml-0130,Banqueta,Herrería,Caño estructural 40×40,6
+bom-0124,OT4302,1,published,2026-07-02,boml-0131,Banqueta,Tapicería,Espuma alta densidad 5 cm,2
+bom-0124,OT4302,1,published,2026-07-02,boml-0132,Banqueta,Tapicería,Tela tapicería antimanchas,6
+bom-0124,OT4302,1,published,2026-07-02,boml-0133,Banqueta,Pintura y lustre,Pintura poliuretánica,4
+bom-0274,OT4303,1,published,2026-08-06,boml-0275,Escritorio,Carpintería,Melamina blanca 18 mm,12
+bom-0274,OT4303,1,published,2026-08-06,boml-0276,Escritorio,Carpintería,Tapacanto PVC 22 mm,60
+bom-0274,OT4303,1,published,2026-08-06,boml-0277,Escritorio,Herrería,Caño estructural 40×40,8
+bom-0274,OT4303,1,published,2026-08-06,boml-0278,Escritorio,Pintura y lustre,Pintura poliuretánica,5
+bom-0274,OT4303,1,published,2026-08-06,boml-0279,Escritorio,Armado y montaje,Tornillo 4×40 (caja de 100),4
+bom-0274,OT4303,1,published,2026-08-06,boml-0280,Locker,Carpintería,Melamina blanca 18 mm,8
+bom-0274,OT4303,1,published,2026-08-06,boml-0281,Locker,Carpintería,Bisagra cazoleta,16
+bom-0410,OT4304,1,published,2026-08-12,boml-0411,Mostrador,Carpintería,Placa MDF 18 mm,6
+bom-0410,OT4304,1,published,2026-08-12,boml-0412,Mostrador,Carpintería,Enchapado roble 18 mm,2
+bom-0410,OT4304,1,published,2026-08-12,boml-0413,Mostrador,Pintura y lustre,Laca nitro,4
+bom-0410,OT4304,1,published,2026-08-12,boml-0414,Exhibidor de pared,Carpintería,Placa MDF 18 mm,6
+bom-0410,OT4304,1,published,2026-08-12,boml-0415,Exhibidor de pared,Pintura y lustre,Laca nitro,3
+bom-0516,OT4305,1,published,2026-08-21,boml-0517,Mostrador de recepción,Carpintería,Enchapado roble 18 mm,3
+bom-0516,OT4305,1,published,2026-08-21,boml-0518,Mostrador de recepción,Carpintería,Placa MDF 18 mm,3
+bom-0516,OT4305,1,published,2026-08-21,boml-0519,Mostrador de recepción,Pintura y lustre,Laca nitro,3
+bom-0516,OT4305,1,published,2026-08-21,boml-0520,Mueble de guardado,Carpintería,Melamina blanca 18 mm,6
+bom-0516,OT4305,1,published,2026-08-21,boml-0521,Mueble de guardado,Carpintería,Corredera telescópica 45 cm,8
+bom-0516,OT4305,1,published,2026-08-21,boml-0522,Sillón de espera,Herrería,Caño estructural 40×40,3
+bom-0516,OT4305,1,published,2026-08-21,boml-0523,Sillón de espera,Pintura y lustre,Pintura poliuretánica,2
+bom-0639,OT4305,2,published,2026-09-30,boml-0640,Mostrador de recepción,Carpintería,Enchapado roble 18 mm,3
+bom-0639,OT4305,2,published,2026-09-30,boml-0641,Mostrador de recepción,Carpintería,Placa MDF 18 mm,3
+bom-0639,OT4305,2,published,2026-09-30,boml-0642,Mostrador de recepción,Pintura y lustre,Laca nitro,3
+bom-0639,OT4305,2,published,2026-09-30,boml-0643,Mueble de guardado,Carpintería,Melamina blanca 18 mm,6
+bom-0639,OT4305,2,published,2026-09-30,boml-0644,Mueble de guardado,Carpintería,Corredera telescópica 45 cm,8
+bom-0639,OT4305,2,published,2026-09-30,boml-0645,Sillón de espera,Herrería,Caño estructural 40×40,3
+bom-0639,OT4305,2,published,2026-09-30,boml-0646,Sillón de espera,Pintura y lustre,Pintura poliuretánica,2
+bom-0639,OT4305,2,published,2026-09-30,boml-0647,Sillón de espera,Tapicería,Espuma alta densidad 5 cm,1
+bom-0639,OT4305,2,published,2026-09-30,boml-0648,Sillón de espera,Tapicería,Tela tapicería antimanchas,4
+bom-0668,OT4306,1,published,2026-09-16,boml-0669,Barra,Carpintería,Placa MDF 18 mm,5
+bom-0668,OT4306,1,published,2026-09-16,boml-0670,Barra,Carpintería,Tapacanto PVC 22 mm,30
+bom-0668,OT4306,1,published,2026-09-16,boml-0671,Barra,Pintura y lustre,Pintura poliuretánica,4
+bom-0668,OT4306,1,published,2026-09-16,boml-0672,Mesa,Carpintería,Multilaminado fenólico 18 mm,6
+bom-0668,OT4306,1,published,2026-09-16,boml-0673,Mesa,Herrería,Caño estructural 40×40,4
+bom-0668,OT4306,1,published,2026-09-16,boml-0674,Silla,Herrería,Caño estructural 40×40,10
+bom-0668,OT4306,1,published,2026-09-16,boml-0675,Silla,Tapicería,Espuma alta densidad 5 cm,3
+bom-0668,OT4306,1,published,2026-09-16,boml-0676,Silla,Tapicería,Tela tapicería antimanchas,9
+bom-0668,OT4306,1,published,2026-09-16,boml-0677,Silla,Pintura y lustre,Pintura poliuretánica,3
+bom-0718,OT4307,1,published,2026-10-02,boml-0719,Biblioteca,Carpintería,Melamina blanca 18 mm,6
+bom-0718,OT4307,1,published,2026-10-02,boml-0720,Biblioteca,Carpintería,Placa MDF 18 mm,3
+bom-0718,OT4307,1,published,2026-10-02,boml-0721,Biblioteca,Pintura y lustre,Laca nitro,4
+bom-0718,OT4307,1,published,2026-10-02,boml-0722,Escritorio,Carpintería,Enchapado roble 18 mm,2
+bom-0718,OT4307,1,published,2026-10-02,boml-0723,Escritorio,Carpintería,Placa MDF 18 mm,2
+bom-0718,OT4307,1,published,2026-10-02,boml-0724,Escritorio,Carpintería,Corredera telescópica 45 cm,3
+bom-0718,OT4307,1,published,2026-10-02,boml-0725,Escritorio,Herrería,Caño estructural 40×40,3
+bom-0728,OT4307,2,published,2026-10-06,boml-0736,Biblioteca,Carpintería,Melamina blanca 18 mm,8
+bom-0728,OT4307,2,published,2026-10-06,boml-0737,Biblioteca,Carpintería,Placa MDF 18 mm,3
+bom-0728,OT4307,2,published,2026-10-06,boml-0738,Biblioteca,Pintura y lustre,Laca nitro,4
+bom-0728,OT4307,2,published,2026-10-06,boml-0739,Escritorio,Carpintería,Enchapado roble 18 mm,2
+bom-0728,OT4307,2,published,2026-10-06,boml-0740,Escritorio,Carpintería,Placa MDF 18 mm,2
+bom-0728,OT4307,2,published,2026-10-06,boml-0741,Escritorio,Carpintería,Corredera telescópica 45 cm,3
+bom-0728,OT4307,2,published,2026-10-06,boml-0742,Escritorio,Herrería,Caño estructural 40×40,3
+bom-0728,OT4307,2,published,2026-10-06,boml-0743,Biblioteca,Carpintería,Bisagra cazoleta,8
+bom-0728,OT4307,2,published,2026-10-06,boml-0744,Biblioteca,Carpintería,Tapacanto PVC 22 mm,40
+bom-0839,OT4308,1,draft,,boml-0840,Respaldo de cama,Carpintería,Placa MDF 18 mm,8
+bom-0839,OT4308,1,draft,,boml-0841,Respaldo de cama,Tapicería,Espuma alta densidad 5 cm,6
+bom-0839,OT4308,1,draft,,boml-0842,Respaldo de cama,Tapicería,Tela tapicería antimanchas,18
+bom-0839,OT4308,1,draft,,boml-0843,Mesa de luz,Carpintería,Melamina blanca 18 mm,14
+bom-0839,OT4308,1,draft,,boml-0844,Mesa de luz,Carpintería,Corredera telescópica 45 cm,24
+bom-0839,OT4308,1,draft,,boml-0845,Mesa de luz,Herrería,Caño estructural 40×40,12
+bom-0839,OT4308,1,draft,,boml-0846,Mesa de luz,Pintura y lustre,Pintura poliuretánica,8

@@ -1,0 +1,40 @@
+id,ot,mueble,rubro,material,cantidad,fecha
+ent-0059,OT4301,Estantería alta,Carpintería,Placa MDF 18 mm,12,2026-06-15
+ent-0061,OT4301,Estantería alta,Carpintería,Tapacanto PVC 22 mm,80,2026-06-15
+ent-0070,OT4301,Mesa de exhibición,Carpintería,Enchapado roble 18 mm,3,2026-06-29
+ent-0075,OT4301,Mesa de exhibición,Herrería,Caño estructural 40×40,2,2026-06-29
+ent-0080,OT4301,Estantería alta,Pintura y lustre,Laca nitro,10,2026-07-06
+ent-0183,OT4302,Barra,Carpintería,Placa MDF 18 mm,6,2026-07-06
+ent-0188,OT4302,Barra,Carpintería,Multilaminado fenólico 18 mm,2,2026-07-06
+ent-0192,OT4302,Barra,Herrería,Caño estructural 40×40,4,2026-07-13
+ent-0197,OT4302,Barra,Herrería,Planchuela 1½″ × 3/16″,2,2026-07-13
+ent-0201,OT4302,Banqueta,Herrería,Caño estructural 40×40,6,2026-07-23
+ent-0206,OT4302,Banqueta,Tapicería,Espuma alta densidad 5 cm,2,2026-08-10
+ent-0211,OT4302,Banqueta,Tapicería,Tela tapicería antimanchas,6,2026-08-10
+ent-0216,OT4302,Barra,Pintura y lustre,Pintura poliuretánica,6,2026-08-17
+ent-0221,OT4302,Banqueta,Pintura y lustre,Pintura poliuretánica,4,2026-08-19
+ent-0315,OT4303,Escritorio,Carpintería,Melamina blanca 18 mm,12,2026-08-17
+ent-0322,OT4303,Escritorio,Carpintería,Tapacanto PVC 22 mm,60,2026-08-17
+ent-0327,OT4303,Escritorio,Herrería,Caño estructural 40×40,8,2026-08-17
+ent-0332,OT4303,Locker,Carpintería,Melamina blanca 18 mm,8,2026-08-24
+ent-0337,OT4303,Locker,Carpintería,Bisagra cazoleta,16,2026-08-24
+ent-0341,OT4303,Escritorio,Pintura y lustre,Pintura poliuretánica,5,2026-09-14
+ent-0347,OT4303,Escritorio,Armado y montaje,Tornillo 4×40 (caja de 100),4,2026-10-05
+ent-0444,OT4304,Mostrador,Carpintería,Placa MDF 18 mm,6,2026-08-24
+ent-0449,OT4304,Mostrador,Carpintería,Enchapado roble 18 mm,2,2026-08-24
+ent-0453,OT4304,Exhibidor de pared,Carpintería,Placa MDF 18 mm,8,2026-09-07
+ent-0459,OT4304,Exhibidor de pared,Pintura y lustre,Laca nitro,3.5,2026-09-21
+ent-0468,OT4304,Mostrador,Pintura y lustre,Laca nitro,4,2026-09-23
+ent-0558,OT4305,Mostrador de recepción,Carpintería,Enchapado roble 18 mm,3,2026-09-07
+ent-0563,OT4305,Mostrador de recepción,Carpintería,Placa MDF 18 mm,3,2026-09-07
+ent-0568,OT4305,Mueble de guardado,Carpintería,Melamina blanca 18 mm,6,2026-09-21
+ent-0573,OT4305,Sillón de espera,Herrería,Caño estructural 40×40,3,2026-09-14
+ent-0578,OT4305,Mueble de guardado,Carpintería,Corredera telescópica 45 cm,8,2026-10-13
+ent-0582,OT4305,Mostrador de recepción,Pintura y lustre,Laca nitro,1.5,2026-10-15
+ent-0764,OT4306,Barra,Carpintería,Placa MDF 18 mm,2,2026-10-01
+ent-0769,OT4306,Barra,Carpintería,Tapacanto PVC 22 mm,30,2026-10-05
+ent-0774,OT4306,Silla,Herrería,Caño estructural 40×40,10,2026-09-28
+ent-0779,OT4306,Mesa,Herrería,Caño estructural 40×40,4,2026-10-12
+ent-0783,OT4306,Silla,Tapicería,Espuma alta densidad 5 cm,3,2026-10-12
+ent-0788,OT4306,Silla,Tapicería,Tela tapicería antimanchas,9,2026-10-12
+ent-0793,OT4306,Mesa,Carpintería,Multilaminado fenólico 18 mm,4,2026-10-14

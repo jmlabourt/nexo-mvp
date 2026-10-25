@@ -94,63 +94,69 @@ Detalle del circuito y resultado de la prueba de punta a punta: `docs/CIRCUITO.m
 
 ## 7. Demo integral (rama `claude/epic-johnson-zn9v9u`)
 
-Guía, matriz de datos y pruebas: `docs/DEMO.md`. Todo lo nuevo vive en el frontend: un estado de demostración
-guardado en el navegador (`store/demo-local.ts`) y un `Ledger` con los registros que la base todavía no tiene
-(`types/index.ts`, `lib/ledger.ts`). Las cuentas reales no usan ese estado: ven "Pendiente de backend".
+Guía: `docs/DEMO.md`. Auditoría de datos y pruebas: `docs/demo-auditoria/`. Todo lo nuevo vive en el frontend: un
+dominio puro (`lib/core/`, tipos en `lib/core/types.ts`) que solo usa el modo demostración, guardado en el navegador
+(`store/demo-local.ts`, esquema 3). Las cuentas reales siguen con las pantallas anteriores y ven «Pendiente de
+backend» en lo nuevo. Nada se escribe en Supabase.
 
 ### 7.1 Ruta pública de demostración
 
 El middleware (`lib/supabase/proxy.ts`) manda a `/login` todo lo que no es público, así que hoy la demo pide iniciar
-sesión. **Pedido:** una ruta pública (por ejemplo `/demo`) que abra la app con `blerp-demo:activa = 1` sin sesión,
-sin acceso a Supabase y con `noindex`. `HydrationGate` ya no consulta la base cuando la demo está activa.
+sesión. **Pedido:** una ruta pública (por ejemplo `/demo`) que abra la app en modo demostración sin sesión, sin
+acceso a Supabase y con `noindex`.
 
-### 7.2 Esquema propuesto
+### 7.2 Entidades a persistir
 
-Todas con `organization_id` (FK) y `created_by`/`created_at`. Importes sin IVA, `numeric(14,2)`.
+Cada entidad de `CoreWorld` (`lib/core/types.ts`) es una tabla candidata, con `organization_id`, `created_by` y
+`created_at`. Las que ya tienen equivalente se indican; el resto son nuevas.
 
-| Tabla | Columnas principales | Notas |
+| Entidad (`types.ts`) | Equivalente hoy | Notas |
 | --- | --- | --- |
-| `sales_invoices` | `project_id`, `number` (único por organización), `date`, `amount`, `notes` | Mes de facturación = `date`. |
-| `collections` | `project_id`, `invoice_id` (nullable = anticipo), `date`, `amount` | Check: Σ cobros de una factura ≤ importe. |
-| `supplier_payments` | `order_id`, `date`, `amount`, `reference` | Requiere orden facturada. |
-| `contract_revisions` | `project_id`, `previous`, `next`, `reason` | Solo después de aprobar; sin update ni delete. |
-| `payment_terms` / `payment_schedule` | `project_id`, `days_after_delivery` / `label`, `amount`, `date` | |
-| `bom_versions` / `bom_lines` | `project_id`, `item_id`, `version`, `status` (`draft`/`published`), `published_at` / `material`, `material_id`, `quantity`, `unit`, `budget_line_id` | Único `(item_id, version)`; una versión publicada no se modifica. Un solo borrador por mueble. |
-| `client_handovers` | `project_id` (único), `date`, `by`, `notes` | Requiere todas las unidades terminadas. |
-| `staff_hours` | `employee_id` (usuario), `project_id` nullable, `date`, `hours`, `task`, `hourly_cost` | Sin proyecto = trabajo interno. |
-| `project_closures` | `project_id`, `date`, `by`, `pending_costs` (jsonb) | Complementa `closure_snapshots`. |
-| `rubro_catalog` | `id`, `name`, `active` | Texto libre; reemplaza `ManagementParams.workRubros`. |
-| `rate_records` | `scope` (`rubro`/`employee`), `subject_id`, `hourly_rate`, `valid_from` | La excepción de la persona prevalece. |
-| `clients` (existe) / `suppliers` | contacto, teléfono, correo, dirección, notas, `active` | `suppliers` es nueva. |
-| `general_costs` | `name`, `monthly_amount` | Informativo. |
-| `material_deliveries` (existe) | + acumulados `consumed`, `waste`, `leftover` | Hoy el cierre del día cierra la entrega entera; la demo deja abierto lo que sigue en producción. |
-| `cost_settings` | + `financial_monthly_rate_pct` | Hoy `financial_pct` es % del precio; la demo lo usa como tasa mensual. |
+| `Project` (OT, estado, muebles, cotización, `baseline`) | `projects`, `project_items`, `budget_lines`, `projects.baseline` | `ot_number` correlativo por organización, nunca reutilizado (secuencia, no `max+1`). Estados: quotation, approved, purchasing, production, closed. |
+| `Quote` (líneas por mueble y rubro, personal, costos generales, cobros previstos) | `budget_lines` | Congelada al aprobar. |
+| `Additional`, `RubroRequest` | — | El adicional suma al contrato vigente sin tocar la `baseline`. |
+| `BomVersion` / `BomLine` | — | Un borrador por OT; una versión publicada no se modifica. |
+| `MaterialRequest` | — | Pedido de Planta que va a Por comprar. |
+| `PurchaseOrder` / `OrderLine` (`projectId` por línea) | `purchase_orders` | Número OC-NNNN por organización. |
+| `Receipt` (con `reversal`) | — | Revertir se bloquea si el lote ya se movió. |
+| `Lot`, `Movement` (lugares `free`, `asg:<ot>`, `prod:<entrega>`, `cons:<ot>`, `waste:<ot>`, `supplier`) | `stock_lots`, `stock_movements` | Saldo = Σ movimientos; nunca negativo. |
+| `Release`, `Rendition` | `material_deliveries` | Liberado = consumido + desperdicio + devuelto + en producción; rendición parcial permitida. |
+| `PlanEntry`, `Assignment` | asignaciones de Planta | Solo rubros cotizados o aprobados como adicional. |
+| `TimeEntry` (con `corrections`), revisión por jornada | `actual_entries`, `planta_correct_hours` | Sin OT = trabajo interno. |
+| `Handover`, `Closure` (foto de costos) | `closure_snapshots` | |
+| `Income` | — | Reemplaza facturas de venta y cobros: un solo registro de dinero ingresado. |
+| `SupplierPayment` | — | Se prorratea por valor de línea; no es costo. |
+| `OtherCost`, `ContractRevision` | — | |
+| `Employee`, `EmployeeCategory`, `RateRecord` (con vigencia), `DayException` | perfiles y tarifas existentes | La tarifa vale desde `valid_from`; nunca se edita una vigente pasada. |
+| `Client`, `Supplier`, `Material`, `Rubro`, `CoreConfig` | parciales | `CoreConfig`: tasa financiera mensual, días de rendición, nomenclatura de OT, umbrales de alertas. |
 
-### 7.3 Permisos (RLS esperada)
+### 7.3 Permisos esperados (RLS)
 
-| Registro | Escribe | Lee |
-| --- | --- | --- |
-| Facturas, cobros, pagos a proveedores, cierre, tasa financiera, rubros, tarifas, costos generales | Gerencia | Gerencia (pagos: estado visible para Compras, sin importes de venta) |
-| Contrato vigente, condiciones de pago, BOM, clientes | Administración (y Gerencia) | Gerencia, Administración; BOM publicado también Compras y Jefe (sin costos) |
-| Proveedores | Administración, Compras | Todos menos Operario |
-| Entrega al cliente, material en producción, corrección de horas | Jefe de planta | Gerencia, Administración |
-| Horas propias | La propia persona (Administración, Compras, Jefe) | Gerencia; la persona, las suyas |
+Las operaciones de `lib/core/ops.ts` validan la sesión con `need()`; el backend debería exigir lo mismo:
 
-### 7.4 Acciones y eventos
+| Acción | Sesión |
+| --- | --- |
+| Clientes, cotizar, aprobar, BOM, adicionales, cobros previstos, contrato, corregir estado (menos Cerrado) | Administración |
+| OCs, recepciones y reversión, asignar stock, proveedores | Compras |
+| Planificar, asignar trabajo, entregar y rendir material, unidades terminadas, entrega al cliente, revisar y corregir horas, pedir rubro o material | Jefe de planta |
+| Ingresos, pagos a proveedores, otros costos, cerrar OT, personal, tarifas, configuración | Gerencia |
+| Horas propias | Cada persona, solo las suyas |
 
-Una RPC por acción, que valide lo mismo que las funciones puras y deje un `activity_events`:
-`register_sales_invoice`, `register_collection`, `apply_advance`, `confirm_supplier_payment`, `revise_contract`,
-`set_payment_terms`, `start_bom_draft`, `save_bom_draft`, `publish_bom`, `confirm_handover`, `close_day` (con
-arrastre), `log_staff_hours`, `close_project` (con `pending_costs`), `set_financial_rate`, `upsert_client`,
-`upsert_supplier`, `add_rate`, `add_rubro`. Las validaciones de referencia están en `lib/ledger.ts`, `lib/tablero.ts`
-(`closeCheck`) y `lib/plant-materials.ts`, con sus pruebas.
+**Pendiente de decisión (no se inventó):** quién puede ver importes en Compras y Planta, si Gerencia puede corregir
+horas, y la política contable de IVA y facturación de venta.
+
+### 7.4 Cálculos
+
+Son funciones puras y probadas; conviene que el backend las replique como vistas o RPC con las mismas pruebas
+(`tests/demo-esperados.test.ts` compara contra `docs/demo-auditoria/calculo_independiente.py`):
+`needRows` (Por comprar), `economics` (costos reales y rentabilidad), `updatedFinancial` (costo financiero por
+tramos), `capacityRows`, `dashboardCards`/`collectionSeries`/`marginComparison`, `closeCheck`, alertas
+(`lib/core/alerts.ts`).
 
 ### 7.5 De la demo a la base
 
-1. Crear las tablas y RPC de 7.2–7.4.
-2. Un adaptador lee la base y arma el mismo `Ledger` (`normalizeLedger`), así las pantallas no cambian.
-3. En `store/use-app-store.ts`, `recordLedger` hoy rechaza fuera de la demo: con la base lista, en vez de rechazar
-   llama a la RPC de cada acción (el `fn` puro sigue validando en el cliente).
-4. `reset_workspace` siembra el mismo escenario de `lib/demo/escenario.ts`.
-5. Pendientes de sincronización: que el cierre del día acepte arrastre (hoy la base cierra la entrega entera) y que
-   las necesidades de Compras salgan del BOM publicado también en `compras_workspace`.
+1. Crear tablas y RPC de 7.2–7.3 (una RPC por operación de `ops.ts`, con la misma validación).
+2. Un adaptador arma un `CoreWorld` desde la base, así las pantallas de `components/demo/` sirven sin cambios.
+3. En `store/use-app-store.ts`, `coreAct` hoy rechaza fuera de la demo: con la base lista, llama a la RPC.
+4. Reemplazar `DemoOr`/`DemoOnly` por las pantallas nuevas también en modo real.
+5. `reset_workspace` puede sembrar el mismo escenario de `lib/core/seed.ts`.

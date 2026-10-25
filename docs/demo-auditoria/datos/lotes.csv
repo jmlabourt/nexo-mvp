@@ -1,0 +1,40 @@
+id,material,costo_unitario,fecha,origen,oc,ot_origen
+lote-0001,Melamina blanca 18 mm,54000,2026-06-01,opening,,
+lote-0003,Tornillo 4×40 (caja de 100),5000,2026-06-01,opening,,
+lote-0005,Laca nitro,13000,2026-06-01,opening,,
+lote-0007,Tapacanto PVC 22 mm,850,2026-06-01,opening,,
+lote-0009,Bisagra cazoleta,2400,2026-06-01,opening,,
+lote-0037,Placa MDF 18 mm,61000,2026-06-15,receipt,OC-0001,OT4301
+lote-0040,Enchapado roble 18 mm,118000,2026-06-15,receipt,OC-0001,OT4301
+lote-0044,Caño estructural 40×40,37500,2026-06-17,receipt,OC-0002,OT4301
+lote-0047,Laca nitro,14200,2026-06-15,receipt,OC-0003,OT4301
+lote-0151,Placa MDF 18 mm,61500,2026-07-06,receipt,OC-0004,OT4302
+lote-0154,Multilaminado fenólico 18 mm,96000,2026-07-06,receipt,OC-0004,OT4302
+lote-0158,Caño estructural 40×40,38500,2026-07-10,receipt,OC-0005,OT4302
+lote-0161,Planchuela 1½″ × 3/16″,21000,2026-07-10,receipt,OC-0005,OT4302
+lote-0164,Caño estructural 40×40,38500,2026-07-10,receipt,OC-0005,OT4302
+lote-0167,Espuma alta densidad 5 cm,47000,2026-08-05,receipt,OC-0006,OT4302
+lote-0170,Tela tapicería antimanchas,27500,2026-08-05,receipt,OC-0006,OT4302
+lote-0173,Pintura poliuretánica,24500,2026-08-10,receipt,OC-0007,OT4302
+lote-0176,Pintura poliuretánica,24500,2026-08-10,receipt,OC-0007,OT4302
+lote-0291,Melamina blanca 18 mm,57500,2026-08-17,receipt,OC-0008,OT4303
+lote-0295,Caño estructural 40×40,39000,2026-08-14,receipt,OC-0009,OT4303
+lote-0298,Pintura poliuretánica,25000,2026-09-10,receipt,OC-0010,OT4303
+lote-0424,Placa MDF 18 mm,63000,2026-08-24,receipt,OC-0011,OT4304
+lote-0427,Enchapado roble 18 mm,121000,2026-08-24,receipt,OC-0011,OT4304
+lote-0430,Placa MDF 18 mm,63000,2026-08-24,receipt,OC-0011,OT4304
+lote-0441,Laca nitro,14500,2026-09-21,receipt,OC-0012,OT4304
+lote-0535,Enchapado roble 18 mm,122000,2026-08-31,receipt,OC-0013,OT4305
+lote-0538,Placa MDF 18 mm,63500,2026-08-31,receipt,OC-0013,OT4305
+lote-0541,Melamina blanca 18 mm,58500,2026-08-31,receipt,OC-0013,OT4305
+lote-0545,Corredera telescópica 45 cm,11200,2026-09-04,receipt,OC-0014,OT4305
+lote-0548,Caño estructural 40×40,39500,2026-09-14,receipt,OC-0015,OT4305
+lote-0555,Laca nitro,14800,2026-10-08,receipt,OC-0016,OT4305
+lote-0653,Espuma alta densidad 5 cm,48000,2026-10-08,receipt,OC-0017,OT4305
+lote-0656,Tela tapicería antimanchas,28500,2026-10-08,receipt,OC-0017,OT4305
+lote-0699,Caño estructural 40×40,39500,2026-09-25,receipt,OC-0018,OT4306
+lote-0702,Caño estructural 40×40,39500,2026-09-25,receipt,OC-0018,OT4306
+lote-0705,Espuma alta densidad 5 cm,48000,2026-09-26,receipt,OC-0019,OT4306
+lote-0708,Tela tapicería antimanchas,28500,2026-09-26,receipt,OC-0019,OT4306
+lote-0752,Multilaminado fenólico 18 mm,97000,2026-10-13,receipt,OC-0020,OT4306
+lote-0757,Multilaminado fenólico 18 mm,97000,2026-10-13,receipt,OC-0020,OT4306

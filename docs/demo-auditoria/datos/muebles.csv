@@ -1,0 +1,23 @@
+id,ot,mueble,cantidad,terminadas
+mu-0855,OT4311,Alacena,1,0
+mu-0851,OT4310,Mesa exterior,8,0
+mu-0847,OT4309,Atril,20,0
+mu-0848,OT4309,Banco de piano,4,0
+mu-0831,OT4308,Respaldo de cama,12,0
+mu-0832,OT4308,Mesa de luz,24,0
+mu-0712,OT4307,Biblioteca,1,0
+mu-0713,OT4307,Escritorio,1,0
+mu-0660,OT4306,Barra,1,0
+mu-0661,OT4306,Mesa,4,0
+mu-0662,OT4306,Silla,12,8
+mu-0509,OT4305,Mostrador de recepción,1,0
+mu-0510,OT4305,Mueble de guardado,2,0
+mu-0511,OT4305,Sillón de espera,3,2
+mu-0404,OT4304,Mostrador,2,2
+mu-0405,OT4304,Exhibidor de pared,6,6
+mu-0268,OT4303,Escritorio,10,10
+mu-0269,OT4303,Locker,4,4
+mu-0118,OT4302,Barra,1,1
+mu-0119,OT4302,Banqueta,8,8
+mu-0011,OT4301,Estantería alta,4,4
+mu-0012,OT4301,Mesa de exhibición,2,2

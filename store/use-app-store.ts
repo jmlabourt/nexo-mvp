@@ -35,7 +35,7 @@ import { costSettingsError, hourRatesError } from "@/lib/cost-settings";
 import { buildSeed } from "@/lib/seed-data";
 import * as ops from "@/lib/project-operations";
 import * as circuit from "@/lib/circuit";
-import { EMPTY_LEDGER, normalizeLedger, type LedgerCtx } from "@/lib/ledger";
+import { EMPTY_LEDGER, type LedgerCtx } from "@/lib/ledger";
 import { closeCheck } from "@/lib/tablero";
 import { setRubroNames } from "@/lib/rubros";
 import { correctHours, type HoursCorrectionInput } from "@/lib/hours-review";

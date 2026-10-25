@@ -1,0 +1,10 @@
+id,nombre,contacto,activo
+cli-01,Librería El Faro Azul,Encargada de local,sí
+cli-02,Restó Cardo y Ajo,Socio gerente,sí
+cli-03,Óptica Visión Clara,Dueña,sí
+cli-04,Coworking Nodo Sur,Administración,sí
+cli-05,Café Brújula,Socio,sí
+cli-06,Estudio Arenal Arquitectura,Arquitecta a cargo,sí
+cli-07,Clínica Dental Sonrisa Norte,Dirección,sí
+cli-08,Hotel Puerto Colibrí,Compras,sí
+cli-09,Escuela de Música Clave de Sol,Secretaría,sí

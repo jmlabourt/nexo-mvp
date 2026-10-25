@@ -1,0 +1,1724 @@
+{
+ "asOf": "2026-10-20",
+ "ots": {
+  "OT4311": {
+   "ot": "OT4311_RestoCardoAjo_AlacenaCocina",
+   "estado": "quotation",
+   "cotizacion": {
+    "materiales": 290000.0,
+    "mano_obra": 170000.0,
+    "personal": 0.0,
+    "directo": 460000.0,
+    "generales": 13800.0,
+    "precio_materiales": 414285.71,
+    "precio_mano_obra": 283333.33,
+    "precio_sugerido": 726753,
+    "precio_lista": 726753,
+    "precio_acordado": 726753.0,
+    "cf_previsto": 15333.33,
+    "costo_total": 489133.33,
+    "rentabilidad_cotizada": 32.7
+   },
+   "tramos_previstos": [
+    {
+     "from": "2026-11-23",
+     "to": "2026-12-18",
+     "days": 25,
+     "capital": 460000.0,
+     "amount": 15333.33
+    }
+   ]
+  },
+  "OT4310": {
+   "ot": "OT4310_CafeBrujula_TerrazaMesasExteriores",
+   "estado": "quotation",
+   "cotizacion": {
+    "materiales": 828000.0,
+    "mano_obra": 796000.0,
+    "personal": 48000.0,
+    "directo": 1672000.0,
+    "generales": 50160.0,
+    "precio_materiales": 1182857.14,
+    "precio_mano_obra": 1406666.67,
+    "precio_sugerido": 2711023,
+    "precio_lista": 2710000.0,
+    "precio_acordado": 2710000.0,
+    "cf_previsto": 71338.67,
+    "costo_total": 1793498.67,
+    "rentabilidad_cotizada": 33.82
+   },
+   "tramos_previstos": [
+    {
+     "from": "2026-11-16",
+     "to": "2026-12-18",
+     "days": 32,
+     "capital": 1672000.0,
+     "amount": 71338.67
+    }
+   ]
+  },
+  "OT4309": {
+   "ot": "OT4309_EscuelaMusicaClave_AtrilesBancos",
+   "estado": "quotation",
+   "cotizacion": {
+    "materiales": 694000.0,
+    "mano_obra": 757600.0,
+    "personal": 72000.0,
+    "directo": 1523600.0,
+    "generales": 45708.0,
+    "precio_materiales": 991428.57,
+    "precio_mano_obra": 1382666.67,
+    "precio_sugerido": 2435703,
+    "precio_lista": 2440000.0,
+    "precio_acordado": 2440000.0,
+    "cf_previsto": 15787.2,
+    "costo_total": 1585095.2,
+    "rentabilidad_cotizada": 35.04
+   },
+   "tramos_previstos": [
+    {
+     "from": "2026-11-09",
+     "to": "2026-12-18",
+     "days": 39,
+     "capital": 303600.0,
+     "amount": 15787.2
+    }
+   ]
+  },
+  "OT4308": {
+   "ot": "OT4308_HotelPuertoColibri_RespaldosMesasLuz12",
+   "estado": "approved",
+   "cotizacion": {
+    "materiales": 3000000.0,
+    "mano_obra": 2451600.0,
+    "personal": 280000.0,
+    "directo": 5731600.0,
+    "generales": 171948.0,
+    "precio_materiales": 4285714.29,
+    "precio_mano_obra": 4552666.67,
+    "precio_sugerido": 9080312,
+    "precio_lista": 9080000.0,
+    "precio_acordado": 8830000.0,
+    "cf_previsto": 73320.0,
+    "costo_total": 5976868.0,
+    "rentabilidad_cotizada": 32.31
+   },
+   "tramos_previstos": [
+    {
+     "from": "2026-11-02",
+     "to": "2026-11-27",
+     "days": 25,
+     "capital": 2199600.0,
+     "amount": 73320.0
+    }
+   ],
+   "economia": {
+    "contrato": 8830000,
+    "cobrado": 0.0,
+    "materiales": 0.0,
+    "desperdicio": 0.0,
+    "mano_obra": 0.0,
+    "horas_obreros": 0.0,
+    "personal": 132000.0,
+    "horas_personal": 11.0,
+    "otros": 0.0,
+    "costo_operativo": 132000.0,
+    "cf_actualizado": 800.0,
+    "cf_previsto_a_la_fecha": 0.0,
+    "cf_adicional": 800.0,
+    "costo_real": 132800.0,
+    "ganancia": 8697200.0,
+    "rentabilidad": 98.5,
+    "rentabilidad_cotizada": 32.31
+   },
+   "tramos_actualizados": [
+    {
+     "from": "2026-10-15",
+     "to": "2026-10-16",
+     "days": 1,
+     "capital": 72000.0,
+     "amount": 96.0
+    },
+    {
+     "from": "2026-10-16",
+     "to": "2026-10-20",
+     "days": 4,
+     "capital": 132000.0,
+     "amount": 704.0
+    }
+   ]
+  },
+  "OT4307": {
+   "ot": "OT4307_EstudioArenal_BibliotecaEscritorio",
+   "estado": "purchasing",
+   "cotizacion": {
+    "materiales": 1101000.0,
+    "mano_obra": 854000.0,
+    "personal": 153000.0,
+    "directo": 2108000.0,
+    "generales": 63240.0,
+    "precio_materiales": 1572857.14,
+    "precio_mano_obra": 1678333.33,
+    "precio_sugerido": 3325122,
+    "precio_lista": 3330000.0,
+    "precio_acordado": 3330000.0,
+    "cf_previsto": 10632.0,
+    "costo_total": 2181872.0,
+    "rentabilidad_cotizada": 34.48
+   },
+   "tramos_previstos": [
+    {
+     "from": "2026-10-26",
+     "to": "2026-11-13",
+     "days": 18,
+     "capital": 443000.0,
+     "amount": 10632.0
+    }
+   ],
+   "economia": {
+    "contrato": 3330000,
+    "cobrado": 1665000.0,
+    "materiales": 0.0,
+    "desperdicio": 0.0,
+    "mano_obra": 0.0,
+    "horas_obreros": 0.0,
+    "personal": 120000.0,
+    "horas_personal": 10.0,
+    "otros": 0.0,
+    "costo_operativo": 120000.0,
+    "cf_actualizado": 768.0,
+    "cf_previsto_a_la_fecha": 0.0,
+    "cf_adicional": 768.0,
+    "costo_real": 120768.0,
+    "ganancia": 3209232.0,
+    "rentabilidad": 96.37,
+    "rentabilidad_cotizada": 34.48
+   },
+   "tramos_actualizados": [
+    {
+     "from": "2026-09-23",
+     "to": "2026-10-01",
+     "days": 8,
+     "capital": 72000.0,
+     "amount": 768.0
+    }
+   ]
+  },
+  "OT4306": {
+   "ot": "OT4306_CafeBrujula_BarraMesas12Sillas",
+   "estado": "production",
+   "cotizacion": {
+    "materiales": 1997000.0,
+    "mano_obra": 1931200.0,
+    "personal": 234000.0,
+    "directo": 4162200.0,
+    "generales": 124866.0,
+    "precio_materiales": 2852857.14,
+    "precio_mano_obra": 3608666.67,
+    "precio_sugerido": 6622693,
+    "precio_lista": 6620000.0,
+    "precio_acordado": 6470000.0,
+    "cf_previsto": 39560.53,
+    "costo_total": 4326626.53,
+    "rentabilidad_cotizada": 33.13
+   },
+   "tramos_previstos": [
+    {
+     "from": "2026-09-28",
+     "to": "2026-10-30",
+     "days": 32,
+     "capital": 927200.0,
+     "amount": 39560.53
+    }
+   ],
+   "economia": {
+    "contrato": 6470000,
+    "cobrado": 3235000.0,
+    "materiales": 1039375.0,
+    "desperdicio": 94325.0,
+    "mano_obra": 1404200.0,
+    "horas_obreros": 163.0,
+    "personal": 256000.0,
+    "horas_personal": 22.0,
+    "otros": 85000.0,
+    "costo_operativo": 2784575.0,
+    "cf_actualizado": 2869.33,
+    "cf_previsto_a_la_fecha": 27197.87,
+    "cf_adicional": 0.0,
+    "costo_real": 2787444.33,
+    "ganancia": 3682555.67,
+    "rentabilidad": 56.92,
+    "rentabilidad_cotizada": 33.13
+   },
+   "tramos_actualizados": [
+    {
+     "from": "2026-09-03",
+     "to": "2026-09-04",
+     "days": 1,
+     "capital": 84000.0,
+     "amount": 112.0
+    },
+    {
+     "from": "2026-09-04",
+     "to": "2026-09-07",
+     "days": 3,
+     "capital": 156000.0,
+     "amount": 624.0
+    },
+    {
+     "from": "2026-09-07",
+     "to": "2026-09-15",
+     "days": 8,
+     "capital": 200000.0,
+     "amount": 2133.33
+    }
+   ]
+  },
+  "OT4305": {
+   "ot": "OT4305_ClinicaDental_MueblesRecepcion",
+   "estado": "production",
+   "cotizacion": {
+    "materiales": 1186000.0,
+    "mano_obra": 1170000.0,
+    "personal": 164000.0,
+    "directo": 2520000.0,
+    "generales": 75600.0,
+    "precio_materiales": 1694285.71,
+    "precio_mano_obra": 2223333.33,
+    "precio_sugerido": 4029928,
+    "precio_lista": 4030000.0,
+    "precio_acordado": 4030000.0,
+    "cf_previsto": 36708.0,
+    "costo_total": 2632308.0,
+    "rentabilidad_cotizada": 34.68
+   },
+   "tramos_previstos": [
+    {
+     "from": "2026-08-31",
+     "to": "2026-09-21",
+     "days": 21,
+     "capital": 1311000.0,
+     "amount": 36708.0
+    }
+   ],
+   "economia": {
+    "contrato": 4450000,
+    "cobrado": 1209000.0,
+    "materiales": 879425.0,
+    "desperdicio": 86750.0,
+    "mano_obra": 1743500.0,
+    "horas_obreros": 206.0,
+    "personal": 72000.0,
+    "horas_personal": 6.0,
+    "otros": 0.0,
+    "costo_operativo": 2694925.0,
+    "cf_actualizado": 47949.07,
+    "cf_previsto_a_la_fecha": 36708.0,
+    "cf_adicional": 11241.07,
+    "costo_real": 2742874.07,
+    "ganancia": 1707125.93,
+    "rentabilidad": 38.36,
+    "rentabilidad_cotizada": 34.68
+   },
+   "tramos_actualizados": [
+    {
+     "from": "2026-08-12",
+     "to": "2026-08-20",
+     "days": 8,
+     "capital": 72000.0,
+     "amount": 768.0
+    },
+    {
+     "from": "2026-09-11",
+     "to": "2026-09-14",
+     "days": 3,
+     "capital": 20100.0,
+     "amount": 80.4
+    },
+    {
+     "from": "2026-09-14",
+     "to": "2026-09-15",
+     "days": 1,
+     "capital": 188600.0,
+     "amount": 251.47
+    },
+    {
+     "from": "2026-09-15",
+     "to": "2026-09-16",
+     "days": 1,
+     "capital": 238600.0,
+     "amount": 318.13
+    },
+    {
+     "from": "2026-09-16",
+     "to": "2026-09-17",
+     "days": 1,
+     "capital": 288600.0,
+     "amount": 384.8
+    },
+    {
+     "from": "2026-09-17",
+     "to": "2026-09-18",
+     "days": 1,
+     "capital": 338600.0,
+     "amount": 451.47
+    },
+    {
+     "from": "2026-09-18",
+     "to": "2026-09-21",
+     "days": 3,
+     "capital": 388600.0,
+     "amount": 1554.4
+    },
+    {
+     "from": "2026-09-21",
+     "to": "2026-09-22",
+     "days": 1,
+     "capital": 440600.0,
+     "amount": 587.47
+    },
+    {
+     "from": "2026-09-22",
+     "to": "2026-09-23",
+     "days": 1,
+     "capital": 492600.0,
+     "amount": 656.8
+    },
+    {
+     "from": "2026-09-23",
+     "to": "2026-09-24",
+     "days": 1,
+     "capital": 544600.0,
+     "amount": 726.13
+    },
+    {
+     "from": "2026-09-24",
+     "to": "2026-09-25",
+     "days": 1,
+     "capital": 596600.0,
+     "amount": 795.47
+    },
+    {
+     "from": "2026-09-25",
+     "to": "2026-09-28",
+     "days": 3,
+     "capital": 648600.0,
+     "amount": 2594.4
+    },
+    {
+     "from": "2026-09-28",
+     "to": "2026-09-29",
+     "days": 1,
+     "capital": 746600.0,
+     "amount": 995.47
+    },
+    {
+     "from": "2026-09-29",
+     "to": "2026-09-30",
+     "days": 1,
+     "capital": 844600.0,
+     "amount": 1126.13
+    },
+    {
+     "from": "2026-09-30",
+     "to": "2026-10-01",
+     "days": 1,
+     "capital": 942600.0,
+     "amount": 1256.8
+    },
+    {
+     "from": "2026-10-01",
+     "to": "2026-10-02",
+     "days": 1,
+     "capital": 976600.0,
+     "amount": 1302.13
+    },
+    {
+     "from": "2026-10-02",
+     "to": "2026-10-05",
+     "days": 3,
+     "capital": 1010600.0,
+     "amount": 4042.4
+    },
+    {
+     "from": "2026-10-05",
+     "to": "2026-10-06",
+     "days": 1,
+     "capital": 1044600.0,
+     "amount": 1392.8
+    },
+    {
+     "from": "2026-10-06",
+     "to": "2026-10-07",
+     "days": 1,
+     "capital": 1078600.0,
+     "amount": 1438.13
+    },
+    {
+     "from": "2026-10-07",
+     "to": "2026-10-08",
+     "days": 1,
+     "capital": 1112600.0,
+     "amount": 1483.47
+    },
+    {
+     "from": "2026-10-08",
+     "to": "2026-10-09",
+     "days": 1,
+     "capital": 1353000.0,
+     "amount": 1804.0
+    },
+    {
+     "from": "2026-10-09",
+     "to": "2026-10-12",
+     "days": 3,
+     "capital": 1387000.0,
+     "amount": 5548.0
+    },
+    {
+     "from": "2026-10-12",
+     "to": "2026-10-13",
+     "days": 1,
+     "capital": 1473200.0,
+     "amount": 1964.27
+    },
+    {
+     "from": "2026-10-13",
+     "to": "2026-10-14",
+     "days": 1,
+     "capital": 1559400.0,
+     "amount": 2079.2
+    },
+    {
+     "from": "2026-10-14",
+     "to": "2026-10-15",
+     "days": 1,
+     "capital": 1645600.0,
+     "amount": 2194.13
+    },
+    {
+     "from": "2026-10-15",
+     "to": "2026-10-16",
+     "days": 1,
+     "capital": 1774300.0,
+     "amount": 2365.73
+    },
+    {
+     "from": "2026-10-16",
+     "to": "2026-10-19",
+     "days": 3,
+     "capital": 1809500.0,
+     "amount": 7238.0
+    },
+    {
+     "from": "2026-10-19",
+     "to": "2026-10-20",
+     "days": 1,
+     "capital": 1912100.0,
+     "amount": 2549.47
+    }
+   ]
+  },
+  "OT4304": {
+   "ot": "OT4304_OpticaVisionClara_MostradoresExhibidores",
+   "estado": "production",
+   "cotizacion": {
+    "materiales": 1082000.0,
+    "mano_obra": 933000.0,
+    "personal": 188000.0,
+    "directo": 2203000.0,
+    "generales": 66090.0,
+    "precio_materiales": 1545714.29,
+    "precio_mano_obra": 1868333.33,
+    "precio_sugerido": 3499477,
+    "precio_lista": 3500000.0,
+    "precio_acordado": 3500000.0,
+    "cf_previsto": 19328.0,
+    "costo_total": 2288418.0,
+    "rentabilidad_cotizada": 34.62
+   },
+   "tramos_previstos": [
+    {
+     "from": "2026-08-24",
+     "to": "2026-09-25",
+     "days": 32,
+     "capital": 453000.0,
+     "amount": 19328.0
+    }
+   ],
+   "economia": {
+    "contrato": 3500000,
+    "cobrado": 2625000.0,
+    "materiales": 1103600.0,
+    "desperdicio": 70250.0,
+    "mano_obra": 907600.0,
+    "horas_obreros": 110.0,
+    "personal": 156000.0,
+    "horas_personal": 13.0,
+    "otros": 0.0,
+    "costo_operativo": 2167200.0,
+    "cf_actualizado": 2584.0,
+    "cf_previsto_a_la_fecha": 19328.0,
+    "cf_adicional": 0.0,
+    "costo_real": 2169784.0,
+    "ganancia": 1330216.0,
+    "rentabilidad": 38.01,
+    "rentabilidad_cotizada": 34.62
+   },
+   "tramos_actualizados": [
+    {
+     "from": "2026-08-05",
+     "to": "2026-08-06",
+     "days": 1,
+     "capital": 84000.0,
+     "amount": 112.0
+    },
+    {
+     "from": "2026-08-06",
+     "to": "2026-08-12",
+     "days": 6,
+     "capital": 156000.0,
+     "amount": 1248.0
+    },
+    {
+     "from": "2026-09-15",
+     "to": "2026-09-16",
+     "days": 1,
+     "capital": 8000.0,
+     "amount": 10.67
+    },
+    {
+     "from": "2026-09-16",
+     "to": "2026-09-17",
+     "days": 1,
+     "capital": 42000.0,
+     "amount": 56.0
+    },
+    {
+     "from": "2026-09-17",
+     "to": "2026-09-18",
+     "days": 1,
+     "capital": 76000.0,
+     "amount": 101.33
+    },
+    {
+     "from": "2026-09-21",
+     "to": "2026-09-22",
+     "days": 1,
+     "capital": 123600.0,
+     "amount": 164.8
+    },
+    {
+     "from": "2026-09-22",
+     "to": "2026-09-23",
+     "days": 1,
+     "capital": 157600.0,
+     "amount": 210.13
+    },
+    {
+     "from": "2026-09-23",
+     "to": "2026-09-24",
+     "days": 1,
+     "capital": 222800.0,
+     "amount": 297.07
+    },
+    {
+     "from": "2026-09-24",
+     "to": "2026-09-25",
+     "days": 1,
+     "capital": 288000.0,
+     "amount": 384.0
+    }
+   ]
+  },
+  "OT4303": {
+   "ot": "OT4303_CoworkingNodoSur_EscritoriosLockers",
+   "estado": "production",
+   "cotizacion": {
+    "materiales": 1701600.0,
+    "mano_obra": 1732000.0,
+    "personal": 162000.0,
+    "directo": 3595600.0,
+    "generales": 107868.0,
+    "precio_materiales": 2430857.14,
+    "precio_mano_obra": 3156666.67,
+    "precio_sugerido": 5745558,
+    "precio_lista": 5750000.0,
+    "precio_acordado": 5630000.0,
+    "cf_previsto": 51952.53,
+    "costo_total": 3755420.53,
+    "rentabilidad_cotizada": 33.3
+   },
+   "tramos_previstos": [
+    {
+     "from": "2026-08-17",
+     "to": "2026-09-15",
+     "days": 29,
+     "capital": 1343600.0,
+     "amount": 51952.53
+    }
+   ],
+   "economia": {
+    "contrato": 5630000,
+    "cobrado": 4504000.0,
+    "materiales": 1586400.0,
+    "desperdicio": 115400.0,
+    "mano_obra": 1798400.0,
+    "horas_obreros": 218.0,
+    "personal": 96000.0,
+    "horas_personal": 8.0,
+    "otros": 0.0,
+    "costo_operativo": 3480800.0,
+    "cf_actualizado": 18794.79,
+    "cf_previsto_a_la_fecha": 51952.53,
+    "cf_adicional": 0.0,
+    "costo_real": 3499594.79,
+    "ganancia": 2130405.21,
+    "rentabilidad": 37.84,
+    "rentabilidad_cotizada": 33.3
+   },
+   "tramos_actualizados": [
+    {
+     "from": "2026-07-29",
+     "to": "2026-08-05",
+     "days": 7,
+     "capital": 96000.0,
+     "amount": 896.0
+    },
+    {
+     "from": "2026-08-25",
+     "to": "2026-08-26",
+     "days": 1,
+     "capital": 33900.0,
+     "amount": 45.2
+    },
+    {
+     "from": "2026-08-26",
+     "to": "2026-08-27",
+     "days": 1,
+     "capital": 151900.0,
+     "amount": 202.53
+    },
+    {
+     "from": "2026-08-27",
+     "to": "2026-08-28",
+     "days": 1,
+     "capital": 269900.0,
+     "amount": 359.87
+    },
+    {
+     "from": "2026-08-28",
+     "to": "2026-08-31",
+     "days": 3,
+     "capital": 387900.0,
+     "amount": 1551.6
+    },
+    {
+     "from": "2026-08-31",
+     "to": "2026-09-01",
+     "days": 1,
+     "capital": 469900.0,
+     "amount": 626.53
+    },
+    {
+     "from": "2026-09-01",
+     "to": "2026-09-02",
+     "days": 1,
+     "capital": 551900.0,
+     "amount": 735.87
+    },
+    {
+     "from": "2026-09-02",
+     "to": "2026-09-03",
+     "days": 1,
+     "capital": 633900.0,
+     "amount": 845.2
+    },
+    {
+     "from": "2026-09-03",
+     "to": "2026-09-04",
+     "days": 1,
+     "capital": 715900.0,
+     "amount": 954.53
+    },
+    {
+     "from": "2026-09-04",
+     "to": "2026-09-10",
+     "days": 6,
+     "capital": 797900.0,
+     "amount": 6383.2
+    },
+    {
+     "from": "2026-09-10",
+     "to": "2026-09-14",
+     "days": 4,
+     "capital": 922900.0,
+     "amount": 4922.13
+    },
+    {
+     "from": "2026-09-14",
+     "to": "2026-09-15",
+     "days": 1,
+     "capital": 954100.0,
+     "amount": 1272.13
+    }
+   ]
+  },
+  "OT4302": {
+   "ot": "OT4302_RestoCardoAjo_BarraBanquetas",
+   "estado": "closed",
+   "cotizacion": {
+    "materiales": 1484000.0,
+    "mano_obra": 1135200.0,
+    "personal": 140000.0,
+    "directo": 2759200.0,
+    "generales": 82776.0,
+    "precio_materiales": 2120000.0,
+    "precio_mano_obra": 2125333.33,
+    "precio_sugerido": 4365922,
+    "precio_lista": 4370000.0,
+    "precio_acordado": 4370000.0,
+    "cf_previsto": 37751.47,
+    "costo_total": 2879727.47,
+    "rentabilidad_cotizada": 34.1
+   },
+   "tramos_previstos": [
+    {
+     "from": "2026-07-06",
+     "to": "2026-08-03",
+     "days": 28,
+     "capital": 1011200.0,
+     "amount": 37751.47
+    }
+   ],
+   "economia": {
+    "contrato": 4370000,
+    "cobrado": 3059000.0,
+    "materiales": 1492000.0,
+    "desperdicio": 103150.0,
+    "mano_obra": 1483600.0,
+    "horas_obreros": 174.0,
+    "personal": 84000.0,
+    "horas_personal": 7.0,
+    "otros": 95000.0,
+    "costo_operativo": 3154600.0,
+    "cf_actualizado": 16146.11,
+    "cf_previsto_a_la_fecha": 37751.47,
+    "cf_adicional": 0.0,
+    "costo_real": 3170746.11,
+    "ganancia": 1199253.89,
+    "rentabilidad": 27.44,
+    "rentabilidad_cotizada": 34.1
+   },
+   "tramos_actualizados": [
+    {
+     "from": "2026-06-24",
+     "to": "2026-07-03",
+     "days": 9,
+     "capital": 84000.0,
+     "amount": 1008.0
+    },
+    {
+     "from": "2026-07-24",
+     "to": "2026-07-27",
+     "days": 3,
+     "capital": 40000.0,
+     "amount": 160.0
+    },
+    {
+     "from": "2026-07-27",
+     "to": "2026-07-28",
+     "days": 1,
+     "capital": 94000.0,
+     "amount": 125.33
+    },
+    {
+     "from": "2026-07-28",
+     "to": "2026-07-29",
+     "days": 1,
+     "capital": 148000.0,
+     "amount": 197.33
+    },
+    {
+     "from": "2026-07-29",
+     "to": "2026-07-30",
+     "days": 1,
+     "capital": 202000.0,
+     "amount": 269.33
+    },
+    {
+     "from": "2026-07-30",
+     "to": "2026-07-31",
+     "days": 1,
+     "capital": 256000.0,
+     "amount": 341.33
+    },
+    {
+     "from": "2026-07-31",
+     "to": "2026-08-03",
+     "days": 3,
+     "capital": 310000.0,
+     "amount": 1240.0
+    },
+    {
+     "from": "2026-08-03",
+     "to": "2026-08-04",
+     "days": 1,
+     "capital": 364000.0,
+     "amount": 485.33
+    },
+    {
+     "from": "2026-08-04",
+     "to": "2026-08-05",
+     "days": 1,
+     "capital": 418000.0,
+     "amount": 557.33
+    },
+    {
+     "from": "2026-08-05",
+     "to": "2026-08-10",
+     "days": 5,
+     "capital": 731000.0,
+     "amount": 4873.33
+    },
+    {
+     "from": "2026-08-20",
+     "to": "2026-08-27",
+     "days": 7,
+     "capital": 600.0,
+     "amount": 5.6
+    },
+    {
+     "from": "2026-08-27",
+     "to": "2026-10-20",
+     "days": 54,
+     "capital": 95600.0,
+     "amount": 6883.2
+    }
+   ]
+  },
+  "OT4301": {
+   "ot": "OT4301_LibreriaFaroAzul_EstanteriasSalon",
+   "estado": "closed",
+   "cotizacion": {
+    "materiales": 1268000.0,
+    "mano_obra": 1014000.0,
+    "personal": 186000.0,
+    "directo": 2468000.0,
+    "generales": 74040.0,
+    "precio_materiales": 1811428.57,
+    "precio_mano_obra": 2000000.0,
+    "precio_sugerido": 3921321,
+    "precio_lista": 3920000.0,
+    "precio_acordado": 3920000.0,
+    "cf_previsto": 35898.67,
+    "costo_total": 2577938.67,
+    "rentabilidad_cotizada": 34.24
+   },
+   "tramos_previstos": [
+    {
+     "from": "2026-06-15",
+     "to": "2026-08-07",
+     "days": 53,
+     "capital": 508000.0,
+     "amount": 35898.67
+    }
+   ],
+   "economia": {
+    "contrato": 3920000,
+    "cobrado": 3920000.0,
+    "materiales": 1237100.0,
+    "desperdicio": 79700.0,
+    "mano_obra": 1055200.0,
+    "horas_obreros": 131.0,
+    "personal": 165000.0,
+    "horas_personal": 14.0,
+    "otros": 0.0,
+    "costo_operativo": 2457300.0,
+    "cf_actualizado": 23143.86,
+    "cf_previsto_a_la_fecha": 35898.67,
+    "cf_adicional": 0.0,
+    "costo_real": 2480443.86,
+    "ganancia": 1439556.14,
+    "rentabilidad": 36.72,
+    "rentabilidad_cotizada": 34.24
+   },
+   "tramos_actualizados": [
+    {
+     "from": "2026-06-03",
+     "to": "2026-06-04",
+     "days": 1,
+     "capital": 72000.0,
+     "amount": 96.0
+    },
+    {
+     "from": "2026-06-04",
+     "to": "2026-06-05",
+     "days": 1,
+     "capital": 132000.0,
+     "amount": 176.0
+    },
+    {
+     "from": "2026-06-05",
+     "to": "2026-06-09",
+     "days": 4,
+     "capital": 165000.0,
+     "amount": 880.0
+    },
+    {
+     "from": "2026-06-24",
+     "to": "2026-06-25",
+     "days": 1,
+     "capital": 19200.0,
+     "amount": 25.6
+    },
+    {
+     "from": "2026-06-25",
+     "to": "2026-06-26",
+     "days": 1,
+     "capital": 75200.0,
+     "amount": 100.27
+    },
+    {
+     "from": "2026-06-26",
+     "to": "2026-06-29",
+     "days": 3,
+     "capital": 9200.0,
+     "amount": 36.8
+    },
+    {
+     "from": "2026-06-29",
+     "to": "2026-06-30",
+     "days": 1,
+     "capital": 85200.0,
+     "amount": 113.6
+    },
+    {
+     "from": "2026-06-30",
+     "to": "2026-07-01",
+     "days": 1,
+     "capital": 161200.0,
+     "amount": 214.93
+    },
+    {
+     "from": "2026-07-01",
+     "to": "2026-07-02",
+     "days": 1,
+     "capital": 237200.0,
+     "amount": 316.27
+    },
+    {
+     "from": "2026-07-02",
+     "to": "2026-07-03",
+     "days": 1,
+     "capital": 277200.0,
+     "amount": 369.6
+    },
+    {
+     "from": "2026-07-03",
+     "to": "2026-07-06",
+     "days": 3,
+     "capital": 317200.0,
+     "amount": 1268.8
+    },
+    {
+     "from": "2026-07-06",
+     "to": "2026-07-07",
+     "days": 1,
+     "capital": 364000.0,
+     "amount": 485.33
+    },
+    {
+     "from": "2026-07-07",
+     "to": "2026-07-08",
+     "days": 1,
+     "capital": 410800.0,
+     "amount": 547.73
+    },
+    {
+     "from": "2026-07-08",
+     "to": "2026-07-09",
+     "days": 1,
+     "capital": 457600.0,
+     "amount": 610.13
+    },
+    {
+     "from": "2026-07-09",
+     "to": "2026-08-05",
+     "days": 27,
+     "capital": 497300.0,
+     "amount": 17902.8
+    }
+   ]
+  }
+ },
+ "necesidades": [
+  {
+   "ot": "OT4307",
+   "material": "Melamina blanca 18 mm",
+   "demanda": 8.0,
+   "usado": 0.0,
+   "asignado": 0.0,
+   "en_produccion": 0.0,
+   "pedido_sin_recibir": 8.0,
+   "faltante": 8.0,
+   "por_registrar": 0.0
+  },
+  {
+   "ot": "OT4307",
+   "material": "Placa MDF 18 mm",
+   "demanda": 5.0,
+   "usado": 0.0,
+   "asignado": 0.0,
+   "en_produccion": 0.0,
+   "pedido_sin_recibir": 0.0,
+   "faltante": 5.0,
+   "por_registrar": 5.0
+  },
+  {
+   "ot": "OT4307",
+   "material": "Laca nitro",
+   "demanda": 4.0,
+   "usado": 0.0,
+   "asignado": 0.0,
+   "en_produccion": 0.0,
+   "pedido_sin_recibir": 0.0,
+   "faltante": 4.0,
+   "por_registrar": 4.0
+  },
+  {
+   "ot": "OT4307",
+   "material": "Enchapado roble 18 mm",
+   "demanda": 2.0,
+   "usado": 0.0,
+   "asignado": 0.0,
+   "en_produccion": 0.0,
+   "pedido_sin_recibir": 2.0,
+   "faltante": 2.0,
+   "por_registrar": 0.0
+  },
+  {
+   "ot": "OT4307",
+   "material": "Corredera telescópica 45 cm",
+   "demanda": 3.0,
+   "usado": 0.0,
+   "asignado": 0.0,
+   "en_produccion": 0.0,
+   "pedido_sin_recibir": 3.0,
+   "faltante": 3.0,
+   "por_registrar": 0.0
+  },
+  {
+   "ot": "OT4307",
+   "material": "Caño estructural 40×40",
+   "demanda": 3.0,
+   "usado": 0.0,
+   "asignado": 0.0,
+   "en_produccion": 0.0,
+   "pedido_sin_recibir": 0.0,
+   "faltante": 3.0,
+   "por_registrar": 3.0
+  },
+  {
+   "ot": "OT4307",
+   "material": "Bisagra cazoleta",
+   "demanda": 8.0,
+   "usado": 0.0,
+   "asignado": 0.0,
+   "en_produccion": 0.0,
+   "pedido_sin_recibir": 8.0,
+   "faltante": 8.0,
+   "por_registrar": 0.0
+  },
+  {
+   "ot": "OT4307",
+   "material": "Tapacanto PVC 22 mm",
+   "demanda": 40.0,
+   "usado": 0.0,
+   "asignado": 0.0,
+   "en_produccion": 0.0,
+   "pedido_sin_recibir": 0.0,
+   "faltante": 40.0,
+   "por_registrar": 40.0
+  },
+  {
+   "ot": "OT4306",
+   "material": "Placa MDF 18 mm",
+   "demanda": 5.0,
+   "usado": 2.0,
+   "asignado": 0.0,
+   "en_produccion": 0.0,
+   "pedido_sin_recibir": 0.0,
+   "faltante": 3.0,
+   "por_registrar": 3.0
+  },
+  {
+   "ot": "OT4306",
+   "material": "Tapacanto PVC 22 mm",
+   "demanda": 30.0,
+   "usado": 20.0,
+   "asignado": 0.0,
+   "en_produccion": 10.0,
+   "pedido_sin_recibir": 0.0,
+   "faltante": 0.0,
+   "por_registrar": 0.0
+  },
+  {
+   "ot": "OT4306",
+   "material": "Pintura poliuretánica",
+   "demanda": 7.0,
+   "usado": 0.0,
+   "asignado": 0.0,
+   "en_produccion": 0.0,
+   "pedido_sin_recibir": 0.0,
+   "faltante": 7.0,
+   "por_registrar": 7.0
+  },
+  {
+   "ot": "OT4306",
+   "material": "Multilaminado fenólico 18 mm",
+   "demanda": 6.0,
+   "usado": 1.75,
+   "asignado": 0.0,
+   "en_produccion": 2.25,
+   "pedido_sin_recibir": 2.0,
+   "faltante": 2.0,
+   "por_registrar": 0.0
+  },
+  {
+   "ot": "OT4306",
+   "material": "Caño estructural 40×40",
+   "demanda": 14.0,
+   "usado": 11.5,
+   "asignado": 0.0,
+   "en_produccion": 2.5,
+   "pedido_sin_recibir": 0.0,
+   "faltante": 0.0,
+   "por_registrar": 0.0
+  },
+  {
+   "ot": "OT4306",
+   "material": "Espuma alta densidad 5 cm",
+   "demanda": 3.0,
+   "usado": 1.75,
+   "asignado": 0.0,
+   "en_produccion": 1.25,
+   "pedido_sin_recibir": 0.0,
+   "faltante": 0.0,
+   "por_registrar": 0.0
+  },
+  {
+   "ot": "OT4306",
+   "material": "Tela tapicería antimanchas",
+   "demanda": 12.0,
+   "usado": 6.75,
+   "asignado": 0.0,
+   "en_produccion": 2.25,
+   "pedido_sin_recibir": 0.0,
+   "faltante": 3.0,
+   "por_registrar": 3.0
+  },
+  {
+   "ot": "OT4305",
+   "material": "Enchapado roble 18 mm",
+   "demanda": 3.0,
+   "usado": 2.75,
+   "asignado": 0.0,
+   "en_produccion": 0.25,
+   "pedido_sin_recibir": 0.0,
+   "faltante": 0.0,
+   "por_registrar": 0.0
+  },
+  {
+   "ot": "OT4305",
+   "material": "Placa MDF 18 mm",
+   "demanda": 3.0,
+   "usado": 3.0,
+   "asignado": 0.0,
+   "en_produccion": 0.0,
+   "pedido_sin_recibir": 0.0,
+   "faltante": 0.0,
+   "por_registrar": 0.0
+  },
+  {
+   "ot": "OT4305",
+   "material": "Laca nitro",
+   "demanda": 3.0,
+   "usado": 0.0,
+   "asignado": 1.5,
+   "en_produccion": 1.5,
+   "pedido_sin_recibir": 0.0,
+   "faltante": 0.0,
+   "por_registrar": 0.0
+  },
+  {
+   "ot": "OT4305",
+   "material": "Melamina blanca 18 mm",
+   "demanda": 6.0,
+   "usado": 3.25,
+   "asignado": 0.0,
+   "en_produccion": 2.75,
+   "pedido_sin_recibir": 0.0,
+   "faltante": 0.0,
+   "por_registrar": 0.0
+  },
+  {
+   "ot": "OT4305",
+   "material": "Corredera telescópica 45 cm",
+   "demanda": 8.0,
+   "usado": 4.0,
+   "asignado": 0.0,
+   "en_produccion": 4.0,
+   "pedido_sin_recibir": 0.0,
+   "faltante": 0.0,
+   "por_registrar": 0.0
+  },
+  {
+   "ot": "OT4305",
+   "material": "Caño estructural 40×40",
+   "demanda": 3.0,
+   "usado": 3.0,
+   "asignado": 0.0,
+   "en_produccion": 0.0,
+   "pedido_sin_recibir": 0.0,
+   "faltante": 0.0,
+   "por_registrar": 0.0
+  },
+  {
+   "ot": "OT4305",
+   "material": "Pintura poliuretánica",
+   "demanda": 2.0,
+   "usado": 0.0,
+   "asignado": 0.0,
+   "en_produccion": 0.0,
+   "pedido_sin_recibir": 0.0,
+   "faltante": 2.0,
+   "por_registrar": 2.0
+  },
+  {
+   "ot": "OT4305",
+   "material": "Espuma alta densidad 5 cm",
+   "demanda": 1.0,
+   "usado": 0.0,
+   "asignado": 1.0,
+   "en_produccion": 0.0,
+   "pedido_sin_recibir": 0.0,
+   "faltante": 0.0,
+   "por_registrar": 0.0
+  },
+  {
+   "ot": "OT4305",
+   "material": "Tela tapicería antimanchas",
+   "demanda": 4.0,
+   "usado": 0.0,
+   "asignado": 4.0,
+   "en_produccion": 0.0,
+   "pedido_sin_recibir": 0.0,
+   "faltante": 0.0,
+   "por_registrar": 0.0
+  },
+  {
+   "ot": "OT4304",
+   "material": "Placa MDF 18 mm",
+   "demanda": 12.0,
+   "usado": 12.0,
+   "asignado": 0.0,
+   "en_produccion": 0.0,
+   "pedido_sin_recibir": 0.0,
+   "faltante": 0.0,
+   "por_registrar": 0.0
+  },
+  {
+   "ot": "OT4304",
+   "material": "Enchapado roble 18 mm",
+   "demanda": 2.0,
+   "usado": 2.0,
+   "asignado": 0.0,
+   "en_produccion": 0.0,
+   "pedido_sin_recibir": 0.0,
+   "faltante": 0.0,
+   "por_registrar": 0.0
+  },
+  {
+   "ot": "OT4304",
+   "material": "Laca nitro",
+   "demanda": 7.0,
+   "usado": 7.5,
+   "asignado": 0.0,
+   "en_produccion": 0.0,
+   "pedido_sin_recibir": 0.0,
+   "faltante": 0.0,
+   "por_registrar": 0.0
+  },
+  {
+   "ot": "OT4303",
+   "material": "Melamina blanca 18 mm",
+   "demanda": 18.5,
+   "usado": 18.5,
+   "asignado": 0.0,
+   "en_produccion": 1.5,
+   "pedido_sin_recibir": 0.0,
+   "faltante": 0.0,
+   "por_registrar": 0.0
+  },
+  {
+   "ot": "OT4303",
+   "material": "Tapacanto PVC 22 mm",
+   "demanda": 60.0,
+   "usado": 60.0,
+   "asignado": 0.0,
+   "en_produccion": 0.0,
+   "pedido_sin_recibir": 0.0,
+   "faltante": 0.0,
+   "por_registrar": 0.0
+  },
+  {
+   "ot": "OT4303",
+   "material": "Caño estructural 40×40",
+   "demanda": 8.0,
+   "usado": 8.0,
+   "asignado": 0.0,
+   "en_produccion": 0.0,
+   "pedido_sin_recibir": 0.0,
+   "faltante": 0.0,
+   "por_registrar": 0.0
+  },
+  {
+   "ot": "OT4303",
+   "material": "Pintura poliuretánica",
+   "demanda": 4.75,
+   "usado": 4.75,
+   "asignado": 0.0,
+   "en_produccion": 0.0,
+   "pedido_sin_recibir": 0.0,
+   "faltante": 0.0,
+   "por_registrar": 0.0
+  },
+  {
+   "ot": "OT4303",
+   "material": "Tornillo 4×40 (caja de 100)",
+   "demanda": 4.0,
+   "usado": 4.0,
+   "asignado": 2.0,
+   "en_produccion": 0.0,
+   "pedido_sin_recibir": 0.0,
+   "faltante": 0.0,
+   "por_registrar": 0.0
+  },
+  {
+   "ot": "OT4303",
+   "material": "Bisagra cazoleta",
+   "demanda": 16.0,
+   "usado": 16.0,
+   "asignado": 0.0,
+   "en_produccion": 0.0,
+   "pedido_sin_recibir": 0.0,
+   "faltante": 0.0,
+   "por_registrar": 0.0
+  }
+ ],
+ "dashboard": {
+  "periodo": {
+   "desde": "2026-07-23",
+   "hasta": "2026-10-20",
+   "corte": "2026-10-20"
+  },
+  "tarjetas": {
+   "dinero_cobrado": 16509000.0,
+   "pendiente_de_cobrar": 20283000.0,
+   "rentabilidad_total": 31.83,
+   "ventas_contratadas": 32210000.0
+  },
+  "detalle_pendiente": [
+   {
+    "ot": "OT4308",
+    "contrato": 8830000,
+    "cobrado": 0.0,
+    "pendiente": 8830000.0
+   },
+   {
+    "ot": "OT4307",
+    "contrato": 3330000,
+    "cobrado": 1665000.0,
+    "pendiente": 1665000.0
+   },
+   {
+    "ot": "OT4306",
+    "contrato": 6470000,
+    "cobrado": 3235000.0,
+    "pendiente": 3235000.0
+   },
+   {
+    "ot": "OT4305",
+    "contrato": 4450000,
+    "cobrado": 1209000.0,
+    "pendiente": 3241000.0
+   },
+   {
+    "ot": "OT4304",
+    "contrato": 3500000,
+    "cobrado": 2625000.0,
+    "pendiente": 875000.0
+   },
+   {
+    "ot": "OT4303",
+    "contrato": 5630000,
+    "cobrado": 4504000.0,
+    "pendiente": 1126000.0
+   },
+   {
+    "ot": "OT4302",
+    "contrato": 4370000,
+    "cobrado": 3059000.0,
+    "pendiente": 1311000.0
+   }
+  ],
+  "detalle_rentabilidad": [
+   {
+    "ot": "OT4302",
+    "ganancia": 1199253.89,
+    "contrato": 4370000
+   },
+   {
+    "ot": "OT4301",
+    "ganancia": 1439556.14,
+    "contrato": 3920000
+   }
+  ],
+  "detalle_ventas": [
+   {
+    "ot": "OT4308",
+    "aprobada": "2026-10-14",
+    "contrato": 8830000
+   },
+   {
+    "ot": "OT4307",
+    "aprobada": "2026-09-29",
+    "contrato": 3330000
+   },
+   {
+    "ot": "OT4306",
+    "aprobada": "2026-09-14",
+    "contrato": 6470000
+   },
+   {
+    "ot": "OT4305",
+    "aprobada": "2026-08-18",
+    "contrato": 4450000
+   },
+   {
+    "ot": "OT4304",
+    "aprobada": "2026-08-10",
+    "contrato": 3500000
+   },
+   {
+    "ot": "OT4303",
+    "aprobada": "2026-08-03",
+    "contrato": 5630000
+   }
+  ],
+  "grafico_cobrado_por_ot": [
+   {
+    "ot": "OT4303",
+    "importe": 4504000.0
+   },
+   {
+    "ot": "OT4306",
+    "importe": 3235000.0
+   },
+   {
+    "ot": "OT4304",
+    "importe": 2625000.0
+   },
+   {
+    "ot": "OT4301",
+    "importe": 1960000.0
+   },
+   {
+    "ot": "OT4307",
+    "importe": 1665000.0
+   },
+   {
+    "ot": "OT4302",
+    "importe": 1311000.0
+   },
+   {
+    "ot": "OT4305",
+    "importe": 1209000.0
+   }
+  ],
+  "grafico_rentabilidad": [
+   {
+    "ot": "OT4308",
+    "cotizada": 32.31,
+    "real": 98.5,
+    "tipo": "parcial"
+   },
+   {
+    "ot": "OT4307",
+    "cotizada": 34.48,
+    "real": 96.37,
+    "tipo": "parcial"
+   },
+   {
+    "ot": "OT4306",
+    "cotizada": 33.13,
+    "real": 56.92,
+    "tipo": "parcial"
+   },
+   {
+    "ot": "OT4305",
+    "cotizada": 34.68,
+    "real": 38.36,
+    "tipo": "parcial"
+   },
+   {
+    "ot": "OT4304",
+    "cotizada": 34.62,
+    "real": 38.01,
+    "tipo": "parcial"
+   },
+   {
+    "ot": "OT4303",
+    "cotizada": 33.3,
+    "real": 37.84,
+    "tipo": "parcial"
+   },
+   {
+    "ot": "OT4302",
+    "cotizada": 34.1,
+    "real": 27.44,
+    "tipo": "final"
+   },
+   {
+    "ot": "OT4301",
+    "cotizada": 34.24,
+    "real": 36.72,
+    "tipo": "final"
+   }
+  ],
+  "grafico_cobros_semanales": [
+   {
+    "desde": "2026-07-23",
+    "hasta": "2026-07-26",
+    "importe": 0.0
+   },
+   {
+    "desde": "2026-07-27",
+    "hasta": "2026-08-02",
+    "importe": 0.0
+   },
+   {
+    "desde": "2026-08-03",
+    "hasta": "2026-08-09",
+    "importe": 4212000.0
+   },
+   {
+    "desde": "2026-08-10",
+    "hasta": "2026-08-16",
+    "importe": 3061000.0
+   },
+   {
+    "desde": "2026-08-17",
+    "hasta": "2026-08-23",
+    "importe": 1209000.0
+   },
+   {
+    "desde": "2026-08-24",
+    "hasta": "2026-08-30",
+    "importe": 0.0
+   },
+   {
+    "desde": "2026-08-31",
+    "hasta": "2026-09-06",
+    "importe": 0.0
+   },
+   {
+    "desde": "2026-09-07",
+    "hasta": "2026-09-13",
+    "importe": 0.0
+   },
+   {
+    "desde": "2026-09-14",
+    "hasta": "2026-09-20",
+    "importe": 5487000.0
+   },
+   {
+    "desde": "2026-09-21",
+    "hasta": "2026-09-27",
+    "importe": 875000.0
+   },
+   {
+    "desde": "2026-09-28",
+    "hasta": "2026-10-04",
+    "importe": 1665000.0
+   },
+   {
+    "desde": "2026-10-05",
+    "hasta": "2026-10-11",
+    "importe": 0.0
+   },
+   {
+    "desde": "2026-10-12",
+    "hasta": "2026-10-18",
+    "importe": 0.0
+   },
+   {
+    "desde": "2026-10-19",
+    "hasta": "2026-10-20",
+    "importe": 0.0
+   }
+  ],
+  "costos_periodo": {
+   "desperdicio": 423725.0,
+   "otros": 180000.0,
+   "financiero": 97523.17
+  }
+ },
+ "capacidad": {
+  "desde": "2026-10-20",
+  "hasta": "2026-11-16",
+  "filas": [
+   {
+    "rubro": "Carpintería",
+    "capacidad": 322.0,
+    "comprometidas": 195.49,
+    "potenciales": 6.72,
+    "saldo": 126.51,
+    "saldo_con_potenciales": 119.79
+   },
+   {
+    "rubro": "Herrería",
+    "capacidad": 40.0,
+    "comprometidas": 55.43,
+    "potenciales": 11.52,
+    "saldo": -15.43,
+    "saldo_con_potenciales": -26.95
+   },
+   {
+    "rubro": "Pintura y lustre",
+    "capacidad": 232.0,
+    "comprometidas": 49.85,
+    "potenciales": 4.64,
+    "saldo": 182.15,
+    "saldo_con_potenciales": 177.51
+   },
+   {
+    "rubro": "Tapicería",
+    "capacidad": 160.0,
+    "comprometidas": 59.09,
+    "potenciales": 1.92,
+    "saldo": 100.91,
+    "saldo_con_potenciales": 98.99
+   },
+   {
+    "rubro": "Armado y montaje",
+    "capacidad": 82.0,
+    "comprometidas": 0.0,
+    "potenciales": 0.0,
+    "saldo": 82.0,
+    "saldo_con_potenciales": 82.0
+   }
+  ]
+ }
+}

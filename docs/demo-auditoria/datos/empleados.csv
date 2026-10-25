@@ -1,0 +1,12 @@
+id,nombre,categoria,ingreso,dias,horas_dia,rubros,sesiones
+emp-01,Marina Quiroga,Gerente,2019-03-01,1 2 3 4 5,8,,gerencia
+emp-02,Tomás Ferreyra,Comercial,2021-02-15,1 2 3 4 5,8,,administracion
+emp-03,Lucía Benítez,Diseñador,2022-05-02,1 2 3 4 5,8,,administracion
+emp-04,Paula Sosa,Compras,2020-08-10,1 2 3 4 5,8,,compras
+emp-05,Raúl Medina,Jefe de planta,2018-11-05,1 2 3 4 5,8,,jefe_planta
+emp-06,Diego Paz,Obrero,2020-01-06,1 2 3 4 5,8,Carpintería,operario
+emp-07,Camila Rivas,Obrero,2021-04-12,1 2 3 4 5,8,"Carpintería, Pintura y lustre",operario
+emp-08,Joaquín Ledesma,Obrero,2019-09-02,1 2 3 4 5,8,Herrería,operario
+emp-09,Sofía Arce,Obrero,2023-03-06,1 2 3 4 5,8,Pintura y lustre,operario
+emp-10,Matías Godoy,Obrero,2022-07-18,1 2 3 4 5,8,Tapicería,operario
+emp-11,Iván Correa,Obrero,2024-02-05,1 2 3 4 5,8,"Carpintería, Armado y montaje",operario

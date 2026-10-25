@@ -1,0 +1,12 @@
+id,ot,cliente,descripcion,estado,subestado_cotizacion,inicio,entrega,aprobada,precio_acordado,rentabilidad_cotizada
+ot-4311,OT4311_RestoCardoAjo_AlacenaCocina,Restó Cardo y Ajo,Alacena de cocina,quotation,draft,2026-11-23,2026-12-18,,,
+ot-4310,OT4310_CafeBrujula_TerrazaMesasExteriores,Café Brújula,Terraza mesas exteriores,quotation,negotiating,2026-11-16,2026-12-18,,,
+ot-4309,OT4309_EscuelaMusicaClave_AtrilesBancos,Escuela de Música Clave de Sol,Atriles y bancos,quotation,sent,2026-11-09,2026-12-11,,,
+ot-4308,OT4308_HotelPuertoColibri_RespaldosMesasLuz12,Hotel Puerto Colibrí,Respaldos y mesas de luz 12 habitaciones,approved,negotiating,2026-11-02,2026-12-18,2026-10-14,8830000,32.31
+ot-4307,OT4307_EstudioArenal_BibliotecaEscritorio,Estudio Arenal Arquitectura,Biblioteca y escritorio,purchasing,sent,2026-10-26,2026-12-04,2026-09-29,3330000,34.48
+ot-4306,OT4306_CafeBrujula_BarraMesas12Sillas,Café Brújula,"Barra, mesas y 12 sillas",production,negotiating,2026-09-28,2026-11-13,2026-09-14,6470000,33.13
+ot-4305,OT4305_ClinicaDental_MueblesRecepcion,Clínica Dental Sonrisa Norte,Muebles de recepción,production,sent,2026-08-31,2026-10-09,2026-08-18,4030000,34.68
+ot-4304,OT4304_OpticaVisionClara_MostradoresExhibidores,Óptica Visión Clara,Mostradores y exhibidores,production,sent,2026-08-24,2026-10-16,2026-08-10,3500000,34.62
+ot-4303,OT4303_CoworkingNodoSur_EscritoriosLockers,Coworking Nodo Sur,Escritorios y lockers,production,sent,2026-08-17,2026-10-14,2026-08-03,5630000,33.3
+ot-4302,OT4302_RestoCardoAjo_BarraBanquetas,Restó Cardo y Ajo,Barra y banquetas,closed,negotiating,2026-07-06,2026-08-28,2026-07-01,4370000,34.1
+ot-4301,OT4301_LibreriaFaroAzul_EstanteriasSalon,Librería El Faro Azul,Estanterías salón principal,closed,sent,2026-06-15,2026-07-31,2026-06-08,3920000,34.24

@@ -1,0 +1,90 @@
+id,ot,fecha,por,tipo,automatico,texto
+act-0856,OT4311,2026-10-19,Tomás Ferreyra,created,,OT OT4311_RestoCardoAjo_AlacenaCocina creada para Restó Cardo y Ajo
+act-0852,OT4310,2026-10-09,Tomás Ferreyra,created,,OT OT4310_CafeBrujula_TerrazaMesasExteriores creada para Café Brújula
+act-0853,OT4310,2026-10-12,Tomás Ferreyra,quote,,"Cotización: Enviada, sin respuesta"
+act-0854,OT4310,2026-10-15,Tomás Ferreyra,quote,,Cotización: En negociación
+act-0849,OT4309,2026-10-06,Tomás Ferreyra,created,,OT OT4309_EscuelaMusicaClave_AtrilesBancos creada para Escuela de Música Clave de Sol
+act-0850,OT4309,2026-10-08,Tomás Ferreyra,quote,,"Cotización: Enviada, sin respuesta"
+act-0833,OT4308,2026-10-01,Tomás Ferreyra,created,,OT OT4308_HotelPuertoColibri_RespaldosMesasLuz12 creada para Hotel Puerto Colibrí
+act-0834,OT4308,2026-10-02,Tomás Ferreyra,quote,,"Cotización: Enviada, sin respuesta"
+act-0835,OT4308,2026-10-07,Tomás Ferreyra,quote,,Cotización: En negociación
+act-0836,OT4308,2026-10-14,Tomás Ferreyra,status,,En cotización → Aprobado · Aprobada por el cliente · contrato 8830000
+act-0714,OT4307,2026-09-21,Tomás Ferreyra,created,,OT OT4307_EstudioArenal_BibliotecaEscritorio creada para Estudio Arenal Arquitectura
+act-0715,OT4307,2026-09-22,Tomás Ferreyra,quote,,"Cotización: Enviada, sin respuesta"
+act-0716,OT4307,2026-09-29,Tomás Ferreyra,status,,En cotización → Aprobado · Aprobada por el cliente · contrato 3330000
+act-0726,OT4307,2026-10-02,Tomás Ferreyra,bom,,BOM v1 publicado y enviado a Compras
+act-0727,OT4307,2026-10-02,Tomás Ferreyra,status,sí,Aprobado → Compras · BOM publicado
+act-0745,OT4307,2026-10-06,Tomás Ferreyra,bom,,BOM v2 publicado y enviado a Compras (3 cambios)
+act-0663,OT4306,2026-09-01,Tomás Ferreyra,created,,OT OT4306_CafeBrujula_BarraMesas12Sillas creada para Café Brújula
+act-0664,OT4306,2026-09-02,Tomás Ferreyra,quote,,"Cotización: Enviada, sin respuesta"
+act-0665,OT4306,2026-09-08,Tomás Ferreyra,quote,,Cotización: En negociación
+act-0666,OT4306,2026-09-14,Tomás Ferreyra,status,,En cotización → Aprobado · Aprobada por el cliente · contrato 6470000
+act-0678,OT4306,2026-09-16,Tomás Ferreyra,bom,,BOM v1 publicado y enviado a Compras
+act-0679,OT4306,2026-09-16,Tomás Ferreyra,status,sí,Aprobado → Compras · BOM publicado
+act-0694,OT4306,2026-09-22,Paula Sosa,stock,,Stock asignado: Placa MDF 18 mm 2
+act-0695,OT4306,2026-09-22,Paula Sosa,status,sí,Compras → Producción · stock libre asignado
+act-0698,OT4306,2026-09-22,Paula Sosa,stock,,Stock asignado: Tapacanto PVC 22 mm 30
+act-0756,OT4306,2026-10-13,Paula Sosa,stock,,Recepción revertida en OC-0020: Multilaminado fenólico 18 mm 6 · Se contaron 6 placas y llegaron 4
+act-0828,OT4306,2026-10-16,Raúl Medina,units,,Silla: 0/12 → 8/12 terminadas
+act-0512,OT4305,2026-08-10,Tomás Ferreyra,created,,OT OT4305_ClinicaDental_MueblesRecepcion creada para Clínica Dental Sonrisa Norte
+act-0513,OT4305,2026-08-11,Tomás Ferreyra,quote,,"Cotización: Enviada, sin respuesta"
+act-0514,OT4305,2026-08-18,Tomás Ferreyra,status,,En cotización → Aprobado · Aprobada por el cliente · contrato 4030000
+act-0524,OT4305,2026-08-21,Tomás Ferreyra,bom,,BOM v1 publicado y enviado a Compras
+act-0525,OT4305,2026-08-21,Tomás Ferreyra,status,sí,Aprobado → Compras · BOM publicado
+act-0544,OT4305,2026-08-31,Paula Sosa,status,sí,Compras → Producción · material recibido (OC-0013)
+act-0630,OT4305,2026-10-02,Raúl Medina,units,,Sillón de espera: 0/3 → 2/3 terminadas
+act-0636,OT4305,2026-09-30,Tomás Ferreyra,additional,,Adicional aprobado: Tapicería en Sillón de espera · 12 h
+act-0638,OT4305,2026-09-30,Tomás Ferreyra,contract,,Contrato vigente 4030000 → 4450000 · Adicional Tapicería
+act-0649,OT4305,2026-09-30,Tomás Ferreyra,bom,,BOM v2 publicado y enviado a Compras (2 cambios)
+act-0406,OT4304,2026-08-03,Tomás Ferreyra,created,,OT OT4304_OpticaVisionClara_MostradoresExhibidores creada para Óptica Visión Clara
+act-0407,OT4304,2026-08-04,Tomás Ferreyra,quote,,"Cotización: Enviada, sin respuesta"
+act-0408,OT4304,2026-08-10,Tomás Ferreyra,status,,En cotización → Aprobado · Aprobada por el cliente · contrato 3500000
+act-0416,OT4304,2026-08-12,Tomás Ferreyra,bom,,BOM v1 publicado y enviado a Compras
+act-0417,OT4304,2026-08-12,Tomás Ferreyra,status,sí,Aprobado → Compras · BOM publicado
+act-0433,OT4304,2026-08-24,Paula Sosa,status,sí,Compras → Producción · material recibido (OC-0011)
+act-0438,OT4304,2026-09-21,Paula Sosa,stock,,Stock asignado: Laca nitro 2.5
+act-0503,OT4304,2026-09-25,Raúl Medina,units,,Exhibidor de pared: 0/6 → 6/6 terminadas
+act-0504,OT4304,2026-10-13,Raúl Medina,units,,Mostrador: 0/2 → 2/2 terminadas
+act-0505,OT4304,2026-10-13,Raúl Medina,units,sí,Todos los muebles terminados: lista para revisar cierre (Gerencia)
+act-0508,OT4304,2026-10-15,Raúl Medina,handover,,Entregado al cliente el 2026-10-15
+act-0270,OT4303,2026-07-27,Tomás Ferreyra,created,,OT OT4303_CoworkingNodoSur_EscritoriosLockers creada para Coworking Nodo Sur
+act-0271,OT4303,2026-07-28,Tomás Ferreyra,quote,,"Cotización: Enviada, sin respuesta"
+act-0272,OT4303,2026-08-03,Tomás Ferreyra,status,,En cotización → Aprobado · Aprobada por el cliente · contrato 5630000
+act-0282,OT4303,2026-08-06,Tomás Ferreyra,bom,,BOM v1 publicado y enviado a Compras
+act-0283,OT4303,2026-08-06,Tomás Ferreyra,status,sí,Aprobado → Compras · BOM publicado
+act-0294,OT4303,2026-08-17,Paula Sosa,status,sí,Compras → Producción · material recibido (OC-0008)
+act-0305,OT4303,2026-08-17,Paula Sosa,stock,,Stock asignado: Melamina blanca 18 mm 5
+act-0308,OT4303,2026-08-17,Paula Sosa,stock,,Stock asignado: Tapacanto PVC 22 mm 60
+act-0311,OT4303,2026-08-24,Paula Sosa,stock,,Stock asignado: Bisagra cazoleta 16
+act-0314,OT4303,2026-10-05,Paula Sosa,stock,,Stock asignado: Tornillo 4×40 (caja de 100) 6
+act-0398,OT4303,2026-09-22,Raúl Medina,units,,Locker: 0/4 → 4/4 terminadas
+act-0399,OT4303,2026-10-09,Raúl Medina,units,,Escritorio: 0/10 → 10/10 terminadas
+act-0400,OT4303,2026-10-09,Raúl Medina,units,sí,Todos los muebles terminados: lista para revisar cierre (Gerencia)
+act-0403,OT4303,2026-10-14,Raúl Medina,handover,,Entregado al cliente el 2026-10-14
+act-0120,OT4302,2026-06-22,Tomás Ferreyra,created,,OT OT4302_RestoCardoAjo_BarraBanquetas creada para Restó Cardo y Ajo
+act-0121,OT4302,2026-06-23,Tomás Ferreyra,quote,,"Cotización: Enviada, sin respuesta"
+act-0122,OT4302,2026-06-26,Tomás Ferreyra,quote,,Cotización: En negociación
+act-0123,OT4302,2026-07-01,Tomás Ferreyra,status,,En cotización → Aprobado · Aprobada por el cliente · contrato 4370000
+act-0134,OT4302,2026-07-02,Tomás Ferreyra,bom,,BOM v1 publicado y enviado a Compras
+act-0135,OT4302,2026-07-02,Tomás Ferreyra,status,sí,Aprobado → Compras · BOM publicado
+act-0157,OT4302,2026-07-06,Paula Sosa,status,sí,Compras → Producción · material recibido (OC-0004)
+act-0259,OT4302,2026-08-18,Raúl Medina,units,,Barra: 0/1 → 1/1 terminadas
+act-0260,OT4302,2026-08-20,Raúl Medina,units,,Banqueta: 0/8 → 8/8 terminadas
+act-0261,OT4302,2026-08-20,Raúl Medina,units,sí,Todos los muebles terminados: lista para revisar cierre (Gerencia)
+act-0264,OT4302,2026-08-27,Raúl Medina,handover,,Entregado al cliente el 2026-08-27
+act-0266,OT4302,2026-09-04,Marina Quiroga,status,,Producción → Cerrado · cierre de Gerencia
+act-0267,OT4302,2026-09-04,Marina Quiroga,closure,,"Cierre: costo operativo 3154600, cobrado 3059000 de 4370000"
+act-0013,OT4301,2026-06-01,Tomás Ferreyra,created,,OT OT4301_LibreriaFaroAzul_EstanteriasSalon creada para Librería El Faro Azul
+act-0014,OT4301,2026-06-02,Tomás Ferreyra,quote,,"Cotización: Enviada, sin respuesta"
+act-0015,OT4301,2026-06-08,Tomás Ferreyra,status,,En cotización → Aprobado · Aprobada por el cliente · contrato 3920000
+act-0023,OT4301,2026-06-09,Tomás Ferreyra,bom,,BOM v1 publicado y enviado a Compras
+act-0024,OT4301,2026-06-09,Tomás Ferreyra,status,sí,Aprobado → Compras · BOM publicado
+act-0043,OT4301,2026-06-15,Paula Sosa,status,sí,Compras → Producción · material recibido (OC-0001)
+act-0055,OT4301,2026-06-15,Paula Sosa,stock,,Stock asignado: Tapacanto PVC 22 mm 80
+act-0058,OT4301,2026-06-15,Paula Sosa,stock,,Stock asignado: Laca nitro 4
+act-0110,OT4301,2026-07-08,Raúl Medina,units,,Estantería alta: 0/4 → 4/4 terminadas
+act-0111,OT4301,2026-07-09,Raúl Medina,units,,Mesa de exhibición: 0/2 → 2/2 terminadas
+act-0112,OT4301,2026-07-09,Raúl Medina,units,sí,Todos los muebles terminados: lista para revisar cierre (Gerencia)
+act-0114,OT4301,2026-07-28,Raúl Medina,handover,,Entregado al cliente el 2026-07-28
+act-0116,OT4301,2026-08-10,Marina Quiroga,status,,Producción → Cerrado · cierre de Gerencia
+act-0117,OT4301,2026-08-10,Marina Quiroga,closure,,"Cierre: costo operativo 2457300, cobrado 3920000 de 3920000"

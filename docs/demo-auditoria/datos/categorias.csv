@@ -1,0 +1,8 @@
+id,nombre,obrero
+cat-ger,Gerente,no
+cat-com,Comercial,no
+cat-dis,Diseñador,no
+cat-adm,Administrativo,no
+cat-cpr,Compras,no
+cat-jef,Jefe de planta,no
+cat-obr,Obrero,sí
