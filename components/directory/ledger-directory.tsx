@@ -45,6 +45,7 @@ export function LedgerDirectory({ kind }: { kind: Kind }) {
   const projects = useAppStore((s) => s.projects);
   const orders = useAppStore((s) => s.orders);
   const record = useAppStore((s) => s.recordLedger);
+  const demoLocal = useAppStore((s) => s.demoLocal);
   const entries: Entry[] = kind === "clients" ? ledger.clients : ledger.suppliers;
   const [q, setQ] = useState("");
   const [form, setForm] = useState<Form | null>(null);
@@ -92,7 +93,7 @@ export function LedgerDirectory({ kind }: { kind: Kind }) {
         <label className="flex items-center gap-2 text-sm text-slate-700">
           <input type="checkbox" className="size-4" checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)} /> Mostrar dados de baja
         </label>
-        <span className="text-xs text-slate-500">Datos de ejemplo</span>
+        {demoLocal && <span className="text-xs text-slate-500">Datos de ejemplo</span>}
       </div>
       <Card>
         <CardContent className="p-0">

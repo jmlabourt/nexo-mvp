@@ -11,7 +11,7 @@ import { formatCurrency, formatDate, formatNumber, formatQty, todayISO } from "@
 import { MATERIALS_STATE_LABELS, materialsState, NEED_STATUS_LABELS, purchaseHistory, supplierPrices, type MaterialNeed, type MaterialsState, type NeedStatus } from "@/lib/purchasing";
 import { parseDecimal } from "@/lib/schemas";
 import { useAppStore } from "@/store/use-app-store";
-import { useMaterialNeeds } from "@/store/selectors";
+import { useMaterialNeeds, useLedgerBacked } from "@/store/selectors";
 import { changeText, materialChanges } from "@/lib/circuit";
 import { rubroLabel } from "@/lib/rubros";
 import { PageHeader } from "@/components/shared/page-header";
@@ -43,9 +43,9 @@ type Filter = "to_buy" | "all";
 export function PurchasingProjectsPage({ projectId }: { projectId?: string }) {
   const projects = useAppStore((s) => s.projects);
   const needs = useMaterialNeeds();
-  const demoLocal = useAppStore((s) => s.demoLocal);
+  const ledgerBacked = useLedgerBacked();
   const ledger = useAppStore((s) => s.ledger);
-  const withoutBom = useMemo(() => (demoLocal ? itemsWithoutBom(projects, ledger) : []), [demoLocal, projects, ledger]);
+  const withoutBom = useMemo(() => (ledgerBacked ? itemsWithoutBom(projects, ledger) : []), [ledgerBacked, projects, ledger]);
   const corrections = useAppStore((s) => s.corrections);
   const [filter, setFilter] = useState<Filter>("to_buy");
   const [selected, setSelected] = useState<string[]>([]);
@@ -67,7 +67,7 @@ export function PurchasingProjectsPage({ projectId }: { projectId?: string }) {
           </Button>
         }
       />
-      {demoLocal && withoutBom.length > 0 && (
+      {ledgerBacked && withoutBom.length > 0 && (
         <p className="rounded-md bg-slate-50 p-3 text-sm text-slate-600">
           Solo cuenta el BOM publicado (&quot;Finalizado y enviado&quot;). Todavía sin BOM publicado:{" "}
           {withoutBom.map((x) => `${x.project.code} · ${x.itemName}`).join(", ")}. Al publicarse aparecen acá; una nueva versión no cambia las órdenes ya emitidas.

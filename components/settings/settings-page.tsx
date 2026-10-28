@@ -38,7 +38,7 @@ import { Badge } from "@/components/ui/badge";
 import { Choice } from "@/components/ui/choice";
 import { PriceHistoryList } from "./price-history-list";
 import { UsersSection } from "./users-section";
-import { useIdentity } from "@/store/selectors";
+import { useIdentity, useLedgerBacked } from "@/store/selectors";
 import { CapacitySection, IndicatorsSection, InflationSection, NomenclatureSection, PermissionsSection, RubrosSection } from "./management-sections";
 
 // ── Piezas comunes de cada sección ───────────────────────────
@@ -609,6 +609,7 @@ export function SettingsPage() {
   const [picked, setPicked] = useState<{ hash: string; tab: string } | null>(null);
   const gerencia = session === "gerencia";
   const demoLocal = useAppStore((s) => s.demoLocal);
+  const ledgerBacked = useLedgerBacked();
   const fallback = gerencia ? "rubros" : "nomenclature";
   const tab = picked && picked.hash === hash ? picked.tab : (gerencia ? tabFromHash(hash) : null) ?? fallback;
 
@@ -650,15 +651,15 @@ export function SettingsPage() {
           {demoLocal && <TabsTrigger value="demo">Demo</TabsTrigger>}
         </TabsList>
         <TabsContent value="rubros" className="space-y-6">
-          {demoLocal ? <RubroCatalogSection /> : <RubrosSection />}
+          {ledgerBacked ? <RubroCatalogSection /> : <RubrosSection />}
           <CapacitySection />
         </TabsContent>
         <TabsContent value="rates" className="space-y-6">
-          {demoLocal && <RubroRatesSection />}
+          {ledgerBacked && <RubroRatesSection />}
           <RatesSection />
         </TabsContent>
         <TabsContent value="costs" className="space-y-6">
-          {demoLocal ? (
+          {ledgerBacked ? (
             <>
               <FinancialRateSection />
               <GeneralCostsSection />

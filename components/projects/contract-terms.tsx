@@ -8,6 +8,7 @@ import { currentContract, originalContract, reviseContract, setPaymentTerms, ter
 import { createId } from "@/lib/activity";
 import { formatCurrency, formatDate, formatDateTime } from "@/lib/formatting";
 import { useAppStore } from "@/store/use-app-store";
+import { useLedgerBacked } from "@/store/selectors";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -18,7 +19,7 @@ const num = (s: string) => Number(s.replace(/\./g, "").replace(",", "."));
 const SESSIONS = ["administracion", "gerencia"] as const;
 
 export function ContractTerms({ project }: { project: Project }) {
-  const demoLocal = useAppStore((s) => s.demoLocal);
+  const ledgerBacked = useLedgerBacked();
   const ledger = useAppStore((s) => s.ledger);
   const record = useAppStore((s) => s.recordLedger);
   const [rev, setRev] = useState({ amount: "", reason: "" });
@@ -28,7 +29,7 @@ export function ContractTerms({ project }: { project: Project }) {
   const [error, setError] = useState("");
   const [saved, setSaved] = useState("");
 
-  if (!demoLocal) {
+  if (!ledgerBacked) {
     return (
       <p className="flex flex-wrap items-center gap-2 text-sm text-slate-500">
         El contrato vigente y las condiciones de pago se guardan cuando el backend lo habilite. <OriginTag origin="pending" />

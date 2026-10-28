@@ -19,7 +19,7 @@ import { Button } from "@/components/ui/button";
 import { ItemsTab } from "./items-tab";
 import { BomVersions } from "./bom-versions";
 import { unassignedMaterials } from "@/lib/ledger";
-import { useAppStore } from "@/store/use-app-store";
+import { useLedgerBacked } from "@/store/selectors";
 import { MaterialChangesCard } from "./material-changes";
 
 export const DESIGN_STATUS_LABELS: Record<DesignStatus, string> = {
@@ -39,7 +39,7 @@ export const FURNITURE_STAGES: Array<{ id: FurnitureStage; label: string }> = [
 
 export function FurniturePanel({ project, canEdit }: { project: Project; canEdit: boolean }) {
   const design = useFurnitureDesign(project);
-  const demoLocal = useAppStore((s) => s.demoLocal);
+  const ledgerBacked = useLedgerBacked();
   const [editing, setEditing] = useState(false);
   if (editing) {
     return (
@@ -65,7 +65,7 @@ export function FurniturePanel({ project, canEdit }: { project: Project; canEdit
   return (
     <div className="space-y-4">
       {realMaterials}
-      {demoLocal && unassignedMaterials(project).length > 0 && (
+      {ledgerBacked && unassignedMaterials(project).length > 0 && (
         <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
           <strong>Pendiente de asignación:</strong> {unassignedMaterials(project).map((l) => l.description).join(", ")}. Estos materiales cotizados no tienen mueble: no se
           reparten solos. Asignalos al armar el BOM de cada mueble.
@@ -108,7 +108,7 @@ export function FurniturePanel({ project, canEdit }: { project: Project; canEdit
                   })}
                 </ul>
               </div>
-              {demoLocal ? (
+              {ledgerBacked ? (
                 <BomVersions project={project} item={item} canEdit={canEdit && !project.isClosed} />
               ) : (
               <div>
@@ -150,7 +150,7 @@ export function FurniturePanel({ project, canEdit }: { project: Project; canEdit
               {canEdit && !project.isClosed && (
                 <div className="flex flex-wrap gap-3 border-t border-slate-100 pt-3">
                   <PendingAction label="Cambiar estado de Diseño" reason="" />
-                  {!demoLocal && <PendingAction label="Editar BOM" reason="" />}
+                  {!ledgerBacked && <PendingAction label="Editar BOM" reason="" />}
                   <PendingAction label="Marcar etapas" reason="Diseño, etapas y BOM se guardan cuando el backend lo habilite." />
                 </div>
               )}

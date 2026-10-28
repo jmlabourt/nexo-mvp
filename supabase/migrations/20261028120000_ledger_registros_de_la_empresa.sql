@@ -272,6 +272,7 @@ begin
     'client_handovers', 'staff_hours', 'rubro_catalog', 'rate_records', 'suppliers', 'general_costs'
   ] loop
     execute format('alter table public.%I enable row level security', t);
+    execute format('revoke all on public.%I from anon', t);
     if not exists (select 1 from pg_policies where schemaname = 'public' and tablename = t and policyname = 'manager reads') then
       execute format(
         'create policy "manager reads" on public.%I for select to authenticated using ((select private.is_org_manager(organization_id)))', t);
@@ -283,8 +284,6 @@ end $$;
 -- ── Reglas del negocio (disparadores) ──────────────────────────────────────────────────────────────────────────
 -- Se saltean en la carga masiva (reset_workspace / ledger_reset) y en empresas que nunca cargaron datos, igual que
 -- el resto de las reglas (private.rules_off).
-
-create or replace function private.today_ledger() returns date language sql stable set search_path = '' as $$ select (now() at time zone 'America/Argentina/Buenos_Aires')::date $$;
 
 create or replace function private.tg_sales_invoice() returns trigger language plpgsql set search_path = '' as $$
 declare st text;

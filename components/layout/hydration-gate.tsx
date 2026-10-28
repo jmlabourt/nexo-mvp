@@ -4,7 +4,7 @@ import { APP_NAME } from "@/lib/constants";
 import { createClient } from "@/lib/supabase/client";
 import { backfillClosures } from "@/lib/supabase/closures";
 import { loadWorkspace, replaceWorkspace } from "@/lib/supabase/workspace";
-import { demoData, useAppStore } from "@/store/use-app-store";
+import { demoWorkspace, useAppStore } from "@/store/use-app-store";
 import { isDemoActive } from "@/store/demo-local";
 
 type GateState = { status: "loading" } | { status: "ready" } | { status: "error"; message: string };
@@ -30,7 +30,7 @@ export function HydrationGate({ children }: { children: React.ReactNode }) {
       const db = createClient();
       let ws = await loadWorkspace(db);
       if (!ws.demoSeeded) {
-        await replaceWorkspace(db, ws.organizationId, demoData());
+        await replaceWorkspace(db, ws.organizationId, demoWorkspace());
         ws = await loadWorkspace(db);
       }
       useAppStore.getState().loadWorkspace(ws);

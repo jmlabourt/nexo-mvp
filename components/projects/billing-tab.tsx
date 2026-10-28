@@ -7,17 +7,16 @@ import type { Project } from "@/types";
 import { billingRows, inflationLoss } from "@/lib/gerencia";
 import { formatCurrency, formatDate, formatNumber } from "@/lib/formatting";
 import { useInvoices, useManagementParams } from "@/store/session-data";
-import { useToday } from "@/store/selectors";
+import { useToday, useLedgerBacked } from "@/store/selectors";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { IndicatorTip, OriginTag, PendingAction } from "@/components/shared/data-origin";
-import { useAppStore } from "@/store/use-app-store";
 import { LedgerBillingTab } from "./ledger-billing";
 
 export function BillingTab({ project }: { project: Project }) {
-  const demoLocal = useAppStore((s) => s.demoLocal);
-  return demoLocal ? <LedgerBillingTab project={project} /> : <ExampleBillingTab project={project} />;
+  const ledgerBacked = useLedgerBacked();
+  return ledgerBacked ? <LedgerBillingTab project={project} /> : <ExampleBillingTab project={project} />;
 }
 
 /** Facturación de ejemplo para una empresa real (las facturas todavía no se guardan en la base). */

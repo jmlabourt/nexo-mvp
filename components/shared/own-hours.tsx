@@ -1,7 +1,7 @@
 "use client";
 // "Registrar mis horas" para Administración, Compras y el Jefe de planta: a un proyecto (se imputa a la OT con el
-// costo por hora vigente) o "Trabajo interno (sin proyecto)". En la demo se guarda de verdad (lib/ledger.ts); en una
-// empresa real queda como "Pendiente de backend".
+// costo por hora vigente) o "Trabajo interno (sin proyecto)". En la demo se guarda en el navegador; en una empresa real,
+// en la base: las horas son de quien las carga y el costo por hora lo congela el servidor (esos roles no leen tarifas).
 import { useState } from "react";
 import { Clock } from "lucide-react";
 import type { SessionKey } from "@/lib/permissions";
@@ -9,7 +9,7 @@ import { hourlyCostAt, registerInternalHours } from "@/lib/ledger";
 import { generalState } from "@/lib/gerencia";
 import { formatNumber, todayISO } from "@/lib/formatting";
 import { useAppStore } from "@/store/use-app-store";
-import { useIdentity } from "@/store/selectors";
+import { useIdentity, useLedgerBacked } from "@/store/selectors";
 import { Button } from "@/components/ui/button";
 import { Input, Select } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -18,15 +18,18 @@ import { PendingAction } from "@/components/shared/data-origin";
 const INTERNAL = "__interno__";
 
 export function OwnHoursButton({ projectId }: { projectId?: string }) {
+  const ledgerBacked = useLedgerBacked();
   const demoLocal = useAppStore((s) => s.demoLocal);
   const projects = useAppStore((s) => s.projects);
   const ledger = useAppStore((s) => s.ledger);
   const adminRate = useAppStore((s) => s.hourRates.find((r) => r.category === "admin")?.hourlyRate ?? 0);
   const record = useAppStore((s) => s.recordLedger);
+  const userId = useAppStore((s) => s.userId);
   const { session, actor: name } = useIdentity();
   const sessionName = session === "jefe_planta" ? "Jefe de planta" : session === "compras" ? "Compras" : session === "gerencia" ? "Gerencia" : "Administración";
   // En la demo todas las sesiones son el mismo usuario: la sesión distingue a la persona.
-  const actor = `${name} (${sessionName})`;
+  // Empresa real: la persona es la cuenta (el servidor guarda de quién son las horas). Demo: la sesión distingue a la persona.
+  const actor = demoLocal ? `${name} (${sessionName})` : (userId ?? name);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ project: projectId ?? "", date: todayISO(), hours: "", task: "" });
   const [error, setError] = useState("");
@@ -34,7 +37,7 @@ export function OwnHoursButton({ projectId }: { projectId?: string }) {
 
   // Gerencia no carga horas propias.
   if (session === "gerencia" || session === "operario") return null;
-  if (!demoLocal) return <PendingAction label="Registrar mis horas" reason="Las horas del personal que no es operario se guardan cuando el backend lo habilite." />;
+  if (!ledgerBacked) return <PendingAction label="Registrar mis horas" reason="Las horas del personal que no es operario se guardan cuando la base de tu empresa tenga habilitados estos registros." />;
   const active = projects.filter((p) => generalState(p) === "approved" || generalState(p) === "in_progress");
   const mine = ledger.internalHours.filter((h) => h.employeeId === actor && h.date === todayISO());
 
