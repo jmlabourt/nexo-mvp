@@ -6,6 +6,7 @@ import { formatDate, formatDays, daysBetween, todayISO } from "@/lib/formatting"
 import { useAppStore } from "@/store/use-app-store";
 import { useIdentity, useMaterialsStateOf, useProjectAlerts, useProjectView } from "@/store/selectors";
 import { can } from "@/lib/permissions";
+import { canQuoteProject } from "@/lib/project-rules";
 import { generalState } from "@/lib/gerencia";
 import { closureOf } from "@/lib/tablero";
 import { Button } from "@/components/ui/button";
@@ -57,7 +58,7 @@ export function ProjectDetail({ id, tab: initialTab, purchase }: { id: string; t
   const ledger = useAppStore((s) => s.ledger);
   const alerts = useProjectAlerts(view?.project);
   const materialsOf = useMaterialsStateOf();
-  const { session } = useIdentity();
+  const { session, isManager, isQuoter, role } = useIdentity();
   const gerencia = session === "gerencia";
   const tabs: readonly string[] = gerencia ? GERENCIA_TABS : ADMIN_TABS;
   const [dialog, setDialog] = useState<DialogName>(null);
@@ -118,18 +119,24 @@ export function ProjectDetail({ id, tab: initialTab, purchase }: { id: string; t
                 </Button>
               ) : (
                 <>
-                  <Button onClick={openDialog("hours")} size="lg">
-                    <Clock /> Registrar horas de operarios
-                  </Button>
+                  {isManager && (
+                    <Button onClick={openDialog("hours")} size="lg">
+                      <Clock /> Registrar horas de operarios
+                    </Button>
+                  )}
                   <OwnHoursButton projectId={p.id} />
                 </>
               )}
-              <Button variant="outline" onClick={openDialog("edit")} size="lg">
-                <Pencil /> Editar información
-              </Button>
-              <Button variant="outline" onClick={openDialog("status")} size="lg">
-                <ArrowRightLeft /> Cambiar etapa
-              </Button>
+              {isQuoter && canQuoteProject(role, p) && (
+                <Button variant="outline" onClick={openDialog("edit")} size="lg">
+                  <Pencil /> Editar información
+                </Button>
+              )}
+              {isManager && (
+                <Button variant="outline" onClick={openDialog("status")} size="lg">
+                  <ArrowRightLeft /> Cambiar etapa
+                </Button>
+              )}
               {can(session, "closeProjects") && (
                 <Button variant="outline" onClick={openDialog("close")} size="lg" className="text-slate-700">
                   <Lock /> Cerrar proyecto

@@ -9,6 +9,7 @@ import type { Project } from "@/types";
 import { CIRCUIT_LABELS, DELIVERY_LABELS, circuitStage, deliveryDecision, type DeliveryChoice } from "@/lib/circuit";
 import { formatNumber } from "@/lib/formatting";
 import { useConfirmedAction } from "@/store/confirmed-action";
+import { useIdentity } from "@/store/selectors";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
@@ -26,6 +27,7 @@ type Open = "renegotiate" | "reject" | "delivery" | null;
 
 export function CircuitActions({ project, canClose }: { project: Project; canClose: boolean }) {
   const changeStatus = useConfirmedAction("changeProjectStatus");
+  const { isManager } = useIdentity();
   const [open, setOpen] = useState<Open>(null);
   const [error, setError] = useState("");
   const stage = circuitStage(project);
@@ -51,17 +53,17 @@ export function CircuitActions({ project, canClose }: { project: Project; canClo
             </Button>
           </>
         )}
-        {stage === "design" && (
+        {stage === "design" && isManager && (
           <Button onClick={() => go("purchasing")}>
             <ArrowRight /> Diseño listo: enviar a Compras
           </Button>
         )}
-        {stage === "purchasing" && (
+        {stage === "purchasing" && isManager && (
           <Button onClick={() => go("production")}>
             <ArrowRight /> Enviar a planta
           </Button>
         )}
-        {stage === "ready" && (
+        {stage === "ready" && isManager && (
           <Button onClick={() => setOpen("delivery")}>
             <PackageCheck /> Proyecto listo: ¿qué se hace?
           </Button>
@@ -73,6 +75,9 @@ export function CircuitActions({ project, canClose }: { project: Project; canClo
           </span>
         )}
       </div>
+      {!isManager && stage !== "quotation" && stage !== "negotiation" && stage !== "rejected" && stage !== "closed" && (
+        <p className="text-xs text-slate-500">Desde acá el proyecto lo avanza Gerencia.</p>
+      )}
       {stage === "design" && <p className="text-xs text-slate-500">Diseño corrige en Muebles las cantidades de materiales que de verdad se necesitan y adjunta los planos.</p>}
       {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
       {open === "renegotiate" && <RenegotiateDialog project={project} onClose={close} />}

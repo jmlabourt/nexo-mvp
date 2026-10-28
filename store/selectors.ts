@@ -10,7 +10,7 @@ import { materialNeeds, materialsState, plantMaterialAlerts, purchasingAlerts, t
 import type { RoleKey } from "@/lib/permissions";
 import { projectEconomics, type ProjectEconomics } from "@/lib/calculations";
 import { todayISO } from "@/lib/formatting";
-import { isBuyer, isManager } from "@/lib/project-rules";
+import { isBuyer, isManager, isQuoter } from "@/lib/project-rules";
 import { catalogPriceAt } from "@/lib/material-options";
 import { withEconomicImpact } from "@/lib/deviations";
 import { deliveryReviewAlerts } from "@/lib/plant-materials";
@@ -168,7 +168,7 @@ export function useIdentity() {
   return useMemo(
     () => {
       const id = effectiveIdentity({ role, currentMode, isDemo, operators, userId, userEmail, actingOperatorId, userName });
-      return { ...id, isManager: isManager(id.role), isBuyer: isBuyer(id.role), realRole: role };
+      return { ...id, isManager: isManager(id.role), isQuoter: isQuoter(id.role), isBuyer: isBuyer(id.role), realRole: role };
     },
     [role, currentMode, isDemo, operators, userId, userEmail, actingOperatorId, userName],
   );

@@ -1,6 +1,6 @@
 // Cinco sesiones (reemplaza el mapa de cuatro roles del Lote 5A): menú, rutas, datos y acciones de cada sesión.
-// Los permisos REALES siguen en la base con cuatro roles; Gerencia y Administración son dos sesiones del rol
-// Administrativo y su separación es solo de pantalla (PENDIENTES_BACKEND.md).
+// Los permisos REALES están en la base con cinco roles: Administración (comercial) tiene el suyo; un Administrativo
+// también puede mirar la sesión Administración.
 import { describe, expect, it } from "vitest";
 import type { AppRole } from "@/types";
 import {
@@ -45,7 +45,7 @@ describe("cada sesión ve exactamente sus pestañas (23 en total)", () => {
   });
   it("el inicio de cada sesión es su primera pestaña; el de un rol de la base, el de su primera sesión", () => {
     expect(SESSION_KEYS.map(homeFor)).toEqual(["/dashboard", "/administracion", "/compras", "/planta", "/taller"]);
-    expect(ROLE_KEYS.map(homeFor)).toEqual(["/dashboard", "/compras", "/planta", "/taller"]);
+    expect(ROLE_KEYS.map(homeFor)).toEqual(["/dashboard", "/administracion", "/compras", "/planta", "/taller"]);
   });
 });
 
@@ -118,7 +118,30 @@ describe("rol de la base ↔ sesiones", () => {
     expect(resolveSession("compras", "gerencia")).toBe("compras");
   });
   it("un usuario nuevo Administrativo se guarda como member (owner queda para quien creó la empresa)", () => {
-    expect(ROLE_KEYS.map(dbRoleOf)).toEqual(["member", "compras", "jefe_planta", "operator"]);
+    expect(ROLE_KEYS.map(dbRoleOf)).toEqual(["member", "comercial", "compras", "jefe_planta", "operator"]);
+  });
+});
+
+describe("rol Administración (comercial) de la base", () => {
+  const base = { role: "comercial" as AppRole, operators: [], userId: "u", userEmail: "ana@x.com", actingOperatorId: null, userName: "Ana", isDemo: false, currentMode: "administracion" as SessionKey };
+  it("se llama Administración, usa solo su sesión y entra a su dashboard", () => {
+    expect(ROLE_LABELS[roleKeyOf("comercial")]).toBe("Administración");
+    expect(dbRoleOf("comercial")).toBe("comercial");
+    expect(sessionsFor("comercial")).toEqual(["administracion"]);
+    expect(resolveSession("comercial", "gerencia")).toBe("administracion");
+    expect(homeFor("comercial")).toBe("/administracion");
+  });
+  it("ve y puede lo de la sesión Administración, nada más", () => {
+    expect(canSee("comercial", "salesPrice")).toBe(true);
+    expect(canSee("comercial", "margin")).toBe(false);
+    expect(canSee("comercial", "hourlyCost")).toBe(false);
+    expect(can("comercial", "createProjects")).toBe(true);
+    expect(can("comercial", "closeProjects")).toBe(false);
+    expect(can("comercial", "manageUsers")).toBe(false);
+  });
+  it("opera con su propio rol (no como Administrativo), aunque haya un modo elegido", () => {
+    expect(effectiveIdentity(base)).toMatchObject({ role: "comercial", roleKey: "comercial", session: "administracion" });
+    expect(effectiveIdentity({ ...base, currentMode: "gerencia" })).toMatchObject({ roleKey: "comercial", session: "administracion" });
   });
 });
 

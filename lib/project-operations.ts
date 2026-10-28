@@ -44,7 +44,7 @@ import { materialKey } from "./material-reconciliation";
 import { productInputError, type ProductInput } from "./production";
 import { rubroDef } from "./rubros";
 import { unresolvedMaterial } from "./material-flow";
-import { assertExecutable, assertTransition, checkHours, isManager, RuleError } from "./project-rules";
+import { assertExecutable, assertTransition, canQuoteProject, checkHours, isManager, isQuoter, RuleError } from "./project-rules";
 import {
   applyChange,
   assignToProject,
@@ -72,6 +72,13 @@ const roleOf = (ctx: Ctx): AppRole => ctx.role ?? "owner";
 
 function assertManager(ctx: Ctx, what: string) {
   if (!isManager(roleOf(ctx))) throw new RuleError(`${what} lo hace un usuario Administrativo.`);
+}
+
+/** Cotizar (productos, presupuesto): Administrativo, o Administración mientras el proyecto está en cotización o aprobado. */
+function assertQuoter(ctx: Ctx, project: Pick<Project, "status" | "isClosed">, what: string) {
+  const role = roleOf(ctx);
+  if (!isQuoter(role)) throw new RuleError(`${what} lo hace un usuario Administrativo o de Administración.`);
+  if (!canQuoteProject(role, project)) throw new RuleError(`${what}: con el proyecto ya en marcha lo hace Gerencia.`);
 }
 
 
@@ -623,7 +630,7 @@ export function reassignForDeactivation(
 
 /** Alta de un producto con sus rubros (horas estimadas y operarios pedidos). Lo hace el Administrativo. */
 export function addItem(project: Project, input: ProductInput, ctx: Ctx): Project {
-  assertManager(ctx, "Editar los productos");
+  assertQuoter(ctx, project, "Editar los productos");
   assertOpen(project);
   const error = productInputError(input);
   if (error) throw new DomainError(error);
@@ -642,7 +649,7 @@ export function addItem(project: Project, input: ProductInput, ctx: Ctx): Projec
 
 /** Cambia nombre, cantidad o rubros de un producto. La cantidad no puede quedar por debajo de lo ya terminado. */
 export function updateItem(project: Project, itemId: string, input: ProductInput, ctx: Ctx): Project {
-  assertManager(ctx, "Editar los productos");
+  assertQuoter(ctx, project, "Editar los productos");
   assertOpen(project);
   const current = project.items.find((i) => i.id === itemId);
   if (!current) throw new DomainError("Producto no encontrado.");
@@ -655,7 +662,7 @@ export function updateItem(project: Project, itemId: string, input: ProductInput
 }
 
 export function removeItem(project: Project, itemId: string, ctx: Ctx): Project {
-  assertManager(ctx, "Editar los productos");
+  assertQuoter(ctx, project, "Editar los productos");
   assertOpen(project);
   const used =
     project.materialUsages.some((u) => u.itemId === itemId) ||

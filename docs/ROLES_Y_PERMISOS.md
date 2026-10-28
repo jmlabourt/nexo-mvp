@@ -1,19 +1,37 @@
 # Roles y permisos (Lote 5A)
 
-Blerp pasó de dos experiencias (Gestión y Taller) a **cuatro roles**. El Lote 5A es la base: permisos, usuarios y precios con vigencia. Las pantallas de cada rol: `docs/PLANTA_Y_HORAS.md` (5B, Jefe de planta y Operario) y `docs/COMPRAS.md` (5C, Compras).
+Blerp pasó de dos experiencias (Gestión y Taller) a **cinco roles** (los cuatro del Lote 5A más Administración, ver más abajo). El Lote 5A es la base: permisos, usuarios y precios con vigencia. Las pantallas de cada rol: `docs/PLANTA_Y_HORAS.md` (5B, Jefe de planta y Operario) y `docs/COMPRAS.md` (5C, Compras).
 
-## Los cuatro roles
+## Los roles
 
 | Rol | Valor en la base (`organization_members.role`) | Antes se llamaba |
 |---|---|---|
 | **Administrativo** | `owner` (quien creó la empresa) o `member` | Gestión |
+| **Administración / Comercial / Diseño** | `comercial` | — (nuevo, migración `20261029120000`) |
 | **Compras** | `compras` | — (nuevo) |
 | **Jefe de planta** | `jefe_planta` | — (nuevo) |
 | **Operario** | `operator` | Taller |
 
 **Decisión:** se mantienen los valores internos `owner` y `member` para Administrativo. Todas las políticas del Lote 2 los usan (`private.is_org_manager`): renombrarlos obligaba a recrear políticas con DROP. En pantalla siempre dice "Administrativo". Un usuario Administrativo nuevo se guarda como `member`; `owner` queda solo para quien creó la empresa.
 
-## Qué ve y qué hace cada rol
+## Administración (rol `comercial`)
+
+Cotiza y aprueba, pero no ve el costo real de la mano de obra ni la plata que entra o sale de la empresa.
+
+| Dato o acción | Administración |
+|---|---|
+| Proyectos con precio de venta, costo presupuestado, clientes, proveedores, compras y stock con costo, tarifas por rubro | Ve |
+| Horas reales de los proyectos | Ve las horas, **no** su importe ni el costo por hora de cada persona |
+| Facturas, cobros, costos generales, tarifas por persona | **No** |
+| Crear y editar cotizaciones, productos y presupuesto; aprobar una cotización | Sí, mientras el proyecto está en **cotización o aprobado** |
+| Proyecto en producción o cerrado; avanzar etapas; cerrar; operarios; stock; tarifas; usuarios | **No** (Gerencia) |
+
+- **Lectura:** `comercial_workspace()`. **Escritura:** `comercial_commit_change()` (valida rol, empresa, etapa del proyecto y que
+  nadie haya cambiado el proyecto mientras tanto). Directo a las tablas no lee ni escribe nada.
+- **Pruebas:** `tests/db/comercial.test.ts` (Postgres real) y `tests/rol-administracion.test.ts` (app).
+- Un Administrativo puede además mirar la sesión Administración, con sus propios permisos.
+
+## Qué ve y qué hace cada rol (los cuatro del Lote 5A)
 
 | Dato o acción | Administrativo | Compras | Jefe de planta | Operario |
 |---|---|---|---|---|

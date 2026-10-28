@@ -6,13 +6,18 @@
 // ─────────────────────────────────────────────────────────────
 import type { AppRole } from "@/types";
 
-/** Los cuatro roles que ve la gente. Administrativo = owner/member en la base (ver docs/ROLES_Y_PERMISOS.md). */
-export type RoleKey = "admin" | "compras" | "jefe_planta" | "operario";
+/**
+ * Los cinco roles que ve la gente. Administrativo = owner/member en la base (ver docs/ROLES_Y_PERMISOS.md).
+ * "comercial" es Administración / Comercial / Diseño: cotiza y aprueba, pero no ve el costo real de la mano de obra,
+ * ni facturas ni cobros, y no avanza la producción.
+ */
+export type RoleKey = "admin" | "comercial" | "compras" | "jefe_planta" | "operario";
 
-export const ROLE_KEYS: RoleKey[] = ["admin", "compras", "jefe_planta", "operario"];
+export const ROLE_KEYS: RoleKey[] = ["admin", "comercial", "compras", "jefe_planta", "operario"];
 
 export const ROLE_LABELS: Record<RoleKey, string> = {
   admin: "Administrativo",
+  comercial: "Administración",
   compras: "Compras",
   jefe_planta: "Jefe de planta",
   operario: "Operario",
@@ -23,6 +28,9 @@ export function roleKeyOf(role: AppRole): RoleKey {
   if (role === "operator") return "operario";
   return role;
 }
+
+/** Sesión (pantalla) de cada rol; un Administrativo arranca en Gerencia. */
+const sessionOfWho = (who: SessionKey | RoleKey): SessionKey => (who === "admin" ? "gerencia" : who === "comercial" ? "administracion" : who);
 
 /** Valor que se guarda en la base para un rol nuevo (owner queda solo para quien creó la empresa). */
 export function dbRoleOf(role: RoleKey): Exclude<AppRole, "owner"> {
@@ -57,10 +65,9 @@ export interface NavItem {
 
 // ── Cinco sesiones (pantalla) ─────────────────────────────────
 //
-// La sesión decide qué pestañas ve una persona. Los permisos REALES están en la base (cuatro roles: Administrativo,
-// Compras, Jefe de planta, Operario). Gerencia y Administración / Comercial / Diseño son dos sesiones del mismo rol
-// de la base (Administrativo): la separación entre las dos es SOLO VISUAL hasta que el backend la aplique
-// (ver PENDIENTES_BACKEND.md). No es seguridad.
+// La sesión decide qué pestañas ve una persona. Los permisos REALES están en la base (cinco roles: Administrativo,
+// Administración, Compras, Jefe de planta, Operario). Quien tiene el rol Administración ve solo su sesión y la base le
+// entrega solo lo suyo. Un Administrativo puede además mirar la sesión Administración (con sus propios permisos).
 
 export type SessionKey = "gerencia" | "administracion" | "compras" | "jefe_planta" | "operario";
 
@@ -88,12 +95,13 @@ export function sessionRole(session: SessionKey): RoleKey {
   return session === "gerencia" || session === "administracion" ? "admin" : session;
 }
 
-/**
- * Sesiones que puede usar una persona según su rol en la base. Un Administrativo puede usar Gerencia y
- * Administración (preparado para el multirrol; hoy la base no distingue entre las dos).
- */
+/** ¿Es Administración de verdad (rol propio, no un Administrativo mirando esa pantalla)? */
+export const isComercialRole = (role: AppRole): boolean => role === "comercial";
+
+/** Sesiones que puede usar una persona según su rol en la base. */
 export function sessionsFor(role: RoleKey): SessionKey[] {
-  return role === "admin" ? ["gerencia", "administracion"] : [role];
+  if (role === "admin") return ["gerencia", "administracion"];
+  return role === "comercial" ? ["administracion"] : [role];
 }
 
 /** Sesión válida: la elegida si la persona la puede usar; si no, la primera que le corresponde. */
@@ -164,8 +172,7 @@ export function projectHref(session: SessionKey | RoleKey, projectId: string, ta
 
 /** Pantalla de inicio de un rol de la base (invitaciones) o de una sesión. */
 export function homeFor(who: RoleKey | SessionKey): string {
-  const session: SessionKey = who === "admin" ? "gerencia" : who;
-  return NAV[session][0].href;
+  return NAV[sessionOfWho(who)][0].href;
 }
 
 const under = (pathname: string, href: string) => pathname === href || pathname.startsWith(`${href}/`);
@@ -194,7 +201,7 @@ const DATA: Record<SessionKey, Record<DataField, boolean>> = {
 };
 
 export function canSee(who: SessionKey | RoleKey, field: DataField): boolean {
-  return DATA[who === "admin" ? "gerencia" : who][field];
+  return DATA[sessionOfWho(who)][field];
 }
 
 export type Action = "manageUsers" | "manageSettings" | "editProjects" | "createProjects" | "closeProjects" | "correctFrozenValues" | "logOwnHours";
@@ -208,5 +215,5 @@ const ACTIONS: Record<SessionKey, Action[]> = {
 };
 
 export function can(who: SessionKey | RoleKey, action: Action): boolean {
-  return ACTIONS[who === "admin" ? "gerencia" : who].includes(action);
+  return ACTIONS[sessionOfWho(who)].includes(action);
 }

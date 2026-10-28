@@ -168,8 +168,11 @@ export function inviteLink(origin: string, email: string, role: RoleKey): string
 const ROLE_ALIASES: Record<string, RoleKey> = {
   admin: "admin",
   administrativo: "admin",
-  administracion: "admin",
   administrador: "admin",
+  administracion: "comercial",
+  comercial: "comercial",
+  diseno: "comercial",
+  "administracion comercial diseno": "comercial",
   compras: "compras",
   compra: "compras",
   comprador: "compras",

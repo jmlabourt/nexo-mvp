@@ -24,6 +24,20 @@ export function isManager(role: AppRole): boolean {
   return role === "owner" || role === "member";
 }
 
+/** Etapas que Administración puede mover: de cotización a aprobado (y volver). De ahí en adelante, Gerencia. */
+export const QUOTER_STATUSES: ProjectStatus[] = ["quotation", "approved"];
+
+/** Cotizan: Administrativo y Administración (el rol comercial). */
+export function isQuoter(role: AppRole): boolean {
+  return isManager(role) || role === "comercial";
+}
+
+/** Administración solo toca proyectos todavía en cotización o recién aprobados; el Administrativo, cualquiera. */
+export function canQuoteProject(role: AppRole, project: Pick<Project, "status" | "isClosed">): boolean {
+  if (isManager(role)) return true;
+  return role === "comercial" && !project.isClosed && QUOTER_STATUSES.includes(project.status);
+}
+
 /** Compran y mueven stock: Administrativo y Compras (Lote 5C). */
 export function isBuyer(role: AppRole): boolean {
   return isManager(role) || role === "compras";
@@ -74,7 +88,12 @@ export function assertTransition(
 ): TransitionKind {
   if (project.isClosed) throw new RuleError("El proyecto está cerrado.");
   if (to === "completed") throw new RuleError("Para finalizar usá “Cerrar proyecto”.");
-  if (!isManager(opts.role)) throw new RuleError("Solo un usuario Administrativo puede cambiar la etapa del proyecto.");
+  if (!isManager(opts.role)) {
+    if (opts.role !== "comercial") throw new RuleError("Solo un usuario Administrativo puede cambiar la etapa del proyecto.");
+    if (!QUOTER_STATUSES.includes(project.status) || !QUOTER_STATUSES.includes(to)) {
+      throw new RuleError("Administración aprueba cotizaciones; las etapas de producción en adelante las avanza Gerencia.");
+    }
+  }
   const kind = transitionKind(project.status, to);
   if (!kind) {
     const next = nextStatus(project.status);

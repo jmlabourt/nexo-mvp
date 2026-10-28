@@ -130,6 +130,8 @@ export async function loadWorkspace(db: SupabaseClient): Promise<Workspace> {
   if (membership.deactivated_at) throw new Error(INACTIVE_USER_MESSAGE);
   if (membership.role === "member" && !membership.can_view_commercial) return loadStaffWorkspace(db, user, "jefe_planta");
   if (membership.role === "compras" || membership.role === "jefe_planta") return loadStaffWorkspace(db, user, membership.role);
+  // Administración: no lee las tablas (tienen el costo real de la mano de obra); lo suyo llega por su función.
+  if (membership.role === "comercial") return loadComercialWorkspace(db, user);
   if (!membership.organizations) throw new Error("Tu usuario no tiene una empresa asociada.");
 
   const org = membership.organization_id;
@@ -491,6 +493,61 @@ async function loadStaffWorkspace(db: SupabaseClient, user: { id: string; email?
   };
 }
 
+interface ComercialWorkspaceJson extends StaffWorkspaceJson {
+  activity_events?: Row[];
+  attachments?: Row[];
+  hour_rates?: Row[];
+  cost_settings?: Row | null;
+}
+
+/**
+ * Workspace de Administración / Comercial / Diseño (comercial_workspace): proyectos con precio y costo presupuestado,
+ * clientes, proveedores y tarifas por rubro. Las horas reales llegan sin importe y los operarios sin costo por hora:
+ * en memoria quedan en 0, y sus pantallas no los muestran.
+ */
+async function loadComercialWorkspace(db: SupabaseClient, user: { id: string; email?: string }): Promise<Workspace> {
+  const json = check(await db.rpc("comercial_workspace")) as ComercialWorkspaceJson;
+  if (json.status !== "active" || !json.organization_id) throw new Error(INACTIVE_USER_MESSAGE);
+  const priceHistory = (json.price_history ?? []).map(priceRecordFromRow);
+  const costSettings = json.cost_settings ? costSettingsFromRow(json.cost_settings) : { ...DEFAULT_COST_SETTINGS };
+  const hourRates = (json.hour_rates ?? []).length ? (json.hour_rates ?? []).map(hourRateFromRow) : DEFAULT_HOUR_RATES.map((r) => ({ ...r }));
+  const actualEntries = (json.actual_entries ?? []).map((r) => (r.type === "labor" ? { ...r, amount: 0, labor: { ...((r.labor as Row | null) ?? {}), hourlyCost: 0 } } : r));
+  return {
+    organizationId: json.organization_id,
+    organizationName: json.organization_name ?? "",
+    userId: user.id,
+    userName: json.display_name || user.email?.split("@")[0] || "Usuario",
+    userEmail: user.email ?? "",
+    role: "comercial",
+    costSettings: { ...costSettings, overtimeMultiplier: valueAt(priceHistory, "overtime_multiplier", OVERTIME_SUBJECT, todayISO(), costSettings.overtimeMultiplier) },
+    hourRates: hourRatesAt(hourRates, priceHistory, todayISO()),
+    priceHistory,
+    corrections: [],
+    assignments: [],
+    orders: ordersFromRows(json.purchase_orders ?? [], json.purchase_order_lines ?? []),
+    ledger: await loadLedger(db),
+    demoSeeded: true,
+    isDemo: false,
+    stockMigrated: false,
+    projects: projectsFromRows({
+      projects: withZeros(json.projects, { progress_percent: 0 }),
+      budgetLines: json.budget_lines ?? [],
+      purchaseEntries: json.purchase_entries ?? [],
+      materialUsages: json.material_usages ?? [],
+      actualEntries,
+      activity: json.activity_events ?? [],
+      items: json.project_items ?? [],
+      stageLogs: json.stage_logs ?? [],
+      attachments: json.attachments ?? [],
+    }),
+    operators: withZeros(json.operators, { hourly_cost: 0 }).map(operatorFromRow),
+    stock: { lots: (json.stock_lots ?? []).map(lotFromRow), movements: (json.stock_movements ?? []).map(movementFromRow) },
+    requests: (json.material_requests ?? []).map(requestFromRow),
+    settings: { ...DEFAULT_SETTINGS, ...(json.alert_settings ?? {}) },
+    resolvedAlertIds: [],
+  };
+}
+
 /** Escrituras de un operario: una llamada a la función de Taller por cada registro nuevo. */
 export async function runTallerCalls(db: SupabaseClient, calls: TallerCall[]) {
   for (const c of calls) check(await db.rpc(c.fn, { p: c.p }));
@@ -742,6 +799,10 @@ export function commitPayload(org: string, prev: Pick<WorkspaceData,"projects"|"
   put("stock_movements",prev.stock.movements,next.stock.movements,(m,i)=>movementToRow(org,m,i));
   put("material_requests",prev.requests,next.requests,(r,i)=>requestToRow(org,r,i));
   return {expected_projects,tables};
+}
+/** Administración guarda cotizaciones y aprobaciones con su propia función (comercial_commit_change). */
+export async function commitComercialChange(db:SupabaseClient,org:string,prev:Pick<WorkspaceData,"projects"|"stock"|"operators"|"requests">,next:Pick<WorkspaceData,"projects"|"stock"|"operators"|"requests">) {
+  check(await db.rpc("comercial_commit_change",{p:commitPayload(org,prev,next)}));
 }
 export async function commitChange(db:SupabaseClient,org:string,prev:Pick<WorkspaceData,"projects"|"stock"|"operators"|"requests">,next:Pick<WorkspaceData,"projects"|"stock"|"operators"|"requests">) {
   check(await db.rpc("admin_commit_change",{p:commitPayload(org,prev,next)}));
