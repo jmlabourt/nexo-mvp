@@ -16,6 +16,14 @@ import { withEconomicImpact } from "@/lib/deviations";
 import { deliveryReviewAlerts } from "@/lib/plant-materials";
 import { effectiveIdentity, useAppStore } from "./use-app-store";
 
+/**
+ * ¿Se pueden cargar y ver los registros de la empresa (facturas, cobros, BOM, contrato, tarifas, directorios…)?
+ * Sí en el modo demostración (se guardan en el navegador) y en una empresa real cuya base ya los guarda.
+ */
+export function useLedgerBacked(): boolean {
+  return useAppStore((s) => s.demoLocal || s.ledgerReady);
+}
+
 export function useToday(): string {
   return useMemo(() => todayISO(), []);
 }
@@ -69,14 +77,14 @@ export function useMaterialsStateOf(): (project: Project) => MaterialsState | nu
 
 /** Necesidades de compra de los proyectos aprobados (Lote 6): por comprar, en orden de compra o recibido. */
 /**
- * Proyectos tal como los ve Compras: en el modo demostración, los materiales salen del BOM publicado de cada mueble
- * (lib/bom-needs.ts); en una empresa real, de las líneas de materiales del presupuesto (como hasta ahora).
+ * Proyectos tal como los ve Compras: los materiales salen del BOM publicado de cada mueble (lib/bom-needs.ts); si la base
+ * de la empresa todavía no guarda los BOM, de las líneas de materiales del presupuesto (como hasta ahora).
  */
 export function useNeedsProjects(): Project[] {
   const projects = useAppStore((s) => s.projects);
-  const demoLocal = useAppStore((s) => s.demoLocal);
+  const ledgerBacked = useLedgerBacked();
   const boms = useAppStore((s) => s.ledger.boms);
-  return useMemo(() => (demoLocal ? projects.map((p) => withPublishedBom(p, { boms })) : projects), [projects, demoLocal, boms]);
+  return useMemo(() => (ledgerBacked ? projects.map((p) => withPublishedBom(p, { boms })) : projects), [projects, ledgerBacked, boms]);
 }
 
 export function useMaterialNeeds(): MaterialNeed[] {

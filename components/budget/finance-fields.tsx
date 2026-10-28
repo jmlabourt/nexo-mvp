@@ -5,6 +5,7 @@
 import { quoteFinancialPct } from "@/lib/financial";
 import { formatNumber, todayISO } from "@/lib/formatting";
 import { useAppStore } from "@/store/use-app-store";
+import { useLedgerBacked } from "@/store/selectors";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { CalcState, QuoteFinanceForm } from "./calculator-state";
@@ -14,10 +15,10 @@ const plusDays = (iso: string, d: number) => new Date(Date.parse(`${iso}T12:00:0
 
 /** Tasa mensual: la de Configuración → Gasto financiero (en la demo) o el % configurado, leído como tasa mensual. */
 export function useMonthlyRate(): number {
-  const demoLocal = useAppStore((s) => s.demoLocal);
+  const ledgerBacked = useLedgerBacked();
   const ledgerRate = useAppStore((s) => s.ledger.financialMonthlyRatePct);
   const settingsRate = useAppStore((s) => s.costSettings.financialPct);
-  return demoLocal ? ledgerRate : settingsRate;
+  return ledgerBacked ? ledgerRate : settingsRate;
 }
 
 export function financePct(f: QuoteFinanceForm, rate: number) {

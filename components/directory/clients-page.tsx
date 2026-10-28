@@ -10,6 +10,7 @@ import { exampleClientDetails } from "@/lib/demo/ejemplos";
 import { GENERAL_STATE_LABELS, generalState } from "@/lib/gerencia";
 import { formatDate } from "@/lib/formatting";
 import { useAppStore } from "@/store/use-app-store";
+import { useLedgerBacked } from "@/store/selectors";
 import { useExampleData } from "@/store/session-data";
 import { LedgerDirectory } from "./ledger-directory";
 import { PageHeader } from "@/components/shared/page-header";
@@ -22,8 +23,8 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { normalizeName } from "@/lib/directory";
 
 export function ClientsPage() {
-  const demoLocal = useAppStore((s) => s.demoLocal);
-  return demoLocal ? <LedgerDirectory kind="clients" /> : <ExampleClientsPage />;
+  const ledgerBacked = useLedgerBacked();
+  return ledgerBacked ? <LedgerDirectory kind="clients" /> : <ExampleClientsPage />;
 }
 
 function ExampleClientsPage() {

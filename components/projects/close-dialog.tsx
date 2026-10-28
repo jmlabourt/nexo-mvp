@@ -10,6 +10,7 @@ import { closingSummary } from "@/lib/insights";
 import { closeCheck } from "@/lib/tablero";
 import { formatCurrency, formatCurrencyOrDash, formatMarginPoints, formatPercent, formatQty, formatSignedCurrency, todayISO } from "@/lib/formatting";
 import { useAppStore } from "@/store/use-app-store";
+import { useLedgerBacked } from "@/store/selectors";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
@@ -24,11 +25,11 @@ export function CloseDialog({ project, open, onOpenChange }: { project: Project;
   const [act, setAct] = useState<{ action: StockAction; target: StockTarget } | null>(null);
   const loose = useMemo(() => unresolvedMaterial(stock, project.id), [stock, project.id]);
   // Modo demostración: además del material, el cierre pide unidades terminadas y la entrega real del Jefe.
-  const demoLocal = useAppStore((s) => s.demoLocal);
+  const ledgerBacked = useLedgerBacked();
   const ledger = useAppStore((s) => s.ledger);
   const orders = useAppStore((s) => s.orders);
   const deliveries = useAppStore((s) => s.deliveries);
-  const check = useMemo(() => (demoLocal ? closeCheck(project, ledger, stock, orders, deliveries) : { blockers: [], warnings: [] }), [demoLocal, project, ledger, stock, orders, deliveries]);
+  const check = useMemo(() => (ledgerBacked ? closeCheck(project, ledger, stock, orders, deliveries) : { blockers: [], warnings: [] }), [ledgerBacked, project, ledger, stock, orders, deliveries]);
   const otherBlockers = check.blockers.filter((b) => !b.startsWith("Hay materiales sin rendir"));
   const flow = useMemo(() => projectMaterialFlow(stock, project.id), [stock, project.id]);
   const target = (h: (typeof loose)[number]): StockTarget => ({

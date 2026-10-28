@@ -17,11 +17,12 @@ Los contratos (tipos) de cada dato están en `types/index.ts`, al final del arch
 
 | Migración | Estado | Nota |
 | --- | --- | --- |
-| `20261023120000_operario_sin_material_usado.sql` | Escrita, **no aplicada** | Aplicar justo después de promover el deploy que la acompaña. |
+| `20261023120001_operario_sin_material_usado.sql` | Escrita, **no aplicada** | Aplicar justo después de promover el deploy que la acompaña. |
 | `20261024120000_planta_entregas_y_cierre.sql` | Escrita, **no aplicada** | Entrega de materiales y cierre del día del Jefe. |
+| `20261028120000_ledger_registros_de_la_empresa.sql` | **Aplicada** (28/10/2026, SQL Editor del proyecto `nexo`) | Registros de la empresa por cuenta: ver sección 8. |
 | `pendiente_supabase.sql` (`reset_workspace`, `admin_commit_change`; no está en el repo) | Puede estar pendiente | Verificar en la base real. |
 
-**Versión duplicada.** `20261023120000_historial_y_dataset_llm.sql` y `20261023120000_operario_sin_material_usado.sql`
+**Versión duplicada.** `20261023120000_historial_y_dataset_llm.sql` y `20261023120001_operario_sin_material_usado.sql`
 tienen la misma versión. Supabase CLI registra las versiones en `schema_migrations` y puede rechazar la segunda o
 saltearla. Hay que renombrar una de las dos (por ejemplo, `operario_sin_material_usado` → `20261023120001_…`) antes de
 aplicarlas. Esta rama no la renombra porque no puede tocar `supabase/`.
@@ -154,3 +155,39 @@ arrastre), `log_staff_hours`, `close_project` (con `pending_costs`), `set_financ
 4. `reset_workspace` siembra el mismo escenario de `lib/demo/escenario.ts`.
 5. Pendientes de sincronización: que el cierre del día acepte arrastre (hoy la base cierra la entrega entera) y que
    las necesidades de Compras salgan del BOM publicado también en `compras_workspace`.
+
+## 8. Registros de la empresa en la base (migración `20261028120000`) — estado
+
+Lo de la sección 7.2–7.5 ya está construido y aplicado. Todo se guarda por empresa (`organization_id`) y se lee con el
+rol de cada sesión.
+
+- **Lectura:** `public.ledger_workspace()` devuelve el `Ledger` solo con lo que el rol puede ver.
+- **Escritura:** `public.ledger_commit(p)` (única vía; las tablas no tienen políticas de escritura). Valida permiso por
+  colección y los disparadores hacen cumplir las reglas del negocio (factura única, cobro ≤ saldo, BOM publicado
+  inmutable, entrega con unidades terminadas, etc.). Estampa autor y hora en el servidor.
+- **Carga masiva:** `public.ledger_reset(p)` (solo Administrativo), usada al cargar la demo de la empresa o empezar de cero.
+- **Frontend:** `lib/supabase/ledger.ts` (`ledgerDelta`, `loadLedger`, `commitLedger`, `resetLedger`); el store marca
+  `ledgerReady` cuando la base tiene la migración (si no, sigue "Pendiente de backend").
+- **Pruebas:** `tests/db/ledger.test.ts` (35, por rol y entre empresas) y `tests/ledger-sync.test.ts`. En vivo se
+  probó con transacciones que se deshacen: Gerencia, Jefe de planta, Operario y anónimo, y el rechazo de proyectos de otra empresa.
+
+### Qué ve y qué escribe cada rol (hoy)
+
+| Rol en la base | Ve | Escribe |
+| --- | --- | --- |
+| Administrativo (Gerencia y, por ahora, Administración) | Todo | Todo |
+| Compras | Pagos a proveedores, BOM publicado (cantidades), proveedores, cierres, sus horas | Proveedores, sus horas |
+| Jefe de planta | BOM publicado (cantidades), entregas al cliente, cierres, sus horas | Entrega al cliente, sus horas |
+| Operario | Solo el catálogo de rubros | Nada de esto |
+
+### Pendiente
+
+1. **Rol propio de Administración (`comercial`)**: hoy comparte el rol Administrativo. Falta el rol, su lectura enmascarada
+   (ve costos de cotización, no costos reales ni facturas/cobros) y la invitación con cinco roles.
+2. `20261024120000_planta_entregas_y_cierre.sql` y `20261023120001_operario_sin_material_usado.sql` (esta última, recién
+   después de desplegar el frontend nuevo).
+3. El estado de materiales del Jefe sigue calculado desde el presupuesto, no desde el BOM publicado.
+4. `planta_close_day` no arrastra material (el arrastre sigue solo en la demo local).
+5. Los cierres de la demo no traen `pending_costs`; las excepciones de tarifa por persona no tienen pantalla.
+6. Las necesidades de Compras salen del BOM publicado: un proyecto real sin BOM no muestra necesidades.
+7. Mails de invitación: falta `SUPABASE_SERVICE_ROLE_KEY` en Production, redeploy y SMTP propio.

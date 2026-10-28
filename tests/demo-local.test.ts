@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { DEMO_ACTIVE_KEY, DEMO_DATA_KEY, DEMO_SCHEMA_VERSION, demoDataChanged, isDemoActive, pickDemoData, readDemo, writeDemo, type DemoStorage } from "@/store/demo-local";
 import { useAppStore } from "@/store/use-app-store";
 import type { Ledger } from "@/types";
+import { EMPTY_LEDGER } from "@/lib/ledger";
 
 const memory = (): DemoStorage & { map: Map<string, string> } => {
   const map = new Map<string, string>();
@@ -89,9 +90,17 @@ describe("modo demostración en la app", () => {
 
   it("una empresa real que carga nunca usa los datos de la demo", () => {
     useAppStore.getState().enterLocalDemo();
-    const ws = { ...useAppStore.getState(), organizationId: "org-real", isDemo: false, corrections: [] } as unknown as Parameters<ReturnType<typeof useAppStore.getState>["loadWorkspace"]>[0];
+    // Empresa real cuya base todavía no guarda los registros (ledger null): queda vacío, nunca el de la demo.
+    const ws = { ...useAppStore.getState(), organizationId: "org-real", isDemo: false, corrections: [], ledger: null } as unknown as Parameters<ReturnType<typeof useAppStore.getState>["loadWorkspace"]>[0];
     useAppStore.getState().loadWorkspace(ws);
     expect(useAppStore.getState().demoLocal).toBe(false);
+    expect(useAppStore.getState().ledgerReady).toBe(false);
+    expect(useAppStore.getState().ledger.salesInvoices).toEqual([]);
+    // Con los registros de su base (ledger_workspace): son los suyos, y queda habilitado cargarlos.
+    const own = { ...EMPTY_LEDGER, rubroCatalog: [{ id: "rubro_x", name: "X", active: true }] };
+    useAppStore.getState().loadWorkspace({ ...ws, ledger: own });
+    expect(useAppStore.getState().ledgerReady).toBe(true);
+    expect(useAppStore.getState().ledger.rubroCatalog).toHaveLength(1);
     expect(useAppStore.getState().ledger.salesInvoices).toEqual([]);
   });
 });

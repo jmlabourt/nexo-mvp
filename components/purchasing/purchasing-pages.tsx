@@ -19,7 +19,7 @@ import {
 } from "@/lib/purchasing";
 import { parseDecimal } from "@/lib/schemas";
 import { useAppStore } from "@/store/use-app-store";
-import { useMaterialNeeds, usePurchasingAlerts, useToday } from "@/store/selectors";
+import { useMaterialNeeds, usePurchasingAlerts, useToday, useLedgerBacked } from "@/store/selectors";
 import { AlertItem } from "@/components/alerts/alert-item";
 import { OwnHoursButton } from "@/components/shared/own-hours";
 import { paidOf } from "@/lib/ledger";
@@ -43,13 +43,13 @@ const WEEK_DAYS = 7;
 const STATUS_TONE: Record<PurchaseOrder["status"], "gray" | "blue" | "green"> = { draft: "gray", sent: "blue", invoiced: "green" };
 
 export function OrderBadges({ order: o }: { order: PurchaseOrder }) {
-  const demoLocal = useAppStore((s) => s.demoLocal);
+  const ledgerBacked = useLedgerBacked();
   const ledgerPaid = useAppStore((s) => paidOf(s.ledger, o.id));
-  const paid = demoLocal ? ledgerPaid + 0.005 >= (o.invoiceAmount ?? 0) && ledgerPaid > 0 : o.paid;
+  const paid = ledgerBacked ? ledgerPaid + 0.005 >= (o.invoiceAmount ?? 0) && ledgerPaid > 0 : o.paid;
   return (
     <span className="flex flex-wrap gap-1.5">
       <Badge tone={STATUS_TONE[o.status]}>{ORDER_STATUS_LABELS[o.status]}</Badge>
-      {o.status === "invoiced" && <Badge tone={paid ? "green" : "yellow"}>{paid ? "Pagada" : demoLocal && ledgerPaid > 0 ? "Pagada en parte" : "Sin pagar"}</Badge>}
+      {o.status === "invoiced" && <Badge tone={paid ? "green" : "yellow"}>{paid ? "Pagada" : ledgerBacked && ledgerPaid > 0 ? "Pagada en parte" : "Sin pagar"}</Badge>}
       {o.status !== "draft" && <Badge tone={o.received === "yes" ? "green" : o.received === "partial" ? "yellow" : "gray"}>Recibida: {ORDER_RECEIVED_LABELS[o.received]}</Badge>}
     </span>
   );
@@ -185,7 +185,7 @@ export function OrdersPage() {
   const sendOrder = useConfirmedAction("sendOrder");
   const setOrderPaid = useConfirmedAction("setOrderPaid");
   // Demo: Compras carga la factura del proveedor pero no paga; el pago lo confirma Gerencia en el proyecto.
-  const demoLocal = useAppStore((s) => s.demoLocal);
+  const ledgerBacked = useLedgerBacked();
   const [action, setAction] = useState<Action>(null);
   const [error, setError] = useState("");
   const history = useMemo(() => purchaseHistory(projects, stock), [projects, stock]);
@@ -247,7 +247,7 @@ export function OrdersPage() {
                           <Receipt /> Registrar factura
                         </Button>
                       )}
-                      {o.status === "invoiced" && !demoLocal && (
+                      {o.status === "invoiced" && !ledgerBacked && (
                         <Button size="sm" variant="outline" onClick={async () => run(await setOrderPaid(o.id, !o.paid))}>
                           {o.paid ? "Marcar como no pagada" : "Marcar como pagada"}
                         </Button>

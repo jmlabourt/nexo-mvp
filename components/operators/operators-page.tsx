@@ -8,7 +8,7 @@ import { activeOperators, operatorHasRecords, visibleOperators } from "@/lib/ope
 import { hourlyCostAt } from "@/lib/ledger";
 import { rubroLabel } from "@/lib/rubros";
 import { useAppStore, type Result } from "@/store/use-app-store";
-import { useCategoryRate, useIdentity } from "@/store/selectors";
+import { useCategoryRate, useIdentity, useLedgerBacked } from "@/store/selectors";
 import { PageHeader } from "@/components/shared/page-header";
 import Link from "next/link";
 import { useManagementParams } from "@/store/session-data";
@@ -159,15 +159,15 @@ export function OperatorsPage({ op }: { op?: string }) {
   const categoryOf = (role: string) => ((params.roleToRubro[role] ?? role) === "Diseño" ? "design" : "labor");
   const rateOf = (role: string) => (categoryOf(role) === "design" ? designRate : laborRate);
   const hoursPerDay = useAppStore((s) => s.costSettings.hoursPerDay);
-  const demoLocal = useAppStore((s) => s.demoLocal);
+  const ledgerBacked = useLedgerBacked();
   const ledger = useAppStore((s) => s.ledger);
   // Demo: el costo sale de Configuración → Costo horario por rubro (la excepción de la persona prevalece).
   const rubroIdOf = (o: Operator) => ledger.rubroCatalog.find((r) => r.name === (params.roleToRubro[o.role] ?? o.role))?.id;
-  const costOf = (o: Operator) => (demoLocal ? hourlyCostAt(ledger, { employeeId: o.id, rubroId: rubroIdOf(o), date: todayISO() }, rateOf(o.role)) : rateOf(o.role));
+  const costOf = (o: Operator) => (ledgerBacked ? hourlyCostAt(ledger, { employeeId: o.id, rubroId: rubroIdOf(o), date: todayISO() }, rateOf(o.role)) : rateOf(o.role));
   const costSource = (o: Operator) =>
-    demoLocal && ledger.rates.some((r) => r.scope === "employee" && r.subjectId === o.id && r.validFrom <= todayISO())
+    ledgerBacked && ledger.rates.some((r) => r.scope === "employee" && r.subjectId === o.id && r.validFrom <= todayISO())
       ? "Excepción de la persona"
-      : demoLocal && rubroIdOf(o)
+      : ledgerBacked && rubroIdOf(o)
         ? "Costo del rubro · Configuración"
         : `${categoryOf(o.role) === "design" ? "Diseño" : "Mano de obra"} · Configuración`;
   const stats = useMemo(() => {

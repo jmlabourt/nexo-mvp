@@ -52,6 +52,7 @@ import { createClient } from "@/lib/supabase/client";
 import { lotToRow } from "@/lib/supabase/mappers";
 import * as remote from "@/lib/supabase/workspace";
 import { recordClosure } from "@/lib/supabase/closures";
+import { commitLedger, ledgerDelta, loadLedger } from "@/lib/supabase/ledger";
 import { buildClosureSnapshot } from "@/lib/closure-snapshot";
 import { DEFAULT_COST_SETTINGS, type ScheduleChange, type Workspace, type WorkspaceData } from "@/lib/supabase/workspace";
 import { exceptionError, workDaysError } from "@/lib/schedule";
@@ -108,8 +109,13 @@ interface AppState {
    * No hay empresa cargada (organizationId null): nada se escribe en la base.
    */
   demoLocal: boolean;
-  /** Registros de la demo integral (facturas, cobros, BOM, contrato vigente…). Ver lib/ledger.ts. */
+  /** Registros de la empresa (facturas, cobros, BOM, contrato vigente…). Ver lib/ledger.ts. */
   ledger: Ledger;
+  /**
+   * La base de la empresa guarda los registros del ledger (migración 20261028120000 aplicada). Con eso, esas pantallas
+   * funcionan en una empresa real; sin eso (o en la demo local) ver `ledgerBacked` en store/selectors.ts.
+   */
+  ledgerReady: boolean;
   /**
    * Sesión elegida (Gerencia, Administración, Compras, Jefe de planta, Operario). En la demo, un Administrativo mira
    * cualquiera de las cinco; en una empresa real, un Administrativo elige entre Gerencia y Administración.
@@ -257,8 +263,9 @@ interface AppState {
   /** Sale del modo demostración local; la app vuelve a cargar la empresa real. */
   exitLocalDemo: () => void;
   /**
-   * Registra en el ledger de la demo (facturas, cobros, contrato vigente, BOM, entregas…) con una operación pura de
-   * lib/ledger.ts. Solo funciona en el modo demostración: en una empresa real esos datos son "Pendiente de backend".
+   * Registra en el ledger (facturas, cobros, contrato vigente, BOM, entregas…) con una operación pura de lib/ledger.ts.
+   * Modo demostración: queda en el navegador. Empresa real: se guarda en la base (ledger_commit, que vuelve a validar
+   * permiso y reglas); si la base todavía no tiene los registros, es "Pendiente de backend".
    * `sessions` = sesiones que pueden hacerlo.
    */
   recordLedger: (sessions: SessionKey[], fn: (ledger: Ledger, ctx: LedgerCtx, state: AppState) => Ledger) => Result;
@@ -306,12 +313,20 @@ export interface ManualHoursInput {
  * Escenario de prueba de la demostración local: los datos de la demo más sus registros (ledger), la configuración de
  * costos y las tarifas por defecto. Es editable y se puede restaurar.
  */
-export function demoFixture(): Record<string, unknown> {
+/**
+ * Datos de ejemplo completos: los de la demo más el escenario (facturas, cobros, BOM, condiciones de pago, rubros,
+ * tarifas, clientes y proveedores). Es lo que se carga en una empresa nueva y al "Restaurar datos demo".
+ */
+export function demoWorkspace(): WorkspaceData & { ledger: Ledger } {
   const data = demoData();
   const scenario = demoScenario({ projects: data.projects, stock: data.stock, orders: data.orders });
+  return { ...data, projects: scenario.projects, ledger: scenario.ledger };
+}
+
+export function demoFixture(): Record<string, unknown> {
+  const { ledger, ...data } = demoWorkspace();
   return {
     ...data,
-    projects: scenario.projects,
     dayExceptions: data.dayExceptions ?? [],
     deliveries: [],
     reviewedHoursKeys: [],
@@ -319,7 +334,7 @@ export function demoFixture(): Record<string, unknown> {
     hourRates: DEFAULT_HOUR_RATES.map((r) => ({ ...r })),
     priceHistory: [],
     corrections: [],
-    ledger: scenario.ledger,
+    ledger,
   };
 }
 
@@ -506,7 +521,7 @@ export const useAppStore = create<AppState>()(
         const run2 = queue.then(async (): Promise<Result> => {
           try {
             await remote.replaceWorkspace(createClient(), org, isDemo ? data : null);
-            set({ ...data, dayExceptions: data.dayExceptions ?? [], deliveries: data.deliveries ?? [], isDemo, currentMode: "gerencia", actingOperatorId: null, syncStatus: "idle", syncError: null });
+            set({ ...data, dayExceptions: data.dayExceptions ?? [], deliveries: data.deliveries ?? [], ledger: get().ledgerReady ? (data.ledger ?? EMPTY_LEDGER) : EMPTY_LEDGER, isDemo, currentMode: "gerencia", actingOperatorId: null, syncStatus: "idle", syncError: null });
             return { ok: true, value: undefined };
           } catch (e) {
             set({ syncStatus: "error", syncError: `No se pudo guardar: ${errorMessage(e)}` });
@@ -535,6 +550,7 @@ export const useAppStore = create<AppState>()(
         deliveries: [],
         demoLocal: false,
         ledger: EMPTY_LEDGER,
+        ledgerReady: false,
         costSettings: { ...DEFAULT_COST_SETTINGS },
         hourRates: DEFAULT_HOUR_RATES.map((r) => ({ ...r })),
         priceHistory: [],
@@ -596,7 +612,8 @@ export const useAppStore = create<AppState>()(
             isDemo: ws.isDemo,
             // Una empresa real nunca usa los datos de la demostración local.
             demoLocal: false,
-            ledger: EMPTY_LEDGER,
+            ledger: ws.ledger ?? EMPTY_LEDGER,
+            ledgerReady: ws.ledger !== null,
             resolvedAlertIds: ws.resolvedAlertIds,
             organizationId: ws.organizationId,
             organizationName: ws.organizationName,
@@ -672,14 +689,27 @@ export const useAppStore = create<AppState>()(
         closeProject: (id) =>
           run(() => {
             const project = find(id);
-            if (get().demoLocal) {
-              // Demo integral: cierra solo Gerencia, con todo terminado, la entrega real y sin materiales sin rendir.
+            if (get().demoLocal || get().ledgerReady) {
+              // Cierra solo Gerencia, con todo terminado, la entrega real y sin materiales sin rendir.
               if (effectiveIdentity(get()).session !== "gerencia") throw new ops.DomainError("El cierre lo hace Gerencia.");
               const check = closeCheck(project, get().ledger, get().stock, get().orders, get().deliveries);
               if (check.blockers.length) throw new ops.DomainError(check.blockers.join(" "));
               const closed = ops.closeProject(project, get().stock, ctx());
               const closure = { projectId: id, date: ctx().now.slice(0, 10), by: ctx().actor, pendingCosts: check.warnings };
-              set({ projects: get().projects.map((p) => (p.id === id ? closed : p)), ledger: { ...get().ledger, closures: [...get().ledger.closures.filter((c) => c.projectId !== id), closure] } });
+              if (get().demoLocal) {
+                set({ projects: get().projects.map((p) => (p.id === id ? closed : p)), ledger: { ...get().ledger, closures: [...get().ledger.closures.filter((c) => c.projectId !== id), closure] } });
+                return undefined;
+              }
+              commit({ projects: get().projects.map((p) => (p.id === id ? closed : p)) });
+              set({ ledger: { ...get().ledger, closures: [...get().ledger.closures.filter((c) => c.projectId !== id), closure] } });
+              // El cierre congelado lleva quién cerró y los avisos (costos pendientes). Si fallara, se completa en la próxima carga.
+              void persistRemote(async (db) => {
+                try {
+                  await recordClosure(db, buildClosureSnapshot(closed, { closedBy: closure.by, pendingCosts: closure.pendingCosts }));
+                } catch (e) {
+                  console.warn("No se pudo guardar el historial del cierre:", errorMessage(e));
+                }
+              });
               return undefined;
             }
             const closed = ops.closeProject(project, get().stock, ctx());
@@ -1153,7 +1183,7 @@ export const useAppStore = create<AppState>()(
           }
         },
 
-        resetDemo: () => (get().demoLocal ? (get().restoreLocalDemo(), Promise.resolve({ ok: true, value: undefined })) : replaceAll(demoData(), true)),
+        resetDemo: () => (get().demoLocal ? (get().restoreLocalDemo(), Promise.resolve({ ok: true, value: undefined })) : replaceAll(demoWorkspace(), true)),
         clearData: () => replaceAll({ ...EMPTY_DATA, settings: { ...DEFAULT_SETTINGS } }, false),
         enterLocalDemo: () => {
           const saved = readDemo();
@@ -1202,11 +1232,27 @@ export const useAppStore = create<AppState>()(
         recordLedger: (sessions, fn) =>
           run(() => {
             const state = get();
-            if (!state.demoLocal) throw new ops.DomainError("Pendiente de backend: este dato todavía no se guarda en la base.");
+            if (!state.demoLocal && !state.ledgerReady) throw new ops.DomainError("Pendiente de backend: este dato todavía no se guarda en la base.");
             const who = effectiveIdentity(state);
             if (!sessions.includes(who.session)) throw new ops.DomainError("Esta acción no corresponde a tu sesión.");
+            // Las reglas son las de lib/ledger.ts (puras): si algo no corresponde, lanza acá y no se guarda nada.
             const ledger = fn(state.ledger, { actor: who.actor, now: new Date().toISOString() }, state);
-            if (ledger !== state.ledger) set({ ledger });
+            if (ledger === state.ledger) return undefined;
+            set({ ledger });
+            // Demo local: queda en el navegador. Empresa real: se guarda en la base lo que cambió (la base valida de nuevo
+            // el permiso y las reglas) y, si fue lo último pendiente, se relee para tomar lo que puso el servidor.
+            if (!state.demoLocal) {
+              const delta = ledgerDelta(state.ledger, ledger);
+              if (delta) {
+                void persistRemote(async (db) => {
+                  await commitLedger(db, delta);
+                  if (pending === 1) {
+                    const fresh = await loadLedger(db);
+                    if (fresh) set({ ledger: fresh });
+                  }
+                });
+              }
+            }
             return undefined;
           }),
         dismissSyncError: () => { void refreshWorkspace().catch(() => undefined); },
@@ -1232,7 +1278,7 @@ export const useAppStore = create<AppState>()(
 // Modo demostración local: cada cambio de datos se guarda en este navegador (nunca en una empresa real).
 if (typeof window !== "undefined") {
   useAppStore.subscribe((next, prev) => {
-    if (next.ledger.rubroCatalog !== prev.ledger.rubroCatalog || next.demoLocal !== prev.demoLocal) setRubroNames(next.demoLocal ? next.ledger.rubroCatalog : []);
+    if (next.ledger.rubroCatalog !== prev.ledger.rubroCatalog || next.demoLocal !== prev.demoLocal || next.ledgerReady !== prev.ledgerReady) setRubroNames(next.demoLocal || next.ledgerReady ? next.ledger.rubroCatalog : []);
     if (!next.demoLocal || !prev.demoLocal) return;
     if (demoDataChanged(next as unknown as Record<string, unknown>, prev as unknown as Record<string, unknown>)) {
       writeDemo(pickDemoData(next as unknown as Record<string, unknown>));

@@ -11,7 +11,7 @@ import { isAssignable, productRubroHours, thresholdOf, VERDICT_LABELS, type Oper
 import { projectProduction, scheduleSignal } from "@/lib/production";
 import { rubroLabel } from "@/lib/rubros";
 import { useAppStore } from "@/store/use-app-store";
-import { useMaterialsStateOf, useToday } from "@/store/selectors";
+import { useMaterialsStateOf, useToday, useLedgerBacked } from "@/store/selectors";
 import { MaterialsBadge } from "@/components/purchasing/purchasing-projects";
 import { PageHeader } from "@/components/shared/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
@@ -91,7 +91,7 @@ export function PlantProjectsPage() {
 }
 
 function ProjectCard({ project: p, onAssign }: { project: Project; onAssign: (d: AssignmentDraft) => void }) {
-  const demoLocal = useAppStore((s) => s.demoLocal);
+  const ledgerBacked = useLedgerBacked();
   const today = useToday();
   const assignments = useAppStore((s) => s.assignments);
   const settings = useAppStore((s) => s.settings);
@@ -170,8 +170,8 @@ function ProjectCard({ project: p, onAssign }: { project: Project; onAssign: (d:
             </section>
           ))
         )}
-        {demoLocal && allUnitsDone(p) && !p.isClosed && <HandoverCard project={p} />}
-        {!demoLocal && p.status === "production" && allUnitsDone(p) && !deliveryDecision(p) && (
+        {ledgerBacked && allUnitsDone(p) && !p.isClosed && <HandoverCard project={p} />}
+        {!ledgerBacked && p.status === "production" && allUnitsDone(p) && !deliveryDecision(p) && (
           <section aria-label="¿Se terminó este proyecto?" className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm">
             <p className="font-medium text-emerald-900">Todas las unidades están terminadas. ¿Se terminó este proyecto?</p>
             <div className="mt-2">

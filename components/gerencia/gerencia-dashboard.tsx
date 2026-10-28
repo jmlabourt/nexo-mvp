@@ -80,6 +80,7 @@ export function GerenciaDashboard() {
   const projects = useAppStore((s) => s.projects);
   const ledger = useAppStore((s) => s.ledger);
   const demoLocal = useAppStore((s) => s.demoLocal);
+  const ledgerReady = useAppStore((s) => s.ledgerReady);
   const operators = useAppStore((s) => s.operators);
   const hoursPerDay = useAppStore((s) => s.costSettings.hoursPerDay);
   const params = useManagementParams();
@@ -131,7 +132,7 @@ export function GerenciaDashboard() {
           Mes
           <Input type="month" className="mt-1 w-40" value={ref} onChange={(e) => e.target.value && setRef(e.target.value)} />
         </label>
-        {demoLocal ? <span className="text-xs text-slate-500">Datos de ejemplo</span> : <OriginTag origin="pending" />}
+        {demoLocal ? <span className="text-xs text-slate-500">Datos de ejemplo</span> : !ledgerReady && <OriginTag origin="pending" />}
       </div>
 
       <section aria-label="Resumen" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">

@@ -5,10 +5,11 @@
 // alcanza con comparar referencias).
 // ─────────────────────────────────────────────────────────────
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { AlertSettings, AppRole, CostSettings, DayException, HourRate, MaterialDelivery, MaterialRequest, Operator, PriceRecord, Project, PurchaseOrder, ValueCorrection, WorkAssignment } from "@/types";
+import type { AlertSettings, AppRole, CostSettings, DayException, HourRate, Ledger, MaterialDelivery, MaterialRequest, Operator, PriceRecord, Project, PurchaseOrder, ValueCorrection, WorkAssignment } from "@/types";
 import { DEFAULT_FINANCIAL_PCT, DEFAULT_HOUR_RATES, DEFAULT_HOURS_PER_DAY, DEFAULT_OVERTIME_MULTIPLIER, DEFAULT_SETTINGS } from "@/lib/constants";
 import type { StockState } from "@/lib/stock";
 import type { TallerCall } from "./taller";
+import { loadLedger, resetLedger } from "./ledger";
 import type { CorrectionInput, CorrectionReceipt } from "@/lib/corrections";
 import { deriveLedgerFromLegacy } from "@/lib/stock-legacy";
 import { todayISO } from "@/lib/formatting";
@@ -59,9 +60,11 @@ export interface WorkspaceData {
   requests: MaterialRequest[];
   settings: AlertSettings;
   resolvedAlertIds: string[];
+  /** Solo para cargar la demo / vaciar la empresa: los registros del escenario (ver replaceWorkspace). */
+  ledger?: Ledger;
 }
 
-export interface Workspace extends WorkspaceData {
+export interface Workspace extends Omit<WorkspaceData, "ledger"> {
   organizationId: string;
   organizationName: string;
   userId: string;
@@ -76,6 +79,11 @@ export interface Workspace extends WorkspaceData {
   priceHistory: PriceRecord[];
   /** Correcciones auditadas de valores congelados (solo Administrativo). */
   corrections: ValueCorrection[];
+  /**
+   * Registros de la empresa (facturas, cobros, BOM, tarifas…) que el rol puede ver. null = la base todavía no los
+   * guarda (migración sin aplicar): la app no ofrece cargarlos.
+   */
+  ledger: Ledger | null;
   demoSeeded: boolean;
   /** La empresa tiene cargados los datos de demostración (muestra "Restaurar datos demo"). */
   isDemo: boolean;
@@ -149,6 +157,7 @@ export async function loadWorkspace(db: SupabaseClient): Promise<Workspace> {
     orders,
     dayExceptions,
     deliveries,
+    ledger,
   ] = await Promise.all([
     check(await db.from("projects").select("*").eq("organization_id", org).order("created_at", { ascending: false })) as Record<
       string,
@@ -176,6 +185,7 @@ export async function loadWorkspace(db: SupabaseClient): Promise<Workspace> {
     loadOrders(db, org),
     loadDayExceptions(db, org),
     loadDeliveries(db, org),
+    loadLedger(db),
   ]);
 
   const domainProjects = projectsFromRows({ projects, budgetLines, purchaseEntries, materialUsages, actualEntries, activity, items, stageLogs, attachments });
@@ -207,6 +217,7 @@ export async function loadWorkspace(db: SupabaseClient): Promise<Workspace> {
     orders,
     dayExceptions,
     deliveries,
+    ledger,
     projects: domainProjects,
     operators: operatorsAt(operators.map(operatorFromRow), priceHistory, todayISO()),
     stock,
@@ -378,6 +389,7 @@ async function loadTallerWorkspace(db: SupabaseClient, user: { id: string; email
     corrections: [],
     assignments: (json.assignments ?? []).map(assignmentFromRow),
     orders: [],
+    ledger: await loadLedger(db),
     demoSeeded: true,
     isDemo: false,
     stockMigrated: false,
@@ -454,6 +466,7 @@ async function loadStaffWorkspace(db: SupabaseClient, user: { id: string; email?
     assignments: (json.assignments ?? []).map(assignmentFromRow),
     orders: ordersFromRows(json.purchase_orders ?? [], json.purchase_order_lines ?? []),
     dayExceptions: (json.day_exceptions ?? []).map(dayExceptionFromRow),
+    ledger: await loadLedger(db),
     demoSeeded: true,
     isDemo: false,
     stockMigrated: false,
@@ -697,6 +710,9 @@ export async function replaceWorkspace(db: SupabaseClient, org: string, data: Wo
     const exceptions = (data?.dayExceptions ?? []).filter((x) => x.operatorId === opId);
     check(await db.rpc("planta_save_schedule", { p: scheduleParams(opId, { add: exceptions }) }));
   }
+  // Los registros de la empresa (facturas, cobros, BOM, tarifas…): se cargan después de las órdenes de compra (los pagos
+  // dependen de ellas). Al vaciar, quedan en blanco. Sin la migración aplicada, no hace nada.
+  await resetLedger(db, data?.ledger ?? null);
   // Con la demo cargada la empresa queda como demo; al vaciar, deja de serlo.
   check(await db.from("organizations").update({ is_demo: data !== null }).eq("id", org));
 }

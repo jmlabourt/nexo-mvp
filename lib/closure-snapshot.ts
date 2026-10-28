@@ -82,6 +82,9 @@ export interface ClosureSnapshot {
   main_deviation_category: string | null;
   main_deviation_amount: number | null;
   summary_text: string;
+  /** Quién cerró y con qué avisos ("Cerrado con costos pendientes"). Solo cuando el cierre los trae. */
+  closed_by?: string;
+  pending_costs?: string[];
 }
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
@@ -201,7 +204,7 @@ function summaryText(
  * Arma el cierre congelado de un proyecto ya cerrado. Lanza si el proyecto sigue abierto:
  * el margen real final solo existe al finalizar (nunca se mezcla con el proyectado).
  */
-export function buildClosureSnapshot(project: Project): ClosureSnapshot {
+export function buildClosureSnapshot(project: Project, extra: { closedBy?: string; pendingCosts?: string[] } = {}): ClosureSnapshot {
   if (!project.isClosed || project.status !== "completed") {
     throw new Error("Solo se puede congelar el cierre de un proyecto finalizado.");
   }
@@ -241,5 +244,7 @@ export function buildClosureSnapshot(project: Project): ClosureSnapshot {
   return {
     ...base,
     summary_text: summaryText(project, base, main ? CATEGORY_LABELS[main.category] : null, main?.projectedVariance.percent ?? null, materialHighlights(materials)),
+    ...(extra.closedBy !== undefined ? { closed_by: extra.closedBy } : {}),
+    ...(extra.pendingCosts !== undefined ? { pending_costs: extra.pendingCosts } : {}),
   };
 }

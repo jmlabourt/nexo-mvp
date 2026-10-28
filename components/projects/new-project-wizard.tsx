@@ -118,7 +118,7 @@ export function NewProjectWizard() {
     const dates = f ? { startDate: f.startDate, dueDate: f.deliveryDate } : {};
     const res = await createProject({ ...v, ...dates, salesPrice: Number(v.salesPrice), code, budgetLines: calc.lines, items: productInputs(calcState) });
     if (!res.ok) return setFormError(res.error);
-    if (f && useAppStore.getState().demoLocal) {
+    if (f && (useAppStore.getState().demoLocal || useAppStore.getState().ledgerReady)) {
       // Demo: la seña y las cuotas pactadas quedan como condiciones de pago del proyecto.
       const n = (x: string) => Number(x.replace(",", "."));
       const terms = { startDate: f.startDate, deliveryDate: f.deliveryDate, daysAfterDelivery: Math.round(n(f.daysAfterDelivery)) || 0, seniaPct: n(f.seniaPct) || 0, installments: Math.round(n(f.installments)) || 1 };
