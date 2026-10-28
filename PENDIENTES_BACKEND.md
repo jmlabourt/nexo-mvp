@@ -17,11 +17,11 @@ Los contratos (tipos) de cada dato están en `types/index.ts`, al final del arch
 
 | Migración | Estado | Nota |
 | --- | --- | --- |
-| `20261023120000_operario_sin_material_usado.sql` | Escrita, **no aplicada** | Aplicar justo después de promover el deploy que la acompaña. |
+| `20261023120001_operario_sin_material_usado.sql` | Escrita, **no aplicada** | Aplicar justo después de promover el deploy que la acompaña. |
 | `20261024120000_planta_entregas_y_cierre.sql` | Escrita, **no aplicada** | Entrega de materiales y cierre del día del Jefe. |
 | `pendiente_supabase.sql` (`reset_workspace`, `admin_commit_change`; no está en el repo) | Puede estar pendiente | Verificar en la base real. |
 
-**Versión duplicada.** `20261023120000_historial_y_dataset_llm.sql` y `20261023120000_operario_sin_material_usado.sql`
+**Versión duplicada.** `20261023120000_historial_y_dataset_llm.sql` y `20261023120001_operario_sin_material_usado.sql`
 tienen la misma versión. Supabase CLI registra las versiones en `schema_migrations` y puede rechazar la segunda o
 saltearla. Hay que renombrar una de las dos (por ejemplo, `operario_sin_material_usado` → `20261023120001_…`) antes de
 aplicarlas. Esta rama no la renombra porque no puede tocar `supabase/`.
