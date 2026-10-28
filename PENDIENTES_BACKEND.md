@@ -20,7 +20,7 @@ Los contratos (tipos) de cada dato están en `types/index.ts`, al final del arch
 | `20261023120001_operario_sin_material_usado.sql` | Escrita, **no aplicada** | Aplicar justo después de promover el deploy que la acompaña. |
 | `20261024120000_planta_entregas_y_cierre.sql` | Escrita, **no aplicada** | Entrega de materiales y cierre del día del Jefe. |
 | `20261028120000_ledger_registros_de_la_empresa.sql` | **Aplicada** (28/10/2026, SQL Editor del proyecto `nexo`) | Registros de la empresa por cuenta: ver sección 8. |
-| `20261029120000_rol_administracion.sql` | **Pendiente de aplicar** | Rol propio de Administración (`comercial`): ver sección 2. |
+| `20261029120000_rol_administracion.sql` | **Aplicada** (28/10/2026, SQL Editor del proyecto `nexo`) | Rol propio de Administración (`comercial`): ver sección 2. Probada en vivo con un usuario temporal (se deshizo). |
 | `pendiente_supabase.sql` (`reset_workspace`, `admin_commit_change`; no está en el repo) | Puede estar pendiente | Verificar en la base real. |
 
 **Versión duplicada.** `20261023120000_historial_y_dataset_llm.sql` y `20261023120001_operario_sin_material_usado.sql`
@@ -185,7 +185,7 @@ rol de cada sesión.
 
 ### Pendiente
 
-1. **Aplicar `20261029120000_rol_administracion.sql`** (ver tabla de migraciones) y probar con una cuenta Administración real.
+1. Probar el rol Administración con una cuenta real (invitar a alguien como Administración desde Configuración → Usuarios) cuando se despliegue el frontend.
 2. `20261024120000_planta_entregas_y_cierre.sql` y `20261023120001_operario_sin_material_usado.sql` (esta última, recién
    después de desplegar el frontend nuevo).
 3. El estado de materiales del Jefe sigue calculado desde el presupuesto, no desde el BOM publicado.
