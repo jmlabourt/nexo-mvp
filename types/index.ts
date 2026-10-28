@@ -657,7 +657,7 @@ export interface DemoUser {
  * Rol de la cuenta en la base. owner/member = Administrativo (owner es quien creó la empresa),
  * compras = Compras, jefe_planta = Jefe de planta, operator = Operario. Ver lib/permissions.ts.
  */
-export type AppRole = "owner" | "member" | "compras" | "jefe_planta" | "operator";
+export type AppRole = "owner" | "member" | "comercial" | "compras" | "jefe_planta" | "operator";
 
 // ─────────────────────────────────────────────────────────────
 // Contratos de las cinco sesiones que TODAVÍA NO TIENEN persistencia en la base (ver PENDIENTES_BACKEND.md).

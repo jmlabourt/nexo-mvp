@@ -20,6 +20,7 @@ Los contratos (tipos) de cada dato están en `types/index.ts`, al final del arch
 | `20261023120001_operario_sin_material_usado.sql` | Escrita, **no aplicada** | Aplicar justo después de promover el deploy que la acompaña. |
 | `20261024120000_planta_entregas_y_cierre.sql` | Escrita, **no aplicada** | Entrega de materiales y cierre del día del Jefe. |
 | `20261028120000_ledger_registros_de_la_empresa.sql` | **Aplicada** (28/10/2026, SQL Editor del proyecto `nexo`) | Registros de la empresa por cuenta: ver sección 8. |
+| `20261029120000_rol_administracion.sql` | **Pendiente de aplicar** | Rol propio de Administración (`comercial`): ver sección 2. |
 | `pendiente_supabase.sql` (`reset_workspace`, `admin_commit_change`; no está en el repo) | Puede estar pendiente | Verificar en la base real. |
 
 **Versión duplicada.** `20261023120000_historial_y_dataset_llm.sql` y `20261023120001_operario_sin_material_usado.sql`
@@ -27,19 +28,20 @@ tienen la misma versión. Supabase CLI registra las versiones en `schema_migrati
 saltearla. Hay que renombrar una de las dos (por ejemplo, `operario_sin_material_usado` → `20261023120001_…`) antes de
 aplicarlas. Esta rama no la renombra porque no puede tocar `supabase/`.
 
-## 2. Gerencia y Administración: separación solo visual
+## 2. Gerencia y Administración: rol propio (migración `20261029120000_rol_administracion.sql`)
 
-- Las dos sesiones usan el mismo rol de la base (`admin` / Administrativo). La separación es de pantallas
-  (`lib/permissions.ts`: `SessionKey`, `sessionRole`, `canSee`, `can`).
-- Hoy un usuario Administrativo puede leer por API lo mismo que Gerencia: márgenes, valor de la mano de obra y costo
-  horario de cada operario.
-- **Punto de partida:** `20261022121000_permiso_comercial.sql` ya agrega `organization_members.can_view_commercial`.
-- **Pendiente:**
-  - un rol en la base para Administración (por ejemplo `comercial`), distinto de Gerencia;
-  - RLS que oculte `hourly_cost` de los operarios y los campos de margen, o vistas sin esas columnas;
-  - mapear ese rol a la sesión `administracion` en `sessionRole` / `sessionsFor`.
-- **Multirrol:** una persona que es Gerencia y Administración elige la sesión con el selector "Sesión" (radiogroup en
-  el menú). No hay persistencia de la sesión elegida en la base: queda en `localStorage` (`nexo-ui-v2`).
+- **Hecho:** Administración / Comercial / Diseño tiene su propio rol en la base (`comercial`). Ya no comparte permisos con
+  Gerencia (Administrativo). Detalle de qué ve y qué hace: `docs/ROLES_Y_PERMISOS.md`.
+- **Lectura:** `comercial_workspace()` (security definer): proyectos con precio y costo presupuestado, compras, stock con
+  costo, tarifas por rubro. Las horas reales llegan **sin importe** y los operarios **sin costo por hora ni PIN**; no llegan
+  facturas, cobros, costos generales ni tarifas por persona. Directo a las tablas no lee nada.
+- **Escritura:** `comercial_commit_change()`: crea y edita cotizaciones (proyecto, productos, presupuesto, actividad,
+  adjuntos) y las aprueba (cotización ↔ aprobado). Un proyecto ya en marcha o cerrado, las etapas de producción en
+  adelante, operarios, stock, tarifas y usuarios siguen siendo de Gerencia.
+- **Decisión a revisar con el equipo:** hoy "Diseño listo: enviar a Compras" (aprobado → compras) lo hace Gerencia. Si
+  Diseño debe hacerlo, se abre en la función y en `QUOTER_STATUSES` (`lib/project-rules.ts`).
+- **Un Administrativo** puede seguir mirando la sesión Administración (con sus propios permisos); el selector "Sesión"
+  queda en `localStorage` (`nexo-ui-v2`).
 
 ## 3. Datos sin tabla o sin lectura desde la app
 
@@ -175,15 +177,15 @@ rol de cada sesión.
 
 | Rol en la base | Ve | Escribe |
 | --- | --- | --- |
-| Administrativo (Gerencia y, por ahora, Administración) | Todo | Todo |
+| Administrativo (Gerencia) | Todo | Todo |
+| Administración (`comercial`) | Contrato, condiciones de pago, BOM, clientes y proveedores; **no** facturas, cobros, costos generales ni tarifas por persona | Condiciones de pago, contrato, clientes, proveedores, BOM, sus horas; **no** facturas, cobros ni entregas |
 | Compras | Pagos a proveedores, BOM publicado (cantidades), proveedores, cierres, sus horas | Proveedores, sus horas |
 | Jefe de planta | BOM publicado (cantidades), entregas al cliente, cierres, sus horas | Entrega al cliente, sus horas |
 | Operario | Solo el catálogo de rubros | Nada de esto |
 
 ### Pendiente
 
-1. **Rol propio de Administración (`comercial`)**: hoy comparte el rol Administrativo. Falta el rol, su lectura enmascarada
-   (ve costos de cotización, no costos reales ni facturas/cobros) y la invitación con cinco roles.
+1. **Aplicar `20261029120000_rol_administracion.sql`** (ver tabla de migraciones) y probar con una cuenta Administración real.
 2. `20261024120000_planta_entregas_y_cierre.sql` y `20261023120001_operario_sin_material_usado.sql` (esta última, recién
    después de desplegar el frontend nuevo).
 3. El estado de materiales del Jefe sigue calculado desde el presupuesto, no desde el BOM publicado.
