@@ -44,7 +44,7 @@ import { demoDataChanged, pickDemoData, readDemo, setDemoActive, writeDemo } fro
 import type { DeliveryChoice } from "@/lib/circuit";
 import * as people from "@/lib/operators";
 import { createId } from "@/lib/activity";
-import { checkHours, isBuyer, isManager } from "@/lib/project-rules";
+import { canQuoteProject, checkHours, isBuyer, isManager, isQuoter } from "@/lib/project-rules";
 import { completedUnitsError, type ProductInput } from "@/lib/production";
 import { EMPTY_STOCK, applyChange, receiveStock, type StockState } from "@/lib/stock";
 import { materialKey } from "@/lib/material-reconciliation";
@@ -385,6 +385,8 @@ export function effectiveIdentity(
     return { role: "operator", roleKey: "operario", session: "operario", operator, actor: operator?.name ?? s.userName };
   }
   const real = roleKeyOf(s.role);
+  // Administración (rol propio): una sola sesión; la base le entrega y le acepta solo lo suyo.
+  if (real === "comercial") return { role: s.role, roleKey: "comercial", session: "administracion", operator: undefined, actor: s.userName };
   // Demo: un Administrativo mira cualquiera de las cinco sesiones. Empresa real: las de su rol (Gerencia / Administración).
   const view: SessionKey = real === "admin" && s.isDemo && s.currentMode ? s.currentMode : resolveSession(real, s.currentMode);
   if (view === "operario") {
@@ -464,7 +466,8 @@ export const useAppStore = create<AppState>()(
           void persistRemote((db) => remote.runTallerCalls(db, calls));
           return;
         }
-        void persistRemote((db, org) => remote.commitChange(db, org, prev, { projects, stock, operators, requests }));
+        const writer = prev.role === "comercial" ? remote.commitComercialChange : remote.commitChange;
+        void persistRemote((db, org) => writer(db, org, prev, { projects, stock, operators, requests }));
       };
 
       /** Corre una operación y devuelve Result (nunca lanza). */
@@ -484,6 +487,12 @@ export const useAppStore = create<AppState>()(
 
       const requireManager = (what: string) => {
         if (!isManager(effectiveIdentity(get()).role)) throw new ops.DomainError(`${what} lo hace un usuario Administrativo.`);
+      };
+      /** Cotizar: Administrativo, o Administración mientras el proyecto está en cotización o aprobado. */
+      const requireQuoter = (what: string, project?: Project) => {
+        const role = effectiveIdentity(get()).role;
+        if (!isQuoter(role)) throw new ops.DomainError(`${what} lo hace un usuario Administrativo o de Administración.`);
+        if (project && !canQuoteProject(role, project)) throw new ops.DomainError(`${what}: con el proyecto ya en marcha lo hace Gerencia.`);
       };
 
 
@@ -640,7 +649,7 @@ export const useAppStore = create<AppState>()(
 
         createProject: (input) =>
           run(() => {
-            requireManager("Crear proyectos");
+            requireQuoter("Crear proyectos");
             const project = ops.createProject(input, ctx());
             commit({ projects: [project, ...get().projects] });
             return project.id;
@@ -648,17 +657,17 @@ export const useAppStore = create<AppState>()(
 
         updateProject: (id, patch) =>
           mutate(id, (p) => {
-            requireManager("Editar el proyecto");
+            requireQuoter("Editar el proyecto", p);
             return { ...p, ...patch, updatedAt: new Date().toISOString() };
           }),
 
         changeProjectStatus: (id, status, opts) => mutate(id, (p) => ops.changeStatus(p, status, ctx(), opts)),
         rejectQuote: (id, reason) =>
-          isManager(effectiveIdentity(get()).role)
+          isQuoter(effectiveIdentity(get()).role)
             ? mutate(id, (p) => circuit.recordRejection(p, reason, ctx()))
             : { ok: false, error: "Lo registra Administración." },
         renegotiatePrice: (id, newPrice, reason) =>
-          isManager(effectiveIdentity(get()).role)
+          isQuoter(effectiveIdentity(get()).role)
             ? mutate(id, (p) => circuit.recordRenegotiation(p, newPrice, reason, ctx()))
             : { ok: false, error: "Lo registra Administración." },
         defineDelivery: (id, choice, note) =>
@@ -672,17 +681,17 @@ export const useAppStore = create<AppState>()(
 
         addBudgetLine: (id, input) =>
           mutate(id, (p) => {
-            requireManager("Editar el costo presupuestado");
+            requireQuoter("Editar el costo presupuestado", p);
             return ops.addBudgetLine(p, input, ctx());
           }),
         updateBudgetLine: (id, lineId, input) =>
           mutate(id, (p) => {
-            requireManager("Editar el costo presupuestado");
+            requireQuoter("Editar el costo presupuestado", p);
             return ops.updateBudgetLine(p, lineId, input, ctx());
           }),
         removeBudgetLine: (id, lineId) =>
           mutate(id, (p) => {
-            requireManager("Editar el costo presupuestado");
+            requireQuoter("Editar el costo presupuestado", p);
             return ops.removeBudgetLine(p, lineId, ctx());
           }),
 

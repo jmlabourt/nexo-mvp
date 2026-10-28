@@ -9,6 +9,7 @@ import { RUBROS, rubroLabel } from "@/lib/rubros";
 import { parseDecimal } from "@/lib/schemas";
 import { ProductionBadge } from "@/components/shared/badges";
 import { useIdentity } from "@/store/selectors";
+import { canQuoteProject } from "@/lib/project-rules";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
@@ -22,11 +23,11 @@ import { AttachButton, AttachmentList } from "@/components/shared/attachments";
  */
 export function ItemsTab({ project }: { project: Project }) {
   const removeItem = useConfirmedAction("removeItem");
-  const { isManager, session } = useIdentity();
+  const { isManager, role, session } = useIdentity();
   // El costo asociado a cada mueble lo ve solo Gerencia.
   const showCost = session === "gerencia";
   const [editing, setEditing] = useState<string | null>(null);
-  const editable = isManager && !project.isClosed;
+  const editable = !project.isClosed && canQuoteProject(role, project);
 
   const costOf = (itemId: string | undefined) => {
     const mats = project.materialUsages.filter((u) => u.itemId === itemId).reduce((s, u) => s + (u.quantityConsumed + u.wasteQuantity) * u.unitCost, 0);
