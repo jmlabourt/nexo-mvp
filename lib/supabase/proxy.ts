@@ -1,6 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
-import { isSupabaseConfigured, SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from "./env";
+import { DEMO_LOCAL_COOKIE, isLocalDemoAllowed, isSupabaseConfigured, SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from "./env";
 import { sessionCookieOptions } from "./session";
 import { safeNext } from "./safe-next";
 
@@ -17,12 +17,26 @@ function isPublic(pathname: string) {
  */
 export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({ request });
+  const { pathname: currentPathname, hostname, searchParams } = request.nextUrl;
+  const hasLocalDemoAccess = isLocalDemoAllowed(hostname, searchParams, request.headers.get("cookie"));
+
+  // Modo demo local solo para desarrollo y localhost, con activación explícita por query param y persistencia por cookie.
+  // Esto no toca la auth de producción ni cambia la lógica de negocio.
+  if (hasLocalDemoAccess) {
+    response.cookies.set(DEMO_LOCAL_COOKIE, "1", {
+      path: "/",
+      httpOnly: false,
+      sameSite: "lax",
+      secure: false,
+      maxAge: 60 * 60 * 24 * 7,
+    });
+    return response;
+  }
 
   // Sin variables de Supabase no hay sesión posible: el sitio público sigue andando
   // y las rutas privadas van a /login, que explica qué falta.
   if (!isSupabaseConfigured) {
-    const { pathname } = request.nextUrl;
-    if (isPublic(pathname)) return response;
+    if (isPublic(currentPathname)) return response;
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     url.search = "";
@@ -47,17 +61,17 @@ export async function updateSession(request: NextRequest) {
   // No meter código entre createServerClient y getClaims (ver docs de @supabase/ssr).
   const { data } = await supabase.auth.getClaims();
   const signedIn = Boolean(data?.claims);
-  const { pathname, search } = request.nextUrl;
+  const { pathname: routePathname, search } = request.nextUrl;
 
-  if (!signedIn && !isPublic(pathname)) {
+  if (!signedIn && !isPublic(routePathname)) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
-    url.search = `?next=${encodeURIComponent(pathname + search)}`;
+    url.search = `?next=${encodeURIComponent(routePathname + search)}`;
     return NextResponse.redirect(url);
   }
 
   // Quien ya tiene sesión y abre un link de invitación (/login?next=/taller…) va directo a la pantalla de su rol.
-  if (signedIn && pathname === "/login") {
+  if (signedIn && routePathname === "/login") {
     const url = request.nextUrl.clone();
     url.pathname = safeNext(request.nextUrl.searchParams.get("next"));
     url.search = "";
