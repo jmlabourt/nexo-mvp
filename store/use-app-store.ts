@@ -76,6 +76,27 @@ import { applyCorrection, correctionError, type CorrectionInput, type Correction
 import { assignmentError, type AssignmentInput } from "@/lib/plant";
 import { closeDay, closeDayPayload, deliverMaterial, deliveryPayload, type CloseDayInput, type DeliveryInput } from "@/lib/plant-materials";
 
+const memoryStorage: Storage = {
+  length: 0,
+  clear: () => undefined,
+  getItem: () => null,
+  key: () => null,
+  removeItem: () => undefined,
+  setItem: () => undefined,
+};
+
+function safeLocalStorage(): Storage {
+  try {
+    if (typeof window === "undefined" || !window.localStorage) return memoryStorage;
+    const probe = "blerp-storage-probe";
+    window.localStorage.setItem(probe, "1");
+    window.localStorage.removeItem(probe);
+    return window.localStorage;
+  } catch {
+    return memoryStorage;
+  }
+}
+
 export type Result<T = undefined> = { ok: true; value: T } | { ok: false; error: string };
 
 export type SyncStatus = "idle" | "saving" | "error";
@@ -329,6 +350,7 @@ export function demoWorkspace(): WorkspaceData & { ledger: Ledger } {
 
 export function demoFixture(): Record<string, unknown> {
   const { ledger, ...data } = demoWorkspace();
+  const nextNumber = Math.max(0, ...data.projects.map((p) => Number(/(\d+)/.exec(p.code)?.[1] ?? 0))) + 1;
   return {
     ...data,
     dayExceptions: data.dayExceptions ?? [],
@@ -338,7 +360,7 @@ export function demoFixture(): Record<string, unknown> {
     hourRates: DEFAULT_HOUR_RATES.map((r) => ({ ...r })),
     priceHistory: [],
     corrections: [],
-    ledger,
+    ledger: { ...ledger, projectNomenclature: ledger.projectNomenclature ?? { pattern: "{prefijo}{numero}", prefix: "OT", nextNumber } },
   };
 }
 
@@ -1301,7 +1323,7 @@ export const useAppStore = create<AppState>()(
     {
       name: "nexo-ui-v2",
       version: 5,
-      storage: createJSONStorage(() => localStorage),
+      storage: createJSONStorage(() => safeLocalStorage()),
       // v3 guardaba "management" / "workshop" (Gestión / Taller).
       migrate: (persisted, version) => {
         const s = (persisted ?? {}) as { currentMode?: string; actingOperatorId?: string | null };

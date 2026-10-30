@@ -14,6 +14,7 @@ import { formatDate, formatWorkingDays, todayISO, toISODate } from "@/lib/format
 import { addWorkingDays } from "@/lib/budget-calculator";
 import { workingDaysBetween } from "@/lib/capacity";
 import { nextProjectCode } from "@/lib/project-operations";
+import { DEFAULT_MANAGEMENT_PARAMS } from "@/lib/demo/ejemplos";
 import { useAppStore } from "@/store/use-app-store";
 import { PageHeader } from "@/components/shared/page-header";
 import { Card, CardContent } from "@/components/ui/card";
@@ -21,7 +22,6 @@ import { Field } from "@/components/ui/field";
 import { Input, Select, Textarea } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { QuoteWorkspace } from "@/components/budget/quote-workspace";
-import { formatProjectCode } from "@/lib/gerencia";
 import { computeCalculator, initialCalcState, productInputs, quoteActionBlocker, type CalcState } from "@/components/budget/calculator-state";
 import { clearQuoteDraft, peekQuoteDraft } from "@/components/budget/quote-draft";
 import { QuoteReview } from "./quote-review";
@@ -49,7 +49,6 @@ export function NewProjectWizard() {
   const isDemo = useAppStore((s) => s.isDemo);
   const monthlyRate = useMonthlyRate();
   const createProject = useConfirmedAction("createProject");
-  const legacyCode = useMemo(() => nextProjectCode(projects), [projects]);
   const nomenclature = useAppStore((s) => s.ledger.projectNomenclature);
   const [draft] = useState(peekQuoteDraft);
   const [step, setStep] = useState(0);
@@ -77,15 +76,16 @@ export function NewProjectWizard() {
   const startDate = useWatch({ control, name: "startDate" });
   const dueDate = useWatch({ control, name: "dueDate" });
   const projectType = useWatch({ control, name: "projectType" });
-  const projectName = useWatch({ control,name:"name" });
-  const clientName = useWatch({ control,name:"client" });
-  const code = (() => {
-    if (!nomenclature || !nomenclature.pattern.includes("{numero}")) return legacyCode;
-    let n = nomenclature.nextNumber;
-    let proposed = formatProjectCode(nomenclature.pattern,{ prefix:nomenclature.prefix,number:n,client:clientName,name:projectName });
-    while (projects.some((p) => p.code.toLowerCase() === proposed.toLowerCase())) proposed = formatProjectCode(nomenclature.pattern,{ prefix:nomenclature.prefix,number:++n,client:clientName,name:projectName });
-    return proposed;
-  })();
+  const projectName = useWatch({ control, name: "name" });
+  const clientName = useWatch({ control, name: "client" });
+  const code = useMemo(
+    () => nextProjectCode(
+      projects,
+      nomenclature ?? { pattern: DEFAULT_MANAGEMENT_PARAMS.projectCodePattern, prefix: DEFAULT_MANAGEMENT_PARAMS.projectCodePrefix },
+      { client: clientName, name: projectName },
+    ),
+    [projects, nomenclature, projectName, clientName],
+  );
   const calc = useMemo(
     () => computeCalculator(calcState, projectType, { projects, rates, overtimeMultiplier, hoursPerDay, salesPrice, isDemo }),
     [calcState, projectType, projects, rates, overtimeMultiplier, hoursPerDay, salesPrice, isDemo],

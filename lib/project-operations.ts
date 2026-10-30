@@ -39,6 +39,7 @@ import {
 import { actualByCategory, budgetByCategory, budgetLineTotal, budgetTotal } from "./calculations";
 import { actualMessage, activity, createId, leftoverMessage, purchaseMessage, usageMessage } from "./activity";
 import { categoryAlertLevel, LEVEL_RANK } from "./alerts";
+import { formatProjectCode } from "./gerencia";
 import { formatPercent, formatQty, todayISO } from "./formatting";
 import { materialKey } from "./material-reconciliation";
 import { productInputError, type ProductInput } from "./production";
@@ -133,12 +134,32 @@ export interface NewProjectInput {
   items?: ProductInput[];
 }
 
-export function nextProjectCode(projects: Pick<Project, "code">[]): string {
-  const max = projects.reduce((m, p) => {
-    const n = Number(/^P-(\d+)$/.exec(p.code)?.[1] ?? 0);
-    return Math.max(m, n);
-  }, 1000);
-  return `P-${max + 1}`;
+export interface ProjectNomenclatureInput {
+  pattern: string;
+  prefix: string;
+  nextNumber?: number;
+}
+
+function numericProjectCode(code: string): number | null {
+  const match = /(\d+)/.exec(code);
+  return match ? Number(match[1]) : null;
+}
+
+export function nextProjectCode(
+  projects: Pick<Project, "code">[],
+  nomenclature?: ProjectNomenclatureInput,
+  context?: { client?: string; name?: string },
+): string {
+  const pattern = nomenclature && nomenclature.pattern.includes("{numero}") ? nomenclature.pattern : "{prefijo}{numero}";
+  const prefix = nomenclature?.prefix || "OT";
+  const base = Number.isFinite(nomenclature?.nextNumber) ? Number(nomenclature?.nextNumber) : Math.max(0, ...projects.map((p) => numericProjectCode(p.code) ?? 0)) + 1;
+  let next = base;
+  let code = formatProjectCode(pattern, { prefix, number: next, client: context?.client ?? "", name: context?.name ?? "" });
+  while (projects.some((p) => p.code.toLowerCase() === code.toLowerCase())) {
+    next += 1;
+    code = formatProjectCode(pattern, { prefix, number: next, client: context?.client ?? "", name: context?.name ?? "" });
+  }
+  return code;
 }
 
 export function createProject(input: NewProjectInput, ctx: Ctx): Project {

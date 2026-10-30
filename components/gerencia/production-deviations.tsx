@@ -17,13 +17,22 @@ export function ProductionDeviations({ projects, ledger }: { projects: Project[]
   const hours = hoursRows(reporting,"project");
   const rubros = hoursRows(reporting,"rubro").sort((a,b) => b.deviation-a.deviation);
   const p = reporting.find((p) => p.id === selected);
-  const materials = projects.map((p) => ({ label:p.code,values:{ quoted:(p.baseline?.lines ?? p.budgetLines).filter((l) => l.category === "materials").reduce((s,l) => s+l.total,0),real:materialActualCost(p.materialUsages) } }));
+  const materials = projects.map((p) => ({ id:p.id, label:p.code, tooltip:`${p.code} · ${p.name}: cotizado ${formatCurrency((p.baseline?.lines ?? p.budgetLines).filter((l) => l.category === "materials").reduce((s,l) => s+l.total,0))} · real ${formatCurrency(materialActualCost(p.materialUsages))}` ,values:{ quoted:(p.baseline?.lines ?? p.budgetLines).filter((l) => l.category === "materials").reduce((s,l) => s+l.total,0),real:materialActualCost(p.materialUsages) } }));
   const maxDeviation = Math.max(1,...rubros.map((r) => Math.abs(r.deviation)));
+  const hourChartColumns = hours.map((r) => {
+    const project = reporting.find((p) => p.id === r.key);
+    return {
+      id: r.key,
+      label: project?.code ?? r.label,
+      tooltip: project ? `${project.code} · ${project.name}: cotizado ${formatNumber(r.budget)} h · real ${formatNumber(r.actual)} h` : r.label,
+      values: { quoted: r.budget, real: r.actual },
+    };
+  });
   return <section className="space-y-5" aria-label="Desvíos de producción">
     <h2 className="font-semibold">Desvíos de producción</h2>
-    <div><h3 className="text-sm font-medium mb-2">Horas cotizadas vs. reales por proyecto</h3><ColumnChart title="Horas cotizadas vs. reales por proyecto" series={series} columns={hours.map((r) => ({ label:r.label,values:{ quoted:r.budget,real:r.actual } }))} format={(n) => `${formatNumber(n)} h`} /></div>
+    <div><h3 className="text-sm font-medium mb-2">Horas cotizadas vs. reales por proyecto</h3><ColumnChart title="Horas cotizadas vs. reales por proyecto" series={series} columns={hourChartColumns} format={(n) => `${formatNumber(n)} h`} onColumnClick={(id) => id && setSelected(id)} /></div>
     <div><h3 className="text-sm font-medium mb-2">Desvíos de horas por rubro</h3><p className="text-xs text-slate-500">Real − cotizado. En proyectos abiertos, las diferencias negativas son remanente estimado, no ahorro.</p><ul className="space-y-2 mt-2">{rubros.map((r) => <li key={r.key} className="text-xs"><div className="flex justify-between"><span>{r.label}</span><span>{r.deviation > 0 ? "+" : ""}{formatNumber(r.deviation)} h · {r.pct === null ? "Sin base" : `${formatNumber(r.pct)} %`}</span></div><div className="h-2 bg-slate-100 rounded"><div className={r.deviation > 0 ? "h-2 bg-red-500 rounded" : "h-2 bg-blue-400 rounded"} style={{ width:`${Math.abs(r.deviation)/maxDeviation*100}%` }} /></div></li>)}</ul></div>
-    <div><h3 className="text-sm font-medium mb-2">Materiales cotizados vs. reales por proyecto ($)</h3><ColumnChart title="Materiales cotizados vs. reales en pesos" series={series} columns={materials} format={formatCurrency} /></div>
+    <div><h3 className="text-sm font-medium mb-2">Materiales cotizados vs. reales por proyecto ($)</h3><ColumnChart title="Materiales cotizados vs. reales en pesos" series={series} columns={materials} format={formatCurrency} onColumnClick={(id) => id && setSelected(id)} /></div>
     <label className="block text-sm">Detalle del proyecto<Select className="mt-1 max-w-md" value={selected} onChange={(e) => setSelected(e.target.value)}>{projects.map((p) => <option key={p.id} value={p.id}>{p.code} · {p.name}</option>)}</Select></label>
     {p && <details><summary className="cursor-pointer text-sm font-medium">Ver detalle por mueble, rubro y material · {p.isClosed ? "Cerrado" : "Parcial"}</summary>
       <Table><THead><TR><TH>Mueble / rubro</TH><TH>Cotizadas</TH><TH>Reales</TH><TH>Diferencia</TH><TH>%</TH></TR></THead><TBody>{p.items.flatMap((i) => i.rubros.map((r) => {

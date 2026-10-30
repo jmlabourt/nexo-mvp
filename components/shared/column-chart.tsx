@@ -13,7 +13,9 @@ export interface ChartSeries {
 }
 
 export interface ChartColumn {
+  id?: string;
   label: string;
+  tooltip?: string;
   values: Record<string, number>;
   /** Línea de referencia de esa columna (ej. capacidad). */
   reference?: number;
@@ -27,6 +29,7 @@ export function ColumnChart({
   referenceLabel,
   format,
   height = 180,
+  onColumnClick,
 }: {
   title: string;
   series: ChartSeries[];
@@ -35,6 +38,7 @@ export function ColumnChart({
   referenceLabel?: string;
   format: (n: number) => string;
   height?: number;
+  onColumnClick?: (id: string | undefined) => void;
 }) {
   const [table, setTable] = useState(false);
   const totals = columns.map((c) => (mode === "stacked" ? series.reduce((s, x) => s + (c.values[x.key] ?? 0), 0) : Math.max(0, ...series.map((x) => c.values[x.key] ?? 0))));
@@ -91,9 +95,24 @@ export function ColumnChart({
         <div className="overflow-x-auto">
           <div className="flex min-w-max items-end gap-3 border-b border-slate-300 pb-0" style={{ height }} role="img" aria-label={`${title}. Abrí "Ver como tabla" para los valores.`}>
             {columns.map((c) => {
-              const tip = [c.label, ...series.map((s) => `${s.label}: ${format(c.values[s.key] ?? 0)}`), ...(c.reference !== undefined && referenceLabel ? [`${referenceLabel}: ${format(c.reference)}`] : [])].join(" · ");
+              const tip = c.tooltip ?? [c.label, ...series.map((s) => `${s.label}: ${format(c.values[s.key] ?? 0)}`), ...(c.reference !== undefined && referenceLabel ? [`${referenceLabel}: ${format(c.reference)}`] : [])].join(" · ");
               return (
-                <div key={c.label} className="relative flex h-full min-w-12 flex-1 flex-col justify-end" title={tip} tabIndex={0} aria-label={tip}>
+                <div
+                  key={c.id ?? c.label}
+                  className={cn("relative flex h-full min-w-12 flex-1 flex-col justify-end", onColumnClick && c.id ? "cursor-pointer" : undefined)}
+                  title={tip}
+                  tabIndex={onColumnClick && c.id ? 0 : -1}
+                  aria-label={tip}
+                  role={onColumnClick && c.id ? "button" : undefined}
+                  onClick={() => onColumnClick?.(c.id)}
+                  onKeyDown={(e) => {
+                    if (!onColumnClick || !c.id) return;
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      onColumnClick(c.id);
+                    }
+                  }}
+                >
                   <div className={cn("flex h-full items-end justify-center", mode === "grouped" ? "gap-[2px]" : "flex-col-reverse items-stretch gap-[2px]")}>
                     {series.map((s) => {
                       const v = c.values[s.key] ?? 0;
@@ -116,7 +135,7 @@ export function ColumnChart({
           </div>
           <div className="flex min-w-max gap-3 pt-1 text-xs text-slate-500">
             {columns.map((c) => (
-              <div key={c.label} className="min-w-12 flex-1 text-center">{c.label}</div>
+              <div key={`${c.id ?? c.label}-label`} className="min-w-12 flex-1 text-center">{c.label}</div>
             ))}
           </div>
         </div>
