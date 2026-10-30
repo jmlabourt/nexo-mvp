@@ -47,9 +47,9 @@ export function ResultSection({ state, onState, result, projectType, salesPrice,
           <span className="block">Todos los importes son sin IVA. Rentabilidad = ganancia sobre el precio de venta.</span>
           <span className="block">
             Precio sugerido = ( Materiales / (1 − rentabilidad objetivo de materiales) + Mano de obra, diseño y administración / (1 − rentabilidad objetivo de
-            mano de obra) + Transporte + Imprevistos ) / (1 − gasto financiero). Transporte e imprevistos van al costo, sin rentabilidad.
+            mano de obra) + Transporte + Imprevistos ) / (1 − costo financiero). Transporte e imprevistos van al costo, sin rentabilidad.
           </span>
-          <span className="block">Los dos objetivos separados y el gasto financiero son supuestos a confirmar con el cliente.</span>
+          <span className="block">Los dos objetivos separados y el costo financiero son supuestos a confirmar con el cliente.</span>
         </>
       }
     >
@@ -72,14 +72,14 @@ export function ResultSection({ state, onState, result, projectType, salesPrice,
         />
         {state.finance ? (
           <div className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-slate-600">Gasto financiero</span>
+            <span className="text-xs font-medium text-slate-600">Costo financiero</span>
             <span className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-right text-sm tabular">{state.financialPct} %</span>
             <span className="text-xs text-slate-500">Calculado con las condiciones de cobro (abajo).</span>
           </div>
         ) : (
           <NumField
             id="c-fin"
-            label="Gasto financiero"
+            label="Costo financiero"
             suffix="%"
             value={state.financialPct}
             onChange={(v) => onState({ financialPct: v })}

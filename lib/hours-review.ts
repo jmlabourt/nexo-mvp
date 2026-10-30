@@ -72,18 +72,24 @@ export function correctHours(
   if (parts.length === 0 || Math.abs(sum - total) > 1e-6) throw new Error(`El reparto tiene que sumar ${total} h (suma ${Math.round(sum * 100) / 100} h).`);
   const note = `Corregido por ${ctx.actor}: ${input.reason.trim()}`;
   const added = new Map<string, Project["actualEntries"]>();
-  for (const a of parts) {
+  let allocatedCost = 0;
+  for (const [index,a] of parts.entries()) {
     const asg = assignments.find((x) => x.id === a.assignmentId);
     if (!asg) throw new Error("Asignación no encontrada.");
+    if (asg.operatorId !== entry.operatorId || asg.date !== entry.date) throw new Error("El reparto debe conservar la persona y fecha; usá la corrección individual para cambiar fecha.");
+    const target = projects.find((p) => p.id === asg.projectId);
+    if (!target || target.isClosed) throw new Error("El destino debe ser un proyecto abierto.");
     const share = a.hours / total;
+    const amount = index === parts.length-1 ? Math.round((entry.amount-allocatedCost)*100)/100 : Math.round(entry.amount*share*100)/100;
+    allocatedCost = Math.round((allocatedCost+amount)*100)/100;
     const next = {
       ...entry,
       id: ctx.id(),
       projectId: asg.projectId,
-      itemId: asg.itemId ?? entry.itemId,
+      itemId: asg.itemId,
       rubro: asg.rubro,
       assignmentId: asg.id,
-      amount: Math.round(entry.amount * share * 100) / 100,
+      amount,
       labor: { ...entry.labor, hours: a.hours },
       notes: [entry.notes, note].filter(Boolean).join(" · "),
     };

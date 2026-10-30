@@ -65,7 +65,7 @@ export interface AssignmentInput {
   hourKind?: "labor" | "design" | "admin";
   projectId: string;
   /** Producto del proyecto. */
-  itemId: string;
+  itemId?: string;
   rubro: RubroId;
   operatorId: string;
   date: string;
@@ -78,11 +78,13 @@ export function assignmentError(input: AssignmentInput, ctx: { projects: Project
   if (!project) return "Elegí un proyecto.";
   if (!isAssignable(project)) return "Solo se asignan proyectos entre Aprobado e Instalación.";
   const item = project.items.find((i) => i.id === input.itemId);
-  if (!item) return "Elegí un producto del proyecto.";
-  if (!item.rubros.some((r) => r.rubro === input.rubro)) return `${item.name} no tiene ese rubro: elegí uno de sus rubros.`;
+  if (input.itemId && !item) return "Elegí un producto del proyecto.";
+  const rubros = item ? item.rubros : project.items.flatMap((i) => i.rubros);
+  if (!rubros.some((r) => r.rubro === input.rubro)) return item ? `${item.name} no tiene ese rubro: elegí uno de sus rubros.` : "Elegí un rubro del proyecto.";
   const operator = ctx.operators.find((o) => o.id === input.operatorId);
   if (!operator) return "Elegí un operario.";
   if (!operator.active) return `${operator.name} está dado de baja.`;
+  if (operator.enabledRubros && !operator.enabledRubros.includes(input.rubro)) return "Ese rubro no está habilitado para la persona.";
   if (!/^\d{4}-\d{2}-\d{2}$/.test(input.date)) return "Elegí el día.";
   if (!(input.plannedHours > 0)) return "Las horas previstas tienen que ser mayores a cero.";
   if (input.plannedHours > 24) return "Un día tiene 24 h.";

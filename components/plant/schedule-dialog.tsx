@@ -1,4 +1,6 @@
 "use client";
+import { addDays } from "@/lib/plant";
+import { useIdentity } from "@/store/selectors";
 import { useConfirmedAction } from "@/store/confirmed-action";
 // Días laborales de un operario y sus excepciones por fecha (Lote 6 · Fase 3). Lo edita el Jefe de planta (o un
 // Administrativo); la base lo guarda con planta_save_schedule. Define la capacidad de cada día en el calendario.
@@ -25,6 +27,8 @@ export function ScheduleDialog({ operatorId, onClose }: { operatorId: string | n
 }
 
 function ScheduleForm({ operatorId, onClose }: { operatorId: string; onClose: () => void }) {
+  const { session } = useIdentity();
+  const canEditHabitual = session === "gerencia";
   const operator = useAppStore((s) => s.operators.find((o) => o.id === operatorId));
   const allExceptions = useAppStore((s) => s.dayExceptions);
   const hoursPerDay = useAppStore((s) => s.costSettings.hoursPerDay);
@@ -33,6 +37,7 @@ function ScheduleForm({ operatorId, onClose }: { operatorId: string; onClose: ()
   const exceptions = allExceptions.filter((x) => x.operatorId === operatorId && x.date >= today);
   const [days, setDays] = useState<number[]>(() => (operator ? workDaysOf(operator) : DEFAULT_WORK_DAYS));
   const [date, setDate] = useState("");
+  const [until,setUntil] = useState("");
   const [works, setWorks] = useState(true);
   const [hours, setHours] = useState("");
   const [note, setNote] = useState("");
@@ -46,10 +51,15 @@ function ScheduleForm({ operatorId, onClose }: { operatorId: string; onClose: ()
     setError("");
   };
   const addException = async () => {
-    const r = await saveSchedule(operatorId, { add: [{ date, works, hours: works && hours.trim() ? parseDecimal(hours) : undefined, note }] });
+    if (until && until < date) return setError("El fin del rango es anterior al inicio.");
+    const dates: string[] = [];
+    for (let d = date; d && d <= (until || date) && dates.length <= 366; d = addDays(d,1)) dates.push(d);
+    if (dates.length > 366) return setError("El rango admite hasta un año; dividí los períodos mayores.");
+    const r = await saveSchedule(operatorId, { add: dates.map((date) => ({ date, works, hours: works && hours.trim() ? parseDecimal(hours) : undefined, note })) });
     if (!r.ok) return setError(r.error);
     setError("");
     setDate("");
+    setUntil("");
     setHours("");
     setNote("");
   };
@@ -65,7 +75,7 @@ function ScheduleForm({ operatorId, onClose }: { operatorId: string; onClose: ()
         </DialogDescription>
       </DialogHeader>
 
-      <fieldset className="space-y-2">
+      <fieldset disabled={!canEditHabitual} className="space-y-2">
         <legend className="text-sm font-medium text-slate-700">Trabaja los días</legend>
         <div className="flex flex-wrap gap-2">
           {WEEK_ORDER.map((d) => (
@@ -81,6 +91,7 @@ function ScheduleForm({ operatorId, onClose }: { operatorId: string; onClose: ()
         </div>
       </fieldset>
 
+      {!canEditHabitual && <p className="text-xs text-slate-500">La jornada y los días habituales se configuran en Gerencia. Acá podés registrar excepciones.</p>}
       <section aria-label="Excepciones" className="space-y-2">
         <h3 className="text-sm font-medium text-slate-700">Excepciones (desde hoy)</h3>
         {exceptions.length === 0 ? (
@@ -112,6 +123,7 @@ function ScheduleForm({ operatorId, onClose }: { operatorId: string; onClose: ()
           <Field label="Fecha" htmlFor="exc-date">
             <Input id="exc-date" type="date" min={today} value={date} onChange={(e) => setDate(e.target.value)} />
           </Field>
+          <Field label="Hasta (opcional)" htmlFor="exc-until"><Input id="exc-until" type="date" min={date || today} value={until} onChange={(e) => setUntil(e.target.value)} /></Field>
           <Field label="Ese día" htmlFor="exc-works">
             <select id="exc-works" className="h-9 rounded-md border border-slate-300 bg-white px-2 text-sm" value={works ? "yes" : "no"} onChange={(e) => setWorks(e.target.value === "yes")}>
               <option value="yes">Trabaja</option>

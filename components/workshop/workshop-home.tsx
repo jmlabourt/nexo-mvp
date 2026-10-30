@@ -1,4 +1,5 @@
 "use client";
+import { FlexibleWork } from "./flexible-work";
 import { useConfirmedAction } from "@/store/confirmed-action";
 // "Mi día" del Operario (Lote 6): lo mínimo posible, pensado para el celular.
 // Solo lo asignado a esa persona para HOY: proyecto, mueble y rubro, con un único campo de horas y "Registrar horas".
@@ -78,11 +79,12 @@ export function WorkshopHome() {
           )}
           <section aria-label="Lo que tenés asignado hoy" className="mt-4 space-y-3">
             {day.items.length === 0 ? (
-              <p className="rounded-md bg-slate-100 p-4 text-sm text-slate-700">Hoy no tenés trabajos asignados. Si trabajaste en algo, avisale al Jefe de planta.</p>
+              <p className="rounded-md bg-slate-100 p-4 text-sm text-slate-700">Hoy no tenés trabajos asignados. Podés registrar otro trabajo válido.</p>
             ) : (
               day.items.map((item) => <AssignmentCard key={item.assignment.id} item={item} onSaved={setSaved} />)
             )}
           </section>
+          <details className="mt-4"><summary className="cursor-pointer font-medium">Agregar otro trabajo / Trabajo interno general</summary><FlexibleWork operator={operator} onSaved={setSaved} /></details>
 
         </>
       )}
@@ -100,6 +102,8 @@ export function WorkshopHome() {
 /** Una asignación de hoy: proyecto, mueble y rubro; un solo campo de horas y "Registrar horas". */
 function AssignmentCard({ item, onSaved }: { item: MyDayItem; onSaved: (msg: string) => void }) {
   const logHours = useConfirmedAction("logHours");
+  const local = useAppStore((s) => s.demoLocal);
+  const operator = useAppStore((s) => s.operators.find((o) => o.id === item.assignment.operatorId));
   const hoursPerDay = useAppStore((s) => s.costSettings.hoursPerDay);
   const projects = useAppStore((s) => s.projects);
   const [hours, setHours] = useState("");
@@ -133,6 +137,7 @@ function AssignmentCard({ item, onSaved }: { item: MyDayItem; onSaved: (msg: str
       <div className="text-sm text-slate-600">
         {a.hourKind === "design" ? "Diseño" : a.hourKind === "admin" ? "Administración" : rubroLabel(a.rubro)}
       </div>
+      <p className="mt-2 text-xs text-slate-500">Horas planificadas: {formatNumber(a.plannedHours)} h · Horas reales: {formatNumber(item.logged)} h</p>
       {item.logged > 0 && (
         <p className="mt-3 flex items-center gap-1.5 text-sm font-medium text-emerald-700">
           <CheckCircle2 className="size-4" aria-hidden /> Cargaste {formatNumber(item.logged)} h
@@ -152,6 +157,7 @@ function AssignmentCard({ item, onSaved }: { item: MyDayItem; onSaved: (msg: str
           </div>
           <Button type="submit" size="lg" className="flex-1" disabled={busy}>{busy ? "Guardando…" : "Registrar horas"}</Button>
         </form>
+      {local && operator && <details className="mt-3"><summary className="cursor-pointer text-sm text-blue-700">Cambiar proyecto, mueble o rubro al registrar</summary><FlexibleWork operator={operator} assignment={a} onSaved={onSaved} /></details>}
       {error && <p role="alert" className="mt-2 text-sm text-red-600">{error}</p>}
       {warn && !error && (
         <div role="alert" className="mt-2 space-y-2 rounded-md bg-amber-50 p-3 text-sm text-amber-900">

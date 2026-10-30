@@ -1,4 +1,5 @@
 "use client";
+import { ExecutionReviews } from "./execution-review";
 import { useState } from "react";
 import { useAppStore } from "@/store/use-app-store";
 import { dailyHoursReviews, type HoursReview } from "@/lib/hours-review";
@@ -17,6 +18,7 @@ export function HoursReviews() {
   const reviewed = useAppStore(s => s.reviewedHoursKeys);
   const rows = dailyHoursReviews(projects, assignments, operators, todayISO(), thresholdOf(settings));
   return <section className="space-y-3" aria-label="Revisión de horas por jornada">
+    <ExecutionReviews />
     <h2 className="font-semibold">Revisión de horas por jornada</h2>
     {!rows.length && <p className="text-sm text-slate-500">No hay jornadas pendientes de revisión.</p>}
     {rows.map(row => <Review key={row.key} row={row} reviewed={reviewed.includes(row.key)} />)}

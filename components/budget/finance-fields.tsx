@@ -1,6 +1,6 @@
 "use client";
 // Cotizador → condiciones de cobro: fechas de inicio y entrega, "¿A cuántos días de la entrega paga el cliente?",
-// seña y cuotas. Con eso el gasto financiero se calcula (lib/financial.ts) como % del precio de venta sin IVA:
+// seña y cuotas. Con eso el costo financiero se calcula (lib/financial.ts) como % del precio de venta sin IVA:
 // precio × tasa mensual / 100 × días financiados / 30, por tramos sobre el saldo. Es una estimación, nunca un costo pagado.
 import { quoteFinancialPct } from "@/lib/financial";
 import { formatNumber, todayISO } from "@/lib/formatting";
@@ -13,7 +13,7 @@ import type { CalcState, QuoteFinanceForm } from "./calculator-state";
 const num = (s: string) => Number(s.replace(",", "."));
 const plusDays = (iso: string, d: number) => new Date(Date.parse(`${iso}T12:00:00Z`) + d * 86_400_000).toISOString().slice(0, 10);
 
-/** Tasa mensual: la de Configuración → Gasto financiero (en la demo) o el % configurado, leído como tasa mensual. */
+/** Tasa mensual: la de Configuración → Costo financiero (en la demo) o el % configurado, leído como tasa mensual. */
 export function useMonthlyRate(): number {
   const ledgerBacked = useLedgerBacked();
   const ledgerRate = useAppStore((s) => s.ledger.financialMonthlyRatePct);
@@ -39,7 +39,7 @@ export function FinanceFields({ state, onState }: { state: CalcState; onState: (
   if (!f) {
     return (
       <div className="mt-4 flex flex-wrap items-center gap-2 rounded-md border border-dashed border-slate-300 p-3 text-sm text-slate-600">
-        <span className="flex-1">Para calcular el gasto financiero, cargá las fechas y cómo paga el cliente.</span>
+        <span className="flex-1">Para calcular el costo financiero, cargá las fechas y cómo paga el cliente.</span>
         <Button
           size="sm"
           variant="outline"
@@ -58,7 +58,7 @@ export function FinanceFields({ state, onState }: { state: CalcState; onState: (
   const r = financePct(f, rate);
   return (
     <fieldset className="mt-4 space-y-2 rounded-md border border-slate-200 p-3">
-      <legend className="px-1 text-sm font-semibold text-slate-800">Condiciones de cobro y gasto financiero</legend>
+      <legend className="px-1 text-sm font-semibold text-slate-800">Condiciones de cobro y costo financiero</legend>
       <div className="grid gap-2 sm:grid-cols-5">
         <label className="text-xs font-medium text-slate-600">
           Inicio
@@ -83,7 +83,7 @@ export function FinanceFields({ state, onState }: { state: CalcState; onState: (
       </div>
       <p className="text-xs text-slate-600" role="status">
         {r.ok
-          ? `Tasa ${formatNumber(rate, 2)} % mensual · ${r.productionDays} días de producción + ${f.daysAfterDelivery || 0} de pago${r.tranches.length > 1 ? `, por tramos sobre el saldo (${r.tranches.length} tramos)` : ""} → gasto financiero ${formatNumber(r.amount, 2)} % del precio de venta sin IVA.`
+          ? `Tasa ${formatNumber(rate, 2)} % mensual · ${r.productionDays} días de producción + ${f.daysAfterDelivery || 0} de pago${r.tranches.length > 1 ? `, por tramos sobre el saldo (${r.tranches.length} tramos)` : ""} → costo financiero ${formatNumber(r.amount, 2)} % del precio de venta sin IVA.`
           : r.reason}
       </p>
       <p className="text-xs text-slate-500">Es una estimación: al aprobar queda la foto en el presupuesto; nunca se muestra como un costo pagado.</p>

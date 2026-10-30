@@ -30,7 +30,9 @@ export interface QuoteMaterial {
 }
 
 /** Un rubro de la cotización. Es un dato plano: un conjunto de rubros se puede guardar como plantilla. */
+export interface QuotedStaffHours { rateId: string; name: string; category: "design" | "admin"; hours: number; hourlyCost: number }
 export interface QuoteRubro {
+  staffHours?: QuotedStaffHours[];
   rubro: RubroId;
   materials: QuoteMaterial[];
   /** Cantidad de operarios (sin nombre: el jefe de planta asigna después). */
@@ -89,7 +91,7 @@ export interface QuoteTargets {
   materialsTargetPct: number;
   /** Rentabilidad objetivo de mano de obra (incluye diseño y administración: a confirmar), en %. */
   laborTargetPct: number;
-  /** Gasto financiero: % sobre el precio de venta. */
+  /** Costo financiero: % sobre el precio de venta. */
   financialPct: number;
 }
 
@@ -190,7 +192,7 @@ const hourCharge = (hours: number, rate: number): HourCharge => {
 
 /** Horas normales × tarifa + horas extra × tarifa × multiplicador + diseño × su tarifa + administración × su tarifa. */
 export function rubroLabor(
-  r: Pick<QuoteRubro, "workers" | "hoursPerWorker" | "designHours" | "adminHours" | "totalHours">,
+  r: Pick<QuoteRubro, "workers" | "hoursPerWorker" | "designHours" | "adminHours" | "totalHours" | "staffHours">,
   p: { normalShare: number; laborRate: number; designRate: number; adminRate: number; overtimeMultiplier: number },
 ): RubroLabor {
   const workers = Math.max(0, Math.round(finite(r.workers)));
@@ -222,7 +224,7 @@ export function rubroLabor(
     overtimeCost: labor.overtimeCost,
     design,
     admin,
-    total: round2(labor.total + design.cost + admin.cost),
+    total: round2(labor.total + design.cost + admin.cost + (r.staffHours ?? []).reduce((s,h) => s + positive(h.hours)*positive(h.hourlyCost),0)),
   };
 }
 
@@ -321,6 +323,10 @@ export function rubroLines(r: QuoteRubro, labor: RubroLabor | null, { rates, ove
       notes: rateNote(rates[category]),
     });
   }
+  for (const h of r.staffHours ?? []) {
+    if (!(h.hours > 0)) continue;
+    lines.push({ category:h.category,rubro:r.rubro,description:`${def.label}: ${h.name}`,quantity:h.hours,unit:"h",unitCost:h.hourlyCost,hourRateId:h.rateId,hourType:"normal",notes:`Personal no operario: ${h.name}. Tarifa congelada al cotizar.` });
+  }
   return lines;
 }
 
@@ -343,13 +349,13 @@ export function adjustmentLines(lines: BudgetLineInput[], adjustments: CalcAdjus
   return out;
 }
 
-/** Gasto financiero: % sobre el precio de venta. Es un costo, no un rubro. Sin precio todavía no hay línea. */
+/** Costo financiero: % sobre el precio de venta. Es un costo, no un rubro. Sin precio todavía no hay línea. */
 export function financialLine(financialPct: number, salesPrice: number): BudgetLineInput | null {
   const amount = round2((positive(salesPrice) * positive(financialPct)) / 100);
   if (!(amount > 0)) return null;
   return {
     category: "financial",
-    description: `Gasto financiero (${num(financialPct)}% del precio de venta)`,
+    description: `Costo financiero (${num(financialPct)}% del precio de venta)`,
     quantity: null,
     unit: "global",
     unitCost: amount,
@@ -383,7 +389,7 @@ export interface RubroTable {
 
 /**
  * Una fila por rubro con importe (en el orden del catálogo) y, al final, los ajustes por historial.
- * El gasto financiero va aparte. Cada celda es la suma de líneas del costo presupuestado.
+ * El costo financiero va aparte. Cada celda es la suma de líneas del costo presupuestado.
  */
 export function rubroTable(lines: BudgetLineInput[]): RubroTable {
   const sum = (ls: BudgetLineInput[], ...cats: BudgetCategory[]) => totalOfLines(ls.filter((l) => cats.includes(l.category)));
@@ -406,7 +412,7 @@ export function rubroTable(lines: BudgetLineInput[]): RubroTable {
 
 // ── Precio sugerido y rentabilidad ────────────────────────────
 
-/** Costos agrupados como los usa la fórmula del precio (sin el gasto financiero, que depende del precio). */
+/** Costos agrupados como los usa la fórmula del precio (sin el costo financiero, que depende del precio). */
 export interface CostGroups {
   materials: number;
   /** Mano de obra + diseño + administración (un solo objetivo de rentabilidad: a confirmar). */
@@ -431,7 +437,7 @@ function marginAt(salesPrice: number, cost: number): number | null {
 export interface PriceAnalysis {
   price: number;
   financialCost: number;
-  /** Costo total con el gasto financiero de ese precio. */
+  /** Costo total con el costo financiero de ese precio. */
   totalCost: number;
   /** Rentabilidad total: (precio − costo total) / precio. */
   totalMargin: number | null;
@@ -445,7 +451,7 @@ export function analyzePrice(price: number, costs: CostGroups, financialPct: num
 }
 
 export interface SuggestedPrice extends PriceAnalysis {
-  /** Parte del precio (antes del gasto financiero) que corresponde a materiales: costo / (1 − objetivo). */
+  /** Parte del precio (antes del costo financiero) que corresponde a materiales: costo / (1 − objetivo). */
   materialsPrice: number;
   laborPrice: number;
   /** Rentabilidad resultante de cada parte (null si esa parte no tiene costo). */
@@ -455,7 +461,7 @@ export interface SuggestedPrice extends PriceAnalysis {
 
 /**
  * Precio sugerido = ( Materiales / (1 − rent. materiales) + Mano de obra, diseño y administración / (1 − rent. mano de obra)
- *                     + Transporte + Imprevistos ) / (1 − % gasto financiero)
+ *                     + Transporte + Imprevistos ) / (1 − % costo financiero)
  * Se redondea hacia arriba al peso. null si falta costo o algún porcentaje no es válido (≥ 100%).
  */
 export function suggestedPrice(costs: CostGroups, t: QuoteTargets): SuggestedPrice | null {
@@ -493,7 +499,7 @@ export interface QuoteBreakdown {
   transport: number;
   contingency: number;
   financial: { pct: number; amount: number };
-  /** Costo total con el gasto financiero del precio. Todo sin IVA. */
+  /** Costo total con el costo financiero del precio. Todo sin IVA. */
   totalCost: number;
   /** Precio usado: el elegido o, si todavía no hay, el sugerido (0 si no hay ninguno). Sin IVA. */
   price: number;
@@ -508,7 +514,7 @@ export interface QuoteBreakdown {
 
 /**
  * Desglose único del resumen, como la planilla de costeo del cliente: materiales y mano de obra con su costo,
- * rentabilidad y venta; transporte, imprevistos, gasto financiero; costo total, precio, ganancia y rentabilidad.
+ * rentabilidad y venta; transporte, imprevistos, costo financiero; costo total, precio, ganancia y rentabilidad.
  * Lo usan el panel derecho, Resultado y "Revisar y crear".
  */
 export function quoteBreakdown(lines: BudgetLineInput[], t: QuoteTargets, chosenPrice: number): QuoteBreakdown {

@@ -245,6 +245,7 @@ export interface LaborDetail {
 }
 
 export interface ActualEntry {
+  corrections?: Array<{ previous: { date: string; projectId: string; itemId?: string; rubro?: RubroId; hours: number; amount: number }; next: { date: string; projectId: string; itemId?: string; rubro?: RubroId; hours: number; amount: number }; reason: string; by: string; at: string }>;
   id: string;
   projectId: string;
   date: string;
@@ -430,6 +431,10 @@ export interface Operator {
   createdAt: string;
   /** Días de la semana que trabaja (0 = domingo … 6 = sábado). Sin dato: lunes a viernes (Lote 6 · Fase 3). */
   workDays?: number[];
+  /** Configuración habitual por persona; nunca se edita desde Planta. */
+  hoursPerDay?: number;
+  enabledRubros?: RubroId[];
+  productive?: boolean;
 }
 
 /** Excepción de un día puntual: "trabaja este sábado (4 h)" o "no viene el viernes". La edita el Jefe de planta. */
@@ -707,6 +712,7 @@ export interface Opportunity {
 
 /** Capacidad de un rubro de trabajo (Configuración de Gerencia). */
 export interface RubroCapacity {
+  members?: Array<{ hoursPerDay: number; workDays: number[] }>;
   rubro: string;
   employees: number;
   hoursPerDay: number;
@@ -896,6 +902,7 @@ export interface ClientHandover {
  * costo por hora vigente, congelado al cargar); sin proyecto son "Trabajo interno" y no van a ninguna OT.
  */
 export interface InternalHours {
+  corrections?: Array<{ previous: { date: string; hours: number; allocations?: Array<{ projectId:string;amount:number }> }; next: { date:string;hours:number }; by:string;at:string;reason:string }>;
   id: string;
   /** Persona que trabajó (nombre de la sesión en la demo). */
   employeeId: string;
@@ -906,6 +913,8 @@ export interface InternalHours {
   /** Costo por hora vigente al cargar (solo horas de proyecto). */
   hourlyCost?: number;
   createdAt: string;
+  /** Distribución monetaria congelada al registrar, sin crear horas productivas. */
+  allocations?: Array<{ projectId: string; amount: number }>;
 }
 
 /** Rubro del catálogo de la empresa (Gerencia lo crea, renombra o desactiva; los demás lo eligen). */
@@ -955,7 +964,41 @@ export interface GeneralCost {
 }
 
 /** Todos los registros nuevos de la demo integral, en un solo lugar. */
+/** Registros frontend para integrar después, sin alterar contratos del backend. */
+export interface ExternalWork {
+  id: string;
+  kind: "hourly" | "workshop";
+  projectId: string;
+  itemId?: string;
+  rubro: RubroId;
+  date: string;
+  description: string;
+  supplier?: string;
+  hours?: number;
+  estimatedCost?: number;
+  confirmedCost?: number;
+  confirmedBy?: string;
+  confirmedAt?: string;
+  costHistory?: Array<{ previous?: number; next: number; by: string; at: string; reason?: string }>;
+  createdBy: string;
+  createdAt: string;
+}
+export interface FrontendPersonnel {
+  employeeId: string;
+  enabled: boolean;
+  view: "gerencia" | "administracion" | "compras" | "jefe_planta" | "operario";
+  hoursPerDay?: number;
+  enabledRubros?: RubroId[];
+  productive?: boolean;
+}
 export interface Ledger {
+  /** Extensiones frontend locales; no se envían al backend. */
+  externalWork?: ExternalWork[];
+  projectNomenclature?: { pattern: string; prefix: string; nextNumber: number };
+  staffCategories?: Array<{ id: string; name: string; category: "design" | "admin"; hourlyCost: number }>;
+  capacityAdjustments?: Array<{ id: string; rubro?: RubroId; date: string; hours: number; note: string; by: string; at: string }>;
+  externalRates?: Array<{ rubro: RubroId; hourlyCost: number; validFrom: string; by: string; at: string }>;
+  personnel?: FrontendPersonnel[];
   salesInvoices: SalesInvoice[];
   collections: Collection[];
   supplierPayments: SupplierPayment[];

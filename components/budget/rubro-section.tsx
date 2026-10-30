@@ -2,6 +2,9 @@
 // Un rubro dentro de un mueble, con todo junto: horas de operarios (para toda la cantidad) y cuántos operarios pide,
 // materiales, y horas de diseño y de administración de ese rubro en ese mueble. El desglose muestra de dónde sale cada
 // importe. Cada rubro va una sola vez por mueble.
+import { useAppStore } from "@/store/use-app-store";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import type { HourCharge, RubroLabor } from "@/lib/budget-calculator";
 import type { RubroId } from "@/types";
 import { formatCurrency, formatNumber } from "@/lib/formatting";
@@ -33,6 +36,8 @@ export function RubroSection({
   onRemove: () => void;
   canRemove: boolean;
 }) {
+  const configured = useAppStore((s) => s.ledger.staffCategories);
+  const categories = configured ?? [];
   const def = rubroDef(row.rubro);
   const labor = result?.labor ?? null;
   const where = `${def.label} de ${owner}`;
@@ -58,7 +63,8 @@ export function RubroSection({
       <div className="space-y-4">
         <div>
           <h4 className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Operarios</h4>
-          <div className="grid max-w-md grid-cols-2 gap-2">
+          <h4 className="text-sm font-medium">Horas de personal no operario</h4>
+        <div className="grid max-w-md grid-cols-2 gap-2">
             <NumField id={`pr-h-${row.key}`} label="Horas" suffix="h" value={row.hours} onChange={(v) => onChange({ hours: v })} help="Horas estimadas para toda la cantidad del mueble." />
             <NumField id={`pr-w-${row.key}`} label="Operarios" value={row.workers} onChange={(v) => onChange({ workers: v })} />
           </div>
@@ -76,9 +82,12 @@ export function RubroSection({
 
         <MaterialRows materials={row.materials ?? []} onChange={(materials) => onChange({ materials })} owner={where} />
 
+        <h4 className="text-sm font-medium">Horas de personal no operario</h4>
         <div className="grid max-w-md grid-cols-2 gap-2">
           <FlatHours id={`dis-${row.key}`} title="Diseño" value={row.designHours ?? ""} charge={labor?.design} onChange={(v) => onChange({ designHours: v })} />
           <FlatHours id={`adm-${row.key}`} title="Administración" value={row.adminHours ?? ""} charge={labor?.admin} onChange={(v) => onChange({ adminHours: v })} />
+          {(row.staffHours ?? []).map((h,i) => <label key={h.rateId} className="text-sm">{h.name}<Input inputMode="decimal" value={h.hours} onChange={(e) => onChange({ staffHours:row.staffHours!.map((x,j) => i === j ? { ...x,hours:e.target.value } : x) })} /><Button size="sm" variant="ghost" onClick={() => onChange({ staffHours:row.staffHours!.filter((_,j) => j !== i) })}>Quitar {h.name}</Button></label>)}
+          {categories.length > 0 && <label className="text-sm">Agregar categoría configurada<Select value="" onChange={(e) => { const c = categories.find((c) => c.id === e.target.value); if (c) onChange({ staffHours:[...(row.staffHours ?? []),{ rateId:c.id,name:c.name,category:c.category,hourlyCost:c.hourlyCost,hours:"" }] }); }}><option value="">Elegí…</option>{categories.filter((c) => !row.staffHours?.some((h) => h.rateId === c.id)).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</Select></label>}
         </div>
       </div>
     </section>

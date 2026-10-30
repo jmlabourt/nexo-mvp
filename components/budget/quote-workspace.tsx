@@ -53,7 +53,7 @@ export function QuoteWorkspace({ state, onState, result, projectType, salesPrice
             <h2 className="flex items-center gap-1 text-sm font-semibold text-slate-900">
               Resumen <span className="font-normal text-slate-500">(importes sin IVA)</span>
               <HelpTip label="Resumen">
-                Igual que la planilla de costeo: costo, rentabilidad y venta de materiales y de mano de obra; después transporte, imprevistos y gasto financiero.
+                Igual que la planilla de costeo: costo, rentabilidad y venta de materiales y de mano de obra; después transporte, imprevistos y costo financiero.
                 Las rentabilidades se cambian en Resultado.
               </HelpTip>
             </h2>
@@ -79,7 +79,7 @@ export function QuoteWorkspace({ state, onState, result, projectType, salesPrice
               <div className="space-y-1.5 border-t border-slate-100 pt-3">
                 {b.transport > 0 && <Row label="Transporte" value={formatCurrency(b.transport)} />}
                 {b.contingency > 0 && <Row label="Imprevistos" value={formatCurrency(b.contingency)} />}
-                <Row label={`Gasto financiero (${formatNumber(b.financial.pct, 2)} %)`} value={formatCurrency(b.financial.amount)} />
+                <Row label={`Costo financiero (${formatNumber(b.financial.pct, 2)} %)`} value={formatCurrency(b.financial.amount)} />
               </div>
             )}
 

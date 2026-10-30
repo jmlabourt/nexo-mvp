@@ -36,7 +36,8 @@ export function useOpportunityInfo(): SourcedData<Opportunity[]> {
 
 /** Parámetros de Gerencia: los valores por defecto (todavía no se guardan). */
 export function useManagementParams(): ManagementParams {
-  return DEFAULT_MANAGEMENT_PARAMS;
+  const nomenclature = useAppStore((s) => s.ledger.projectNomenclature);
+  return useMemo(() => nomenclature ? { ...DEFAULT_MANAGEMENT_PARAMS,projectCodePattern:nomenclature.pattern,projectCodePrefix:nomenclature.prefix } : DEFAULT_MANAGEMENT_PARAMS,[nomenclature]);
 }
 
 /** Diseño, etapas y BOM de los muebles de un proyecto. */

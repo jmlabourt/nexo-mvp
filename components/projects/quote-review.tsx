@@ -101,7 +101,7 @@ export function QuoteReview({ info, calc, salesPrice }: { info: ReviewInfo; calc
                 ))}
                 {table.financial > 0 && (
                   <TR>
-                    <TD className="font-medium text-slate-900">Gasto financiero</TD>
+                    <TD className="font-medium text-slate-900">Costo financiero</TD>
                     <TD colSpan={COLUMNS.length} className="text-right text-slate-500">
                       {formatNumber(calc.input.financialPct, 2)}% del precio de venta
                     </TD>
@@ -134,7 +134,7 @@ export function QuoteReview({ info, calc, salesPrice }: { info: ReviewInfo; calc
           <ul className="list-disc space-y-1 pl-5">
             <li>Tarifas: {ratesText(calc.rates)}.</li>
             <li>Jornada del operario: {formatNumber(calc.input.hoursPerDay, 1)} h por día.</li>
-            <li>Gasto financiero: {formatNumber(calc.input.financialPct, 2)} % del precio de venta.</li>
+            <li>Costo financiero: {formatNumber(calc.input.financialPct, 2)} % del precio de venta.</li>
             <li>Días de trabajo estimados: {schedule.workDays > 0 ? formatWorkingDays(schedule.workDays) : "—"}.</li>
             <li>
               {schedule.availableDays === null

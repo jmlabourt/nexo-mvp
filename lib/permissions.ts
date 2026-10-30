@@ -125,7 +125,6 @@ const NAV: Record<SessionKey, NavItem[]> = {
     { href: "/quotes", label: "Cotizador", icon: "quotes" },
     { href: "/stock", label: "Stock", icon: "stock" },
     { href: "/clientes", label: "Clientes", icon: "clients" },
-    { href: "/proveedores", label: "Proveedores", icon: "suppliers" },
     { href: "/settings", label: "Configuración", icon: "settings" },
   ],
   compras: [
@@ -137,7 +136,8 @@ const NAV: Record<SessionKey, NavItem[]> = {
     { href: "/compras/proveedores", label: "Proveedores", icon: "suppliers" },
   ],
   jefe_planta: [
-    { href: "/planta", label: "Dashboard", icon: "dashboard" },
+    { href: "/planta", label: "Hoy", icon: "day" },
+    { href: "/planta/asignaciones", label: "Planificación", icon: "assign" },
     { href: "/planta/proyectos", label: "Proyectos", icon: "projects" },
     { href: "/planta/operarios", label: "Operarios", icon: "operators" },
     { href: "/planta/alertas", label: "Alertas", icon: "alerts" },

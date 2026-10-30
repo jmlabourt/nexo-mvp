@@ -1,4 +1,5 @@
 "use client";
+import { FrontendProductionSettings, StaffCategoriesSettings } from "./frontend-production";
 import { useConfirmedAction } from "@/store/confirmed-action";
 // Configuración en pestañas. Gerencia: Rubros y capacidad · Costos horarios · Costos · Alertas · Indicadores y cálculos ·
 // Inflación y nomenclatura · Usuarios y permisos · Datos. Administración: solo Nomenclatura y Rubros (consulta).
@@ -39,7 +40,7 @@ import { Choice } from "@/components/ui/choice";
 import { PriceHistoryList } from "./price-history-list";
 import { UsersSection } from "./users-section";
 import { useIdentity, useLedgerBacked } from "@/store/selectors";
-import { CapacitySection, IndicatorsSection, InflationSection, NomenclatureSection, PermissionsSection, RubrosSection } from "./management-sections";
+import { CapacitySection, IndicatorsSection, NomenclatureSection, PermissionsSection, RubrosSection } from "./management-sections";
 
 // ── Piezas comunes de cada sección ───────────────────────────
 
@@ -501,9 +502,9 @@ function CostsSection() {
         >
           <div className="flex max-w-sm flex-col gap-1.5">
             <div className="flex items-center gap-1">
-              <label htmlFor="financial-pct" className="text-sm font-medium text-slate-700">Gasto financiero (% del precio de venta)</label>
-              <HelpTip label="Gasto financiero">
-                Es un costo: aparece como línea &quot;Gasto financiero&quot; en el costo presupuestado. Es el valor con el que arranca cada cotización; en el Cotizador
+              <label htmlFor="financial-pct" className="text-sm font-medium text-slate-700">Costo financiero (% del precio de venta)</label>
+              <HelpTip label="Costo financiero">
+                Es un costo: aparece como línea &quot;Costo financiero&quot; en el costo presupuestado. Es el valor con el que arranca cada cotización; en el Cotizador
                 se puede cambiar. El {DEFAULT_FINANCIAL_PCT}% inicial es un valor de ejemplo, a confirmar.
               </HelpTip>
             </div>
@@ -645,20 +646,23 @@ export function SettingsPage() {
           <TabsTrigger value="costs">Costos</TabsTrigger>
           <TabsTrigger value="alerts">Alertas</TabsTrigger>
           <TabsTrigger value="indicators">Indicadores y cálculos</TabsTrigger>
-          <TabsTrigger value="params">Inflación y nomenclatura</TabsTrigger>
-          <TabsTrigger value="users">Usuarios y permisos</TabsTrigger>
+          <TabsTrigger value="params">Nomenclatura de proyectos</TabsTrigger>
+          {!demoLocal && <TabsTrigger value="users">Usuarios y permisos</TabsTrigger>}
           <TabsTrigger value="data">Datos</TabsTrigger>
           {demoLocal && <TabsTrigger value="demo">Demo</TabsTrigger>}
         </TabsList>
         <TabsContent value="rubros" className="space-y-6">
           {ledgerBacked ? <RubroCatalogSection /> : <RubrosSection />}
           <CapacitySection />
+          <FrontendProductionSettings kind="capacity" />
         </TabsContent>
         <TabsContent value="rates" className="space-y-6">
           {ledgerBacked && <RubroRatesSection />}
           <RatesSection />
         </TabsContent>
         <TabsContent value="costs" className="space-y-6">
+          <FrontendProductionSettings kind="rates" />
+          <StaffCategoriesSettings />
           {ledgerBacked ? (
             <>
               <FinancialRateSection />
@@ -680,7 +684,6 @@ export function SettingsPage() {
           <IndicatorsSection hash={hash} />
         </TabsContent>
         <TabsContent value="params" className="space-y-6">
-          <div id="inflacion" className="scroll-mt-20"><InflationSection /></div>
           <div id="nomenclatura" className="scroll-mt-20"><NomenclatureSection /></div>
         </TabsContent>
         <TabsContent value="users" id="usuarios" className="space-y-6">

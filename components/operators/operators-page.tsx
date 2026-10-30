@@ -1,4 +1,7 @@
 "use client";
+import { PersonnelView } from "./personnel-view";
+import { ScheduleDialog } from "@/components/plant/schedule-dialog";
+import { useConfiguredOperators } from "@/store/selectors";
 import { useConfirmedAction } from "@/store/confirmed-action";
 import { useMemo, useState } from "react";
 import { HardHat, Plus, Trash2, UserCheck, UserMinus } from "lucide-react";
@@ -64,7 +67,7 @@ function OperatorDialog({ operator, hasRecords, open, onOpenChange }: { operator
         <DialogHeader>
           <DialogTitle>{operator ? "Editar operario" : "Nuevo operario"}</DialogTitle>
           <DialogDescription>
-            El costo por hora no se carga por persona: todos los operarios cobran la tarifa de Mano de obra de Configuración.
+            El costo por hora se configura en Gerencia → Configuración → Costos. La categoría laboral es independiente de la vista de Blerp.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={save} className="space-y-4" noValidate>
@@ -140,12 +143,13 @@ function OperatorDialog({ operator, hasRecords, open, onOpenChange }: { operator
 }
 
 export function OperatorsPage({ op }: { op?: string }) {
-  const operators = useAppStore((s) => s.operators);
+  const operators = useConfiguredOperators();
   const projects = useAppStore((s) => s.projects);
   const reactivateOperator = useConfirmedAction("reactivateOperator");
   const { isManager } = useIdentity();
   const [editing, setEditing] = useState<Operator | null | "new">(op ? (operators.find((o) => o.id === op) ?? null) : null);
   const [showDeactivated, setShowDeactivated] = useState(false);
+  const [schedule,setSchedule] = useState<string | null>(null);
   const shown = visibleOperators(operators, showDeactivated);
   const deactivatedCount = operators.length - activeOperators(operators).length;
 
@@ -189,6 +193,7 @@ export function OperatorsPage({ op }: { op?: string }) {
 
   return (
     <div>
+      <ScheduleDialog operatorId={schedule} onClose={() => setSchedule(null)} />
       <PageHeader
         back
         title="Personal"
@@ -201,7 +206,7 @@ export function OperatorsPage({ op }: { op?: string }) {
           <Input type="month" className="mt-1 w-40" value={month} onChange={(e) => e.target.value && setMonth(e.target.value)} />
         </label>
         <p className="text-xs text-slate-500">
-          Los roles del sistema (Gerencia, Compras, Jefe de planta…) se asignan en <Link href="/settings#usuarios" className="text-blue-700 hover:underline">Configuración → Usuarios</Link>.
+          La categoría laboral y la vista de Blerp son independientes. Editá la vista y la disponibilidad desde esta misma tabla.
         </p>
       </div>
       {laborValuation === "operator" && (
@@ -227,7 +232,7 @@ export function OperatorsPage({ op }: { op?: string }) {
               <TR>
                 <TH>Nombre</TH>
                 <TH>Rubro principal</TH>
-                <TH>Rol del sistema</TH>
+                <TH>Vista de Blerp</TH>
                 <TH>Estado</TH>
                 <TH>Jornada y días</TH>
                 <TH className="text-right">Costo por hora</TH>
@@ -245,15 +250,15 @@ export function OperatorsPage({ op }: { op?: string }) {
                       <span className="block text-xs font-normal text-slate-500">{o.role} · {s?.projects ?? 0} proyectos activos</span>
                     </TD>
                     <TD>{params.roleToRubro[o.role] ?? o.role}</TD>
-                    <TD className="text-xs text-slate-600">Operario{o.userId ? " · con acceso" : o.email ? ` · invitado (${o.email})` : " · sin acceso"}</TD>
+                    <TD className="text-xs text-slate-600"><PersonnelView employee={o} /></TD>
                     <TD>
                       <Badge tone={o.active ? "green" : "gray"}>
                         {o.active ? "Activo" : `Inactivo${o.deactivatedAt ? ` desde el ${formatDate(o.deactivatedAt)}` : ""}`}
                       </Badge>
                     </TD>
                     <TD className="text-xs text-slate-600">
-                      {formatNumber(hoursPerDay)} h por día
-                      <span className="block">{daysLabel(o.workDays)}</span>
+                      {formatNumber(o.hoursPerDay ?? hoursPerDay)} h por día
+                      <span className="block">{daysLabel(o.workDays)}</span><Button size="sm" variant="ghost" onClick={() => setSchedule(o.id)}>Días y disponibilidad</Button>
                       {(s?.rubros.length ?? 0) > 1 && <span className="block">Multirrol: {s?.rubros.join(", ")}</span>}
                     </TD>
                     <TD className="text-right tabular">

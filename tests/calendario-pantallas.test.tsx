@@ -69,10 +69,9 @@ describe("días laborales en Operarios", () => {
     await user.selectOptions(within(dialog).getByLabelText("Ese día"), "no");
     await user.click(within(dialog).getByRole("button", { name: "Agregar excepción" }));
     expect(useAppStore.getState().dayExceptions.some((x) => x.operatorId === "op-lucia" && x.date === date && !x.works)).toBe(true);
-    // Días: agregar el sábado.
-    await user.click(within(dialog).getByRole("checkbox", { name: "sábado" }));
-    await user.click(within(dialog).getByRole("button", { name: "Guardar días" }));
-    expect(useAppStore.getState().operators.find((o) => o.id === "op-lucia")?.workDays).toEqual([1, 2, 3, 4, 5, 6]);
+    // Planta puede cambiar excepciones, pero los días habituales corresponden a Gerencia.
+    expect(within(dialog).getByRole("checkbox", { name: "sábado" })).toBeDisabled();
+    expect(useAppStore.getState().saveSchedule("op-lucia", { workDays:[1,2,3,4,5,6] }).ok).toBe(false);
   });
   it("Compras no puede editar días (el store lo rechaza)", () => {
     useAppStore.setState({ currentMode: "compras" });

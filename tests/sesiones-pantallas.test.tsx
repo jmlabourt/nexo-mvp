@@ -102,7 +102,7 @@ describe("Configuración por sesión", () => {
       "Costos",
       "Alertas",
       "Indicadores y cálculos",
-      "Inflación y nomenclatura",
+      "Nomenclatura de proyectos",
       "Usuarios y permisos",
       "Datos",
     ]);
@@ -118,6 +118,8 @@ describe("Configuración por sesión", () => {
     const pattern = screen.getByLabelText("Formato");
     await user.clear(pattern);
     await user.type(pattern, "OT{{numero}");
+    await user.clear(screen.getByLabelText("Número"));
+    await user.type(screen.getByLabelText("Número"),"4300");
     // Con un formato sin {cliente} ni {nombre}, el código es OT + número.
     expect(screen.getByText("OT4300")).toBeInTheDocument();
     await user.clear(pattern);
@@ -137,7 +139,7 @@ describe("Jefe de planta y Compras", () => {
   it("Jefe: Dashboard y Operarios con las asignaciones integradas, sin importes", () => {
     useAppStore.setState({ currentMode: "jefe_planta" });
     render(<PlantSummaryPage />);
-    expect(screen.getByRole("heading", { name: "Dashboard" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Hoy" })).toBeInTheDocument();
     cleanup();
     render(<PlantOperatorsPage />);
     expect(screen.getAllByRole("tab").map((t) => t.textContent)).toEqual(["Asignaciones", "Disponibilidad", "Correcciones de horas"]);

@@ -184,7 +184,7 @@ describe("Resultado: porcentajes, transporte, imprevistos y gasto financiero", (
     const result = screen.getByRole("region", { name: "Resultado" });
     expect(within(result).getByLabelText("Rentabilidad objetivo de materiales")).toHaveValue("30");
     expect(within(result).getByLabelText("Rentabilidad objetivo de mano de obra")).toHaveValue("30");
-    expect(within(result).getByLabelText("Gasto financiero")).toHaveValue("5");
+    expect(within(result).getByLabelText("Costo financiero")).toHaveValue("5");
     const aside = screen.getByRole("complementary", { name: "Resumen de la cotización" });
     expect(within(aside).getByText("Rentabilidad total")).toBeInTheDocument();
     expect(within(aside).getAllByText("Rentabilidad")).toHaveLength(2);

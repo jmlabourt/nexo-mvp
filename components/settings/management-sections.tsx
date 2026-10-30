@@ -8,6 +8,7 @@ import { INDICATORS } from "@/lib/indicators";
 import { navFor, SESSION_KEYS, SESSION_LABELS, canSee, type DataField } from "@/lib/permissions";
 import { formatCurrency, formatNumber } from "@/lib/formatting";
 import { parseDecimal } from "@/lib/schemas";
+import { useConfiguredOperators } from "@/store/selectors";
 import { useAppStore } from "@/store/use-app-store";
 import { useManagementParams } from "@/store/session-data";
 import { useToday } from "@/store/selectors";
@@ -78,7 +79,7 @@ export function RubrosSection({ readOnly = false }: { readOnly?: boolean }) {
 
 /** Capacidad por rubro: sale de los empleados activos (cada uno cuenta una sola vez, en su rubro principal). */
 export function CapacitySection() {
-  const operators = useAppStore((s) => s.operators);
+  const operators = useConfiguredOperators();
   const hoursPerDay = useAppStore((s) => s.costSettings.hoursPerDay);
   const params = useManagementParams();
   const today = useToday();
@@ -242,7 +243,10 @@ export function NomenclatureSection({ readOnly = false }: { readOnly?: boolean }
   const projects = useAppStore((s) => s.projects);
   const [pattern, setPattern] = useState(params.projectCodePattern);
   const [prefix, setPrefix] = useState(params.projectCodePrefix);
-  const [number, setNumber] = useState("4300");
+  const local = useAppStore((s) => s.demoLocal);
+  const record = useAppStore((s) => s.recordLedger);
+  const [saved,setSaved] = useState("");
+  const [number, setNumber] = useState(String(useAppStore.getState().ledger.projectNomenclature?.nextNumber ?? projects.length + 1));
   const [client, setClient] = useState("Cliente");
   const [name, setName] = useState("Local centro");
   const n = Number.parseInt(number, 10);
@@ -285,7 +289,8 @@ export function NomenclatureSection({ readOnly = false }: { readOnly?: boolean }
           </p>
           {problem && <p role="alert" className="mt-1 text-sm text-red-600">{problem}</p>}
         </fieldset>
-        {!readOnly && <PendingAction label="Guardar formato" reason={SAVE_PENDING} />}
+        {!readOnly && (local ? <Button disabled={!!problem} onClick={() => { const r = record(["gerencia"],(l) => ({ ...l,projectNomenclature:{ pattern,prefix:prefix.trim(),nextNumber:n } })); setSaved(r.ok ? "Formato guardado. Los identificadores existentes se conservan." : r.error); }}>Guardar formato</Button> : <PendingAction label="Guardar formato" reason={SAVE_PENDING} />)}
+        {saved && <p role="status" className="text-sm text-slate-600">{saved}</p>}
       </CardContent>
     </Card>
   );

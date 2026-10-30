@@ -2,6 +2,12 @@
 // Gerencia → Dashboard. Más vacío que lleno: cuatro números, una lista corta de pendientes y el detalle plegado
 // (facturación, rentabilidad, costos y horas, capacidad, alertas, cómo se calcula). Todo sale de funciones puras
 // (lib/tablero.ts, lib/gerencia.ts) sobre los proyectos y los registros de la demo (lib/ledger.ts).
+import { ProductionDeviations } from "./production-deviations";
+import { ExternalWorkSection } from "@/components/plant/external-work";
+import { approvalDate, weeklyCapacity, withExternalHours } from "@/lib/frontend-work";
+import { currentContract } from "@/lib/ledger";
+import { inPeriod } from "@/lib/gerencia";
+import { fullWeek } from "@/lib/schedule";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { AlertTriangle, ArrowRight } from "lucide-react";
@@ -19,10 +25,11 @@ import {
   periodOf,
   type HoursGroup,
 } from "@/lib/gerencia";
-import { aggregateMargin, billingByOt, billingMonths, billingTotals, capacityTimeline, overdueSchedule, profitView } from "@/lib/tablero";
+import { financialCostInPeriod, aggregateMargin, billingByOt, billingMonths, billingTotals, capacityTimeline, overdueSchedule, profitView } from "@/lib/tablero";
 import { INDICATORS } from "@/lib/indicators";
 import { profitOverview } from "@/lib/dashboard";
 import { formatCurrency, formatNumber, formatPercent } from "@/lib/formatting";
+import { useConfiguredOperators } from "@/store/selectors";
 import { useAppStore } from "@/store/use-app-store";
 import { useAlerts, useToday } from "@/store/selectors";
 import { useManagementParams } from "@/store/session-data";
@@ -81,7 +88,7 @@ export function GerenciaDashboard() {
   const ledger = useAppStore((s) => s.ledger);
   const demoLocal = useAppStore((s) => s.demoLocal);
   const ledgerReady = useAppStore((s) => s.ledgerReady);
-  const operators = useAppStore((s) => s.operators);
+  const operators = useConfiguredOperators();
   const hoursPerDay = useAppStore((s) => s.costSettings.hoursPerDay);
   const params = useManagementParams();
   const { open } = useAlerts();
@@ -90,15 +97,20 @@ export function GerenciaDashboard() {
   const [hoursGroup, setHoursGroup] = useState<HoursGroup>("project");
   const month = periodOf("month", `${ref}-01`);
 
+  const approved = projects.filter((p) => p.status !== "quotation" && inPeriod(approvalDate(p),month));
+  const collections = ledger.collections.filter((c) => inPeriod(c.date,month));
+  const exceptions = useAppStore((s) => s.dayExceptions);
   const sales = projects.filter((p) => generalState(p) !== "quotation");
   const otRows = useMemo(() => billingByOt(projects, ledger), [projects, ledger]);
   const totals = billingTotals(otRows);
-  const months = useMemo(() => billingMonths(projects, ledger, addMonths(month.from, -3), periodOf("month", addMonths(month.from, 3)).to), [projects, ledger, month.from]);
+  const months = billingMonths(projects, ledger, addMonths(month.from, -3), periodOf("month", addMonths(month.from, 3)).to);
   const thisMonth = months.find((m) => m.key === ref) ?? { planned: 0, invoiced: 0, collected: 0 };
 
-  const profits = useMemo(() => sales.map((p) => ({ project: p, view: profitView(p, ledger) })), [sales, ledger]);
+  const profits = useMemo(() => sales.map((p) => ({ project: p, view: profitView(p, ledger,today) })), [sales, ledger,today]);
   const aggregate = aggregateMargin(profits.filter((x) => x.view.toDate.contract > 0).map((x) => ({ profit: x.view.toDate.profit, contract: x.view.toDate.contract })));
   const anyPartial = profits.some((x) => x.view.toDate.partial);
+  const periodCostRows = costRows(sales.map((p) => ({ ...p, actualEntries:p.actualEntries.filter((e) => inPeriod(e.date,month)),materialUsages:p.materialUsages.filter((u) => inPeriod(u.date,month)) })));
+  const periodCostSubtotal = periodCostRows.filter((r) => ["waste","other"].includes(r.key)).reduce((s,r) => s+r.actual,0) + financialCostInPeriod(sales,ledger,month.from,month.to > today ? today : month.to);
   const assignments = useAppStore((s) => s.assignments);
   const dueSoonDays = useAppStore((s) => s.settings.dueSoonDays);
   const severePoints = useAppStore((s) => s.settings.marginWarningPp);
@@ -112,7 +124,7 @@ export function GerenciaDashboard() {
 
   const [granularity, setGranularity] = useState<"week" | "month">("week");
   const [capRubro, setCapRubro] = useState("");
-  const timeline = useMemo(() => capacityTimeline(capacities, projects, opps, today, granularity, capRubro || undefined), [capacities, projects, opps, today, granularity, capRubro]);
+  const timeline = useMemo(() => capacityTimeline(capacities, withExternalHours(projects,ledger), opps, today, granularity, capRubro || undefined, { operators, exceptions, hoursPerDay, roleToRubro: params.roleToRubro, assignments, ledger }), [capacities, projects, opps, today, granularity, capRubro, operators, exceptions, hoursPerDay, params.roleToRubro, assignments, ledger]);
   const overdue = overdueSchedule(projects, ledger, today);
   const alerts = [
     ...open
@@ -136,11 +148,11 @@ export function GerenciaDashboard() {
       </div>
 
       <section aria-label="Resumen" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <Kpi label={`Facturado en ${month.label}`} value={formatCurrency(thisMonth.invoiced)} hint={`Previsto en el mes: ${formatCurrency(thisMonth.planned)}`} ind="billing_month" href="#facturacion" />
+        <Kpi label="Proyectos aprobados" value={formatCurrency(approved.reduce((s,p) => s+currentContract(p,ledger),0))} hint={`${approved.length} proyectos · aprobaciones de ${month.label}`} ind="contract_current" href="#facturacion" />
         <Kpi label={`Cobrado en ${month.label}`} value={formatCurrency(thisMonth.collected)} hint="Por fecha de ingreso." ind="collected" href="#facturacion" />
         <Kpi label="Pendiente de cobro" value={formatCurrency(totals.pendingToCollect)} hint={`De ${formatCurrency(totals.contracted)} contratados vigentes.`} ind="collected" href="#facturacion" />
         <Kpi
-          label={anyPartial ? "Margen agregado hasta hoy (parcial)" : "Margen agregado"}
+          label={anyPartial ? "Rentabilidad total hasta hoy (parcial)" : "Rentabilidad total"}
           value={formatPercent(aggregate.margin)}
           tone={(aggregate.margin ?? 0) < 0 ? "red" : undefined}
           hint={`Σ ganancias ${formatCurrency(aggregate.profit)} / Σ contratos.`}
@@ -166,6 +178,11 @@ export function GerenciaDashboard() {
         </section>
       )}
 
+      <Section id="cobros-proyecto" title="Dinero cobrado por proyecto">
+        <Table><THead><TR><TH>Proyecto</TH><TH>Cliente</TH><TH>Importe cobrado en {month.label}</TH></TR></THead><TBody>{sales.map((p) => ({ p,amount:collections.filter((c) => c.projectId === p.id).reduce((s,c) => s+c.amount,0) })).filter((r) => r.amount > 0).map(({ p,amount }) => <TR key={p.id}><TD><Link href={`/projects/${p.id}?tab=facturacion`} className="text-blue-700 hover:underline">{p.code}</Link></TD><TD>{p.client}</TD><TD>{formatCurrency(amount)}</TD></TR>)}</TBody></Table>
+      </Section>
+      <ProductionDeviations projects={sales} ledger={ledger} />
+      <ExternalWorkSection />
       <Section id="facturacion" title="Facturación y cobros" ind="billing_project">
         <div className="space-y-4">
           <Table>
@@ -228,6 +245,9 @@ export function GerenciaDashboard() {
       </Section>
 
       <Section id="rentabilidad" title="Rentabilidad por proyecto" ind="profit_views">
+        <div className="mb-4 space-y-3" role="img" aria-label="Rentabilidad estimada y real registrada por proyecto, parcial mientras esté abierto">
+          {profits.map(({ project,view }) => <div key={project.id} className="text-xs"><Link href={`/projects/${project.id}`} className="font-medium text-blue-700">{project.code}</Link>{[{ label:"Estimada aprobada",value:view.budgeted?.margin },{ label:view.toDate.partial ? "Hasta hoy (parcial)" : "Real final",value:view.toDate.margin }].map((r) => <div key={r.label} className="mt-1 flex items-center gap-2"><span className="w-36 shrink-0">{r.label}</span><div className="w-full max-w-72 h-2 bg-slate-100 rounded"><div className={r.value != null && r.value < 0 ? "bg-red-500 h-2 rounded" : r.label === "Estimada aprobada" ? "bg-blue-300 h-2 rounded" : "bg-blue-700 h-2 rounded"} style={{ width:`${Math.min(100,Math.abs(r.value ?? 0))}%` }} /></div><span>{r.value == null ? "Sin base" : formatPercent(r.value)}</span></div>)}</div>)}
+        </div>
         <Table>
           <THead>
             <TR>
@@ -296,7 +316,9 @@ export function GerenciaDashboard() {
       </Section>
 
       <Section id="costos" title="Costos y horas" ind="actual_cost">
+        <p className="mb-3 text-sm font-medium">Subtotal del período (desperdicios + otros gastos directos + costo financiero): {formatCurrency(periodCostSubtotal)}</p>
         <div className="space-y-4">
+          <p className="text-xs text-slate-500">Detalle acumulado de los proyectos. El subtotal anterior corresponde al período seleccionado.</p>
           <Table>
             <THead>
               <TR>
@@ -306,7 +328,7 @@ export function GerenciaDashboard() {
               </TR>
             </THead>
             <TBody>
-              {costRows(sales).map((r) => (
+              {[...costRows(sales),{ key:"external",label:"Externos y tercerizaciones (confirmados y estimados; costos pendientes señalados arriba)",budget:0,actual:sales.reduce((s,p) => s+(ledger.externalWork ?? []).filter((e) => e.projectId === p.id).reduce((v,e) => v+(e.confirmedCost ?? e.estimatedCost ?? 0),0),0) }].map((r) => (
                 <TR key={r.key}>
                   <TD className={r.label.startsWith("·") ? "pl-6 text-slate-500" : undefined}>{r.label.replace(/^· /, "")}</TD>
                   <TD className="text-right tabular">{r.budget ? formatCurrency(r.budget) : "—"}</TD>
@@ -352,6 +374,8 @@ export function GerenciaDashboard() {
       </Section>
 
       <Section id="capacidad" title="Capacidad" ind="capacity">
+        <h3 className="mb-2 text-sm font-semibold">Semana actual · Disponibilidad, planificación y demanda</h3>
+        {(() => { const week = fullWeek(today); const c = weeklyCapacity(withExternalHours(projects,ledger),operators,assignments,exceptions,week[0],week[6],today,hoursPerDay,undefined,ledger); return <p className="mb-4 text-sm">Disponibles: {hours(c.available)} · Planificadas: {hours(c.planned)} · Necesarias estimadas: {hours(c.needed)}. La planificación usa capacidad y no se suma a la demanda.</p>; })()}
         <div className="mb-3 flex flex-wrap items-end gap-3">
           <Choice<"week" | "month">
             name="Ver por"
@@ -378,8 +402,8 @@ export function GerenciaDashboard() {
             <TR>
               <TH>{granularity === "week" ? "Semana" : "Mes"}</TH>
               <TH className="text-right">Disponible</TH>
-              <TH className="text-right">CONFIRMADO</TH>
-              <TH className="text-right">POTENCIAL</TH>
+              <TH className="text-right">Necesarias estimadas</TH>
+              <TH className="text-right">Planificadas</TH><TH className="text-right">POTENCIAL</TH>
               <TH className="text-right">Libre si se aprueba todo</TH>
             </TR>
           </THead>
@@ -389,7 +413,7 @@ export function GerenciaDashboard() {
                 <TD>{b.label}</TD>
                 <TD className="text-right tabular">{hours(b.capacity)}</TD>
                 <TD className={cn("text-right tabular", b.confirmed > b.capacity && "text-red-700")}>{hours(b.confirmed)}</TD>
-                <TD className="text-right tabular">{hours(b.potential)}</TD>
+                <TD className="text-right tabular">{hours(b.planned ?? 0)}</TD><TD className="text-right tabular">{hours(b.potential)}</TD>
                 <TD className={cn("text-right tabular", b.capacity - b.confirmed - b.potential < 0 && "text-amber-700")}>{hours(b.capacity - b.confirmed - b.potential)}</TD>
               </TR>
             ))}

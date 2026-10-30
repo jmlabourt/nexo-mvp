@@ -9,6 +9,7 @@ import { formatDate, formatNumber } from "@/lib/formatting";
 import { activeOperators } from "@/lib/operators";
 import { pendingAssignments } from "@/lib/plant";
 import { rubroLabel } from "@/lib/rubros";
+import { useConfiguredOperators } from "@/store/selectors";
 import { useAppStore } from "@/store/use-app-store";
 import { useMaterialsStateOf, useToday } from "@/store/selectors";
 import { MaterialsBadge } from "@/components/purchasing/purchasing-projects";
@@ -22,7 +23,7 @@ import { PlantCalendar } from "./plant-calendar";
 export function AssignmentsPage({ embedded = false }: { embedded?: boolean } = {}) {
   const today = useToday();
   const projects = useAppStore((s) => s.projects);
-  const operators = activeOperators(useAppStore((s) => s.operators));
+  const operators = activeOperators(useConfiguredOperators());
   const assignments = useAppStore((s) => s.assignments);
   const hoursPerDay = useAppStore((s) => s.costSettings.hoursPerDay);
   const [draft, setDraft] = useState<AssignmentDraft | null>(null);

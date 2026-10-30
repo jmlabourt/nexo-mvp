@@ -44,7 +44,7 @@ export const DEFAULT_OVERTIME_MULTIPLIER = 2;
 /** Jornada del operario por defecto (horas por día). Se cambia en Configuración (entre 1 y 24). */
 export const DEFAULT_HOURS_PER_DAY = 9.5;
 
-/** Gasto financiero por defecto: % sobre el precio de venta. A confirmar con el cliente. */
+/** Costo financiero por defecto: % sobre el precio de venta. A confirmar con el cliente. */
 export const DEFAULT_FINANCIAL_PCT = 5;
 
 /** Categorías que tienen horas, en el orden en que se muestran. */
@@ -74,7 +74,7 @@ export const CATEGORY_LABELS: Record<BudgetCategory, string> = {
   design: "Diseño",
   admin: "Administración",
   transport: "Transporte y fletes",
-  financial: "Gasto financiero",
+  financial: "Costo financiero",
   contingency: "Imprevistos",
 };
 
@@ -123,10 +123,10 @@ export const ACTUAL_TYPE_LABELS: Record<ActualEntryType, string> = {
   logistics: "Transporte y fletes",
   installation: "Montaje e instalación",
   unexpected: "Imprevisto",
-  other: "Diseño, administración o gasto financiero",
+  other: "Diseño, administración o costo financiero",
 };
 
-/** Categoría por defecto de cada tipo. "other" se registra con su categoría: Diseño, Administración o Gasto financiero. */
+/** Categoría por defecto de cada tipo. "other" se registra con su categoría: Diseño, Administración o Costo financiero. */
 export const ACTUAL_TYPE_TO_CATEGORY: Record<ActualEntryType, BudgetCategory> = {
   labor: "labor",
   outsourcing: "materials",

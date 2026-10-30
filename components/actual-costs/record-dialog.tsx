@@ -10,7 +10,7 @@ import { canExecute } from "@/lib/project-rules";
 import { STATUS_LABELS } from "@/lib/constants";
 import { OtherCostForm } from "./other-cost-form";
 
-/** Diseño, Administración y Gasto financiero se registran como tipo "other" con su categoría. */
+/** Diseño, Administración y Costo financiero se registran como tipo "other" con su categoría. */
 type Kind = "material" | "labor" | Exclude<ActualEntryType, "finishing" | "labor" | "other"> | OtherCostCategory;
 
 /** Una tarjeta por tipo de registro; cubren las siete categorías de reporte. El uso de máquina va dentro de las horas. */

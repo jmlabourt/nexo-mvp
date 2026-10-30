@@ -1,4 +1,6 @@
 "use client";
+import { ProductionMaterials } from "./production-materials";
+import { actualStart, withExternalHours } from "@/lib/frontend-work";
 import { useConfirmedAction } from "@/store/confirmed-action";
 // Jefe de planta → Proyectos (Lote 6): por producto, su estado y el contador de unidades terminadas (lo carga el
 // Jefe de planta); por rubro, horas estimadas, operarios pedidos/asignados y horas cargadas; por operario,
@@ -90,7 +92,7 @@ export function PlantProjectsPage() {
   );
 }
 
-function ProjectCard({ project: p, onAssign }: { project: Project; onAssign: (d: AssignmentDraft) => void }) {
+export function ProjectCard({ project: p, onAssign }: { project: Project; onAssign: (d: AssignmentDraft) => void }) {
   const ledgerBacked = useLedgerBacked();
   const today = useToday();
   const assignments = useAppStore((s) => s.assignments);
@@ -99,7 +101,9 @@ function ProjectCard({ project: p, onAssign }: { project: Project; onAssign: (d:
   const materialsOf = useMaterialsStateOf();
   const production = projectProduction(p);
   const schedule = scheduleSignal(p, today, settings.dueSoonDays);
-  const rows = productRubroHours(p, assignments, thresholdOf(settings), today);
+  const ledger = useAppStore((s) => s.ledger);
+  const report = withExternalHours([p],ledger)[0];
+  const rows = productRubroHours(report, assignments, thresholdOf(settings), today);
   const name = (id: string) => operators.find((o) => o.id === id)?.name ?? "Operario";
 
   return (
@@ -114,6 +118,7 @@ function ProjectCard({ project: p, onAssign }: { project: Project; onAssign: (d:
           <span>· entrega {formatDate(p.dueDate)}</span> <ScheduleBadge view={schedule} />
         </div>
         <p className="text-xs text-slate-500">{schedule.reason}</p>
+        <p className="text-xs text-slate-600">Cliente: {p.client} · Inicio previsto: {formatDate(p.startDate)} · Inicio real: {actualStart(p,ledger) ? formatDate(actualStart(p,ledger)!) : "Sin trabajo productivo registrado"}</p>
       </CardHeader>
       <CardContent className="space-y-4">
         {production.products.length === 0 ? (
@@ -143,9 +148,9 @@ function ProjectCard({ project: p, onAssign }: { project: Project; onAssign: (d:
                       <li key={r.rubro} className="space-y-1.5 py-2 text-sm">
                         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                           <strong className="text-slate-900">{rubroLabel(r.rubro)}</strong>
-                          <span className="tabular text-slate-600">estimadas {formatNumber(r.estimated)} h</span>
+                          <span className="tabular text-slate-600">Horas cotizadas totales: {formatNumber(r.estimated)} h</span>
                           <span className={cn("tabular", r.flagged ? "font-semibold text-red-700" : "text-slate-600")}>
-                            cargadas {formatNumber(r.actual)} h{r.flagged && ` (+${formatNumber(r.over)} h)`}
+                            Horas trabajadas hasta hoy: {formatNumber(r.actual)} h{r.flagged && ` (+${formatNumber(r.over)} h)`}
                           </span>
                           <span className={cn("tabular", missing > 0 ? "font-semibold text-amber-800" : "text-slate-600")}>
                             operarios {assigned}/{r.workers}
@@ -156,6 +161,8 @@ function ProjectCard({ project: p, onAssign }: { project: Project; onAssign: (d:
                             </Button>
                           )}
                         </div>
+                        <p className="text-xs text-slate-600">{r.actual > r.estimated ? `Sobreconsumo: ${formatNumber(r.actual-r.estimated)} h` : `Horas pendientes estimadas: ${formatNumber(Math.max(0,r.estimated-r.actual))} h`} · Horas registradas hoy: {formatNumber(r.records.filter((e) => e.date === today).reduce((s,e) => s+e.hours,0))} h</p>
+                        <ProductionMaterials project={p} itemId={item.id} rubro={r.rubro} />
                         {r.operators.length > 0 && (
                           <div className="flex flex-wrap gap-1.5">
                             {r.operators.map((o) => (
@@ -167,6 +174,7 @@ function ProjectCard({ project: p, onAssign }: { project: Project; onAssign: (d:
                     );
                   })}
               </ul>
+              <ProductionMaterials project={p} itemId={item.id} />
             </section>
           ))
         )}
@@ -182,6 +190,7 @@ function ProjectCard({ project: p, onAssign }: { project: Project; onAssign: (d:
             </div>
           </section>
         )}
+        {report.actualEntries.some((e) => e.labor && !e.itemId) && <section className="rounded border p-3 text-sm"><h3 className="font-semibold">Horas de proyecto/rubro sin atribuir a mueble</h3>{report.actualEntries.filter((e) => e.labor && !e.itemId).map((e) => <p key={e.id}>{e.date} · {e.rubro ? rubroLabel(e.rubro) : "Sin rubro"} · {formatNumber(e.labor!.hours)} h</p>)}</section>}
         <MaterialChangesCard project={p} amounts={false} canCorrect={false} />
         <ProjectMaterials project={p} />
       </CardContent>

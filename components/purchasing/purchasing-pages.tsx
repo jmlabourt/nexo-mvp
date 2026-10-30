@@ -197,7 +197,7 @@ export function OrdersPage() {
     <div className="space-y-6">
       <PageHeader
         title="Órdenes de compra"
-        subtitle="Borrador → Enviada → Facturada (el costo real del proyecto cambia al facturar). Pagada y Recibida van aparte. Registro manual: sin mail ni banco."
+        subtitle="Borrador → Enviada → Facturada. Recepciones parciales y pagos se registran por separado. La compra se convierte en costo productivo al consumir o desperdiciar."
       />
       {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
       <Tabs defaultValue="ordenes">

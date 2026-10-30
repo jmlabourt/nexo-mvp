@@ -12,7 +12,7 @@ import { Input, Textarea } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { DialogFooter } from "@/components/ui/dialog";
 
-/** Costo real que no es material ni horas. `cost` dice el tipo y, para Diseño / Administración / Gasto financiero, la categoría. */
+/** Costo real que no es material ni horas. `cost` dice el tipo y, para Diseño / Administración / Costo financiero, la categoría. */
 export function OtherCostForm({ project, cost, onDone }: { project: Project; cost: Pick<ActualInput, "type" | "category">; onDone: () => void }) {
   const addActualEntry = useConfirmedAction("addActualEntry");
   const { register, handleSubmit, setError, formState } = useForm<OtherCostValues>({

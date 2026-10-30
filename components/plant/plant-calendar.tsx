@@ -2,6 +2,8 @@
 // Calendario del Jefe de planta (Lote 6 · Fase 3): grilla operarios × días (lunes a domingo). Cada celda muestra horas
 // asignadas / capacidad del día (ej. 6/8 h) y un chip por proyecto, uno al lado del otro, con el color del proyecto.
 // Rojo si lo asignado pasa la capacidad; gris si no es día laborable (días del operario y excepciones). Sin importes.
+import { weeklyCapacity, withExternalHours } from "@/lib/frontend-work";
+import { useConfirmedAction } from "@/store/confirmed-action";
 import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import { useState } from "react";
 import type { Operator } from "@/types";
@@ -20,8 +22,27 @@ export function PlantCalendar({ operators, today, onAssign }: { operators: Opera
   const assignments = useAppStore((s) => s.assignments);
   const exceptions = useAppStore((s) => s.dayExceptions);
   const hoursPerDay = useAppStore((s) => s.costSettings.hoursPerDay);
+  const ledger = useAppStore((s) => s.ledger);
   const [anchor, setAnchor] = useState(today);
+  const saveAssignment = useConfirmedAction("saveAssignment");
+  const [copyMessage,setCopyMessage] = useState("");
+  const [copying,setCopying] = useState(false);
+  const copyWeek = async () => {
+    setCopying(true);
+    const source = assignments.filter((a) => a.date >= week[0] && a.date <= week[6]);
+    let count = 0;
+    for (const a of source) {
+      const target = addDays(a.date,7);
+      if (assignments.some((other) => other.date === target && other.operatorId === a.operatorId && other.projectId === a.projectId && other.rubro === a.rubro && other.itemId === a.itemId)) continue;
+      const result = await saveAssignment({ ...a,id:undefined,date:target });
+      if (!result.ok) { setCopyMessage(`${count} copiadas. ${result.error}`); setCopying(false); return; }
+      count += 1;
+    }
+    setCopyMessage(`${count} asignaciones copiadas a la próxima semana. No se generaron horas reales.`);
+    setCopying(false);
+  };
   const week = fullWeek(anchor);
+  const capacity = weeklyCapacity(withExternalHours(projects,ledger),operators,assignments,exceptions,week[0],week[6],today,hoursPerDay,undefined,ledger);
   const code = (id: string) => projects.find((p) => p.id === id)?.code ?? id;
   const shown = new Set(week.flatMap((d) => assignments.filter((a) => a.date === d).map((a) => a.projectId)));
 
@@ -47,12 +68,15 @@ export function PlantCalendar({ operators, today, onAssign }: { operators: Opera
             <ChevronLeft />
           </Button>
           <Button variant="outline" size="sm" onClick={() => setAnchor(today)}>Esta semana</Button>
+          <Button variant="outline" size="sm" disabled={copying} onClick={copyWeek}>Copiar a próxima semana</Button>
           <Button variant="outline" size="sm" onClick={() => setAnchor(addDays(week[0], 7))} aria-label="Semana siguiente">
             <ChevronRight />
           </Button>
         </div>
       </CardHeader>
       <CardContent className="space-y-3">
+        <p className="text-sm text-slate-600">Horas disponibles: {formatNumber(capacity.available)} · Planificadas: {formatNumber(capacity.planned)} · Necesarias estimadas: {formatNumber(capacity.needed)}. La planificación no es ejecución ni se suma a la demanda.</p>
+        {copyMessage && <p role="status" className="text-xs text-slate-600">{copyMessage}</p>}
         {shown.size > 0 && (
           <ul aria-label="Proyectos de la semana" className="flex flex-wrap gap-1.5 text-xs">
             {[...shown].sort((a, b) => code(a).localeCompare(code(b))).map((id) => (

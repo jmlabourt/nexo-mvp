@@ -70,7 +70,7 @@ describe("menú y acceso por sesión", () => {
   it("Jefe de planta que entra al dashboard va a su inicio", () => {
     useAppStore.setState({ role: "jefe_planta", isDemo: false });
     render(<AppShell>x</AppShell>);
-    expect(menuItems()).toEqual(["Dashboard", "Proyectos", "Operarios", "Alertas"]);
+    expect(menuItems()).toEqual(["Hoy", "Planificación", "Proyectos", "Operarios", "Alertas"]);
     expect(nav.replace).toHaveBeenCalledWith("/planta");
   });
 
@@ -86,7 +86,7 @@ describe("menú y acceso por sesión", () => {
   it("Administración: 7 pestañas, sin el Dashboard gerencial", () => {
     useAppStore.setState({ currentMode: "administracion" });
     render(<AppShell>contenido</AppShell>);
-    expect(menuItems()).toEqual(["Dashboard", "Proyectos", "Cotizador", "Stock", "Clientes", "Proveedores", "Configuración"]);
+    expect(menuItems()).toEqual(["Dashboard", "Proyectos", "Cotizador", "Stock", "Clientes", "Configuración"]);
     expect(nav.replace).toHaveBeenCalledWith("/administracion");
   });
 

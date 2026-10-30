@@ -149,7 +149,7 @@ describe("sin precio de venta", () => {
 describe("categorías de reporte (Lote 4)", () => {
   it("son siempre las mismas siete, también en la tabla de desvío", () => {
     expect(CATEGORY_ORDER.map((c) => CATEGORY_LABELS[c])).toEqual([
-      "Materiales", "Mano de obra", "Diseño", "Administración", "Transporte y fletes", "Gasto financiero", "Imprevistos",
+      "Materiales", "Mano de obra", "Diseño", "Administración", "Transporte y fletes", "Costo financiero", "Imprevistos",
     ]);
     expect(projectEconomics(project()).categories.map((c) => c.category)).toEqual(CATEGORY_ORDER);
   });

@@ -1,6 +1,6 @@
 "use client";
 // Gerencia → proyecto → Facturación (modo demostración): facturas de venta, cobros y anticipos, pagos a proveedores y
-// gasto financiero estimado. Todo se registra de verdad en la demo (lib/ledger.ts) y sobrevive a la recarga.
+// costo financiero estimado. Todo se registra de verdad en la demo (lib/ledger.ts) y sobrevive a la recarga.
 // Cotizado ≠ contratado ≠ facturado ≠ cobrado; un pago a proveedor no es ingreso ni un costo nuevo.
 import { useState } from "react";
 import type { Project } from "@/types";
@@ -17,6 +17,7 @@ import {
   registerSalesInvoice,
 
 } from "@/lib/ledger";
+import { accruedFinancialInput } from "@/lib/ledger";
 import { financialCost } from "@/lib/financial";
 import { formatCurrency, formatDate, formatNumber } from "@/lib/formatting";
 import { useAppStore } from "@/store/use-app-store";
@@ -60,10 +61,11 @@ export function LedgerBillingTab({ project }: { project: Project }) {
     return r.ok;
   };
 
-  // Gasto financiero: el del presupuesto aprobado (foto) y la estimación actualizada con la tasa y las fechas de hoy.
+  // Costo financiero: el del presupuesto aprobado (foto) y la estimación actualizada con la tasa y las fechas de hoy.
   const approvedFinancial = (project.baseline?.lines ?? project.budgetLines).filter((l) => l.category === "financial").reduce((s, l) => s + l.total, 0);
   const updatedInput = updatedFinancialInput(project, ledger, today);
   const updated = financialCost(updatedInput);
+  const accrued = financialCost(accruedFinancialInput(project,ledger,today));
 
   return (
     <div className="space-y-4">
@@ -264,7 +266,7 @@ export function LedgerBillingTab({ project }: { project: Project }) {
 
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">Gasto financiero estimado <IndicatorTip id="financial_cost" /></CardTitle>
+          <CardTitle className="flex items-center gap-2">Costo financiero <IndicatorTip id="financial_cost" /></CardTitle>
           <p className="text-sm text-slate-500">Es una estimación del costo de financiar la obra hasta el cobro, nunca un costo pagado.</p>
         </CardHeader>
         <CardContent>
@@ -274,6 +276,7 @@ export function LedgerBillingTab({ project }: { project: Project }) {
               <dd className="mt-1 text-base font-semibold tabular">{formatCurrency(approvedFinancial)}</dd>
             </div>
             <div className="rounded-md border border-slate-200 p-3">
+              <dt className="text-xs text-slate-500">Acumulado hasta hoy, con cobros reales</dt><dd className="font-medium">{accrued.ok ? formatCurrency(accrued.amount) : "No calculable"}</dd>
               <dt className="text-xs text-slate-500">Estimación actualizada ({formatNumber(ledger.financialMonthlyRatePct, 2)} % mensual)</dt>
               <dd className="mt-1 text-base font-semibold tabular">{updated.ok ? formatCurrency(updated.amount) : "No calculable"}</dd>
               <dd className="mt-1 text-xs text-slate-500">

@@ -210,7 +210,7 @@ describe("7. Dashboard de Gerencia: facturas, cobros y condiciones en distintas 
   });
 });
 
-describe("9. Gasto financiero desde Configuración", () => {
+describe("9. Costo financiero desde Configuración", () => {
   it("la tasa de Gerencia se usa en el cotizador: 5 % mensual, 30 + 30 días → 10 % ($100.000 sobre $1.000.000)", () => {
     as("gerencia");
     ok(st().recordLedger(["gerencia"], (l) => setFinancialRate(l, 5)));

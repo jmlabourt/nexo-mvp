@@ -7,7 +7,7 @@ import { CATEGORY_LABELS } from "@/lib/constants";
 import { projectEconomics } from "@/lib/calculations";
 import { projectMaterialFlow, unresolvedMaterial } from "@/lib/material-flow";
 import { closingSummary } from "@/lib/insights";
-import { closeCheck } from "@/lib/tablero";
+import { profitView, closeCheck } from "@/lib/tablero";
 import { formatCurrency, formatCurrencyOrDash, formatMarginPoints, formatPercent, formatQty, formatSignedCurrency, todayISO } from "@/lib/formatting";
 import { useAppStore } from "@/store/use-app-store";
 import { useLedgerBacked } from "@/store/selectors";
@@ -29,7 +29,11 @@ export function CloseDialog({ project, open, onOpenChange }: { project: Project;
   const ledger = useAppStore((s) => s.ledger);
   const orders = useAppStore((s) => s.orders);
   const deliveries = useAppStore((s) => s.deliveries);
-  const check = useMemo(() => (ledgerBacked ? closeCheck(project, ledger, stock, orders, deliveries) : { blockers: [], warnings: [] }), [ledgerBacked, project, ledger, stock, orders, deliveries]);
+  const assignments = useAppStore((s) => s.assignments);
+  const operators = useAppStore((s) => s.operators);
+  const settings = useAppStore((s) => s.settings);
+  const reviewed = useAppStore((s) => s.reviewedHoursKeys);
+  const check = useMemo(() => (ledgerBacked ? closeCheck(project, ledger, stock, orders, deliveries, { assignments,operators,today:todayISO(),threshold:{ pct:settings.hoursDeviationPct,hours:settings.hoursDeviationHours },reviewed }) : { blockers: [], warnings: [] }), [ledgerBacked, project, ledger, stock, orders, deliveries, assignments,operators,settings,reviewed]);
   const otherBlockers = check.blockers.filter((b) => !b.startsWith("Hay materiales sin rendir"));
   const flow = useMemo(() => projectMaterialFlow(stock, project.id), [stock, project.id]);
   const target = (h: (typeof loose)[number]): StockTarget => ({
@@ -55,7 +59,9 @@ export function CloseDialog({ project, open, onOpenChange }: { project: Project;
   };
   // Simulamos el cierre para mostrar la rentabilidad real antes de confirmar.
   const simulated = useMemo(() => ({ ...project, status: "completed" as const }), [project]);
-  const econ = useMemo(() => projectEconomics(simulated), [simulated]);
+  const baseEcon = useMemo(() => projectEconomics(simulated), [simulated]);
+  const result = profitView(simulated,ledger,todayISO());
+  const econ = { ...baseEcon, actualCostToDate:result.toDate.cost, finalProfit:result.toDate.profit,finalMargin:result.toDate.margin };
   const texts = useMemo(() => closingSummary(simulated), [simulated]);
 
   return (

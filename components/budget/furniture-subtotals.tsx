@@ -16,7 +16,7 @@ export function FurnitureSubtotalsTable({ result, salesPrice }: { result: Calcul
         <>
           <span className="block">Costo directo = mano de obra, materiales, diseño y administración de los rubros del mueble.</span>
           <span className="block">
-            Los costos compartidos (transporte, imprevistos, márgenes de seguridad y gasto financiero) no se reparten en el costo: el precio de venta se reparte entre los
+            Los costos compartidos (transporte, imprevistos, márgenes de seguridad y costo financiero) no se reparten en el costo: el precio de venta se reparte entre los
             muebles en proporción a su costo directo, y la suma da el precio total.
           </span>
         </>

@@ -1,10 +1,14 @@
 "use client";
 // Hooks derivados: combinan estado + funciones puras. Memoizados para no recalcular en cada render.
 import { withPublishedBom } from "@/lib/bom-needs";
+import { configuredOperators } from "@/lib/frontend-work";
 import { useCallback, useMemo } from "react";
 import type { Alert, EconomicHealth, HourRate, Project } from "@/types";
 import { allAlerts, openAlertCount, projectHealth, sortAlerts, splitAlerts } from "@/lib/alerts";
 import { designChangeAlerts } from "@/lib/circuit";
+import { dailyHoursReviews } from "@/lib/hours-review";
+import { thresholdOf } from "@/lib/plant";
+import { pendingExternal } from "@/lib/frontend-work";
 import { plantAlerts } from "@/lib/plant";
 import { materialNeeds, materialsState, plantMaterialAlerts, purchasingAlerts, type MaterialNeed, type MaterialsState } from "@/lib/purchasing";
 import type { RoleKey } from "@/lib/permissions";
@@ -35,7 +39,10 @@ export function useToday(): string {
 export function usePlantAlerts(): Alert[] {
   const projects = useAppStore((s) => s.projects);
   const assignments = useAppStore((s) => s.assignments);
-  const operators = useAppStore((s) => s.operators);
+  const operators = useConfiguredOperators();
+  const ledger = useAppStore((s) => s.ledger);
+  const deliveries = useAppStore((s) => s.deliveries);
+  const reviewed = useAppStore((s) => s.reviewedHoursKeys);
   const settings = useAppStore((s) => s.settings);
   const hoursPerDay = useAppStore((s) => s.costSettings.hoursPerDay);
   const dayExceptions = useAppStore((s) => s.dayExceptions);
@@ -46,8 +53,11 @@ export function usePlantAlerts(): Alert[] {
       sortAlerts([
         ...plantAlerts({ projects, assignments, operators, settings, hoursPerDay, today, dayExceptions }),
         ...plantMaterialAlerts(projects, stateOf, today, settings.purchaseLeadDays),
+        ...projects.filter((p) => !p.isClosed).flatMap((p): Alert[] => pendingExternal(ledger,p.id).map((e) => ({ id:`external:${e.id}`,resolutionKey:`external:${e.id}`,projectId:p.id,projectCode:p.code,projectName:p.name,kind:"hours",level:"warning",title:"Costo externo pendiente de confirmar",message:`${e.date} · ${e.description}. Gerencia debe completar o confirmar su costo.`,action:"Coordinar con Gerencia; el costo debe confirmarse antes del cierre." }))),
+        ...deliveryReviewAlerts(projects,{ lots:[],movements:[] },deliveries,today).filter((a) => a.kind === "delivery_open").map((a) => ({ ...a,impactAmount:undefined,impactPoints:undefined })),
+        ...dailyHoursReviews(projects,assignments,operators,today,thresholdOf(settings)).filter((r) => !reviewed.includes(r.key)).flatMap((r): Alert[] => { const p = projects.find((p) => p.id === r.assignments[0]?.projectId); return p ? [{ id:`review:${r.key}`,resolutionKey:`review:${r.key}`,projectId:p.id,projectCode:p.code,projectName:p.name,kind:"hours",level:"warning",title:`Revisar horas de ${r.worker}`,message:r.message,action:"Operarios → Correcciones de horas." }] : []; }),
       ]),
-    [projects, assignments, operators, settings, hoursPerDay, today, dayExceptions, stateOf],
+    [projects, assignments, operators, settings, hoursPerDay, today, dayExceptions, stateOf, ledger, deliveries, reviewed],
   );
 }
 
@@ -120,7 +130,7 @@ export function useAlerts(): { open: Alert[]; resolved: Alert[]; count: number }
   return useMemo(() => {
     // El Administrativo ve cuánto cuesta cada alerta (horas de más × costo por hora, puntos de margen).
     // "Falta material" del Jefe es la misma situación que "material sin pedir" / "pedido y no llegó" de Compras.
-    const fromPlant = plant.filter((a) => a.kind !== "material_missing");
+    const fromPlant = plant.filter((a) => a.kind !== "material_missing" && a.kind !== "delivery_open");
     // Entregas y cierres del Jefe de planta, con su costo (solo el Administrativo lo ve).
     const planta = deliveryReviewAlerts(projects, stock, deliveries, today);
     const all = withEconomicImpact([...allAlerts(projects, settings, today), ...fromPlant, ...buying, ...planta], projects, assignments, today);
@@ -186,4 +196,11 @@ export function useCatalogPrice(): (materialId: string) => number {
  */
 export function useCategoryRate(category: HourRate["category"]): number {
   return useAppStore((s) => s.hourRates.find((r) => r.category === category)?.hourlyRate ?? 0);
+}
+
+/** Frontend personnel setup overlays the existing employees, without a second employee catalogue. */
+export function useConfiguredOperators() {
+  const operators = useAppStore((s) => s.operators);
+  const ledger = useAppStore((s) => s.ledger);
+  return useMemo(() => configuredOperators(operators,ledger),[operators,ledger]);
 }

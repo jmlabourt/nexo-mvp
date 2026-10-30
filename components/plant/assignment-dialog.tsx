@@ -1,4 +1,5 @@
 "use client";
+import { useConfiguredOperators } from "@/store/selectors";
 import { useConfirmedAction } from "@/store/confirmed-action";
 // Asignar trabajo: proyecto → producto → rubro → operario(s) → días → horas por día. Sin importes.
 // Al crear se pueden elegir varias personas y un rango de días (una asignación por persona y día hábil);
@@ -33,7 +34,7 @@ export function AssignmentDialog({ draft, onClose }: { draft: AssignmentDraft | 
 
 function AssignmentForm({ draft, onClose }: { draft: AssignmentDraft; onClose: () => void }) {
   const projects = useAppStore((s) => s.projects).filter(isAssignable);
-  const operators = activeOperators(useAppStore((s) => s.operators));
+  const operators = activeOperators(useConfiguredOperators());
   const saveAssignment = useConfirmedAction("saveAssignment");
   const removeAssignment = useConfirmedAction("removeAssignment");
   const editing = !!draft.id;
@@ -42,14 +43,15 @@ function AssignmentForm({ draft, onClose }: { draft: AssignmentDraft; onClose: (
   const [projectId, setProjectId] = useState(draft.projectId ?? projects[0]?.id ?? "");
   const project = projects.find((p) => p.id === projectId);
   const [itemId, setItemId] = useState(draft.itemId ?? "");
-  const item = project?.items.find((i) => i.id === itemId) ?? project?.items[0];
+  const item = project?.items.find((i) => i.id === itemId);
+  const rubros = item?.rubros ?? project?.items.flatMap((i) => i.rubros).filter((r, i, all) => all.findIndex((x) => x.rubro === r.rubro) === i) ?? [];
   const [rubro, setRubro] = useState<RubroId | "">(draft.rubro ?? "");
-  const chosenRubro = item?.rubros.some((r) => r.rubro === rubro) ? rubro : (item?.rubros[0]?.rubro ?? "");
+  const chosenRubro = rubros.some((r) => r.rubro === rubro) ? rubro : (rubros[0]?.rubro ?? "");
   const need = item?.rubros.find((r) => r.rubro === chosenRubro);
   const [picked, setPicked] = useState<string[]>(draft.operatorId ? [draft.operatorId] : []);
   const [from, setFrom] = useState(draft.date ?? "");
   const [to, setTo] = useState(draft.date ?? "");
-  const [hours, setHours] = useState(draft.plannedHours ? String(draft.plannedHours).replace(".", ",") : "8");
+  const [hours, setHours] = useState(draft.plannedHours ? String(draft.plannedHours).replace(".", ",") : String(useAppStore.getState().costSettings.hoursPerDay));
   const [error, setError] = useState("");
   const exceptions = useAppStore((s) => s.dayExceptions);
   const assignments = useAppStore((s) => s.assignments);
@@ -80,12 +82,12 @@ function AssignmentForm({ draft, onClose }: { draft: AssignmentDraft; onClose: (
 
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!item || !chosenRubro) return setError("Elegí el producto y el rubro.");
+    if (!chosenRubro) return setError("Elegí el rubro.");
     if (picked.length === 0) return setError("Elegí al menos un operario.");
     if (total === 0) return setError(editing ? "Elegí el día." : "Elegí desde y hasta qué día: en ese rango no hay días laborales de esas personas.");
     for (const operatorId of picked) {
       for (const date of daysFor(operatorId)) {
-        const r = await saveAssignment({ id: draft.id, projectId, itemId: item.id, rubro: chosenRubro, operatorId, date, plannedHours: parseDecimal(hours), hourKind });
+        const r = await saveAssignment({ id: draft.id, projectId, itemId: item?.id, rubro: chosenRubro, operatorId, date, plannedHours: parseDecimal(hours), hourKind });
         if (!r.ok) return setError(r.error);
       }
     }
@@ -108,8 +110,9 @@ function AssignmentForm({ draft, onClose }: { draft: AssignmentDraft; onClose: (
           </Select>
         </Field>
         <div className="grid grid-cols-2 gap-3">
-          <Field label="Producto" htmlFor="as-item">
+          <Field label="Mueble (opcional)" htmlFor="as-item">
             <Select id="as-item" value={item?.id ?? ""} onChange={(e) => setItemId(e.target.value)}>
+              <option value="">Proyecto y rubro, sin mueble</option>
               {(project?.items ?? []).map((i) => (
                 <option key={i.id} value={i.id}>{i.name} × {i.quantity}</option>
               ))}
@@ -117,7 +120,7 @@ function AssignmentForm({ draft, onClose }: { draft: AssignmentDraft; onClose: (
           </Field>
           <Field label="Rubro" htmlFor="as-rubro">
             <Select id="as-rubro" value={chosenRubro} onChange={(e) => setRubro(e.target.value as RubroId)}>
-              {(item?.rubros ?? []).map((r) => (
+              {rubros.map((r) => (
                 <option key={r.rubro} value={r.rubro}>{rubroLabel(r.rubro)}</option>
               ))}
             </Select>

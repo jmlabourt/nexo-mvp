@@ -21,6 +21,7 @@ import { Field } from "@/components/ui/field";
 import { Input, Select, Textarea } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { QuoteWorkspace } from "@/components/budget/quote-workspace";
+import { formatProjectCode } from "@/lib/gerencia";
 import { computeCalculator, initialCalcState, productInputs, quoteActionBlocker, type CalcState } from "@/components/budget/calculator-state";
 import { clearQuoteDraft, peekQuoteDraft } from "@/components/budget/quote-draft";
 import { QuoteReview } from "./quote-review";
@@ -48,7 +49,8 @@ export function NewProjectWizard() {
   const isDemo = useAppStore((s) => s.isDemo);
   const monthlyRate = useMonthlyRate();
   const createProject = useConfirmedAction("createProject");
-  const code = useMemo(() => nextProjectCode(projects), [projects]);
+  const legacyCode = useMemo(() => nextProjectCode(projects), [projects]);
+  const nomenclature = useAppStore((s) => s.ledger.projectNomenclature);
   const [draft] = useState(peekQuoteDraft);
   const [step, setStep] = useState(0);
   const [calcState, setCalcState] = useState<CalcState>(() => draft?.state ?? initialCalcState(financialPct));
@@ -75,6 +77,15 @@ export function NewProjectWizard() {
   const startDate = useWatch({ control, name: "startDate" });
   const dueDate = useWatch({ control, name: "dueDate" });
   const projectType = useWatch({ control, name: "projectType" });
+  const projectName = useWatch({ control,name:"name" });
+  const clientName = useWatch({ control,name:"client" });
+  const code = (() => {
+    if (!nomenclature || !nomenclature.pattern.includes("{numero}")) return legacyCode;
+    let n = nomenclature.nextNumber;
+    let proposed = formatProjectCode(nomenclature.pattern,{ prefix:nomenclature.prefix,number:n,client:clientName,name:projectName });
+    while (projects.some((p) => p.code.toLowerCase() === proposed.toLowerCase())) proposed = formatProjectCode(nomenclature.pattern,{ prefix:nomenclature.prefix,number:++n,client:clientName,name:projectName });
+    return proposed;
+  })();
   const calc = useMemo(
     () => computeCalculator(calcState, projectType, { projects, rates, overtimeMultiplier, hoursPerDay, salesPrice, isDemo }),
     [calcState, projectType, projects, rates, overtimeMultiplier, hoursPerDay, salesPrice, isDemo],
@@ -90,7 +101,7 @@ export function NewProjectWizard() {
       const days = workingDaysBetween(startDate, dueDate);
       if (days > 0) next = { ...next, deadlineDays: String(days) };
     }
-    // Las condiciones de cobro usan las fechas del proyecto (el gasto financiero se recalcula con ellas).
+    // Las condiciones de cobro usan las fechas del proyecto (el costo financiero se recalcula con ellas).
     if (next.finance && (next.finance.startDate !== startDate || next.finance.deliveryDate !== dueDate)) {
       const finance = { ...next.finance, startDate, deliveryDate: dueDate };
       const r = financePct(finance, monthlyRate);

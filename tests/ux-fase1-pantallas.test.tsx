@@ -95,9 +95,10 @@ describe("Operario: solo lo de hoy y un campo de horas", () => {
     expect(screen.getAllByLabelText("Horas trabajadas").length).toBeGreaterThan(0);
     expect(document.body.textContent).not.toMatch(/\$|Material usado|desperdicio|sobrante|unidades/i);
   });
-  it("Mi día no muestra horas estimadas ni el pedido de material o problemas", () => {
+  it("Mi día distingue horas planificadas y reales sin pedir materiales", () => {
     render(<WorkshopHome />);
-    expect(document.body.textContent).not.toMatch(/estimadas|previstas|planificadas|Pedir material|problema/i);
+    expect(document.body.textContent).toMatch(/Horas planificadas/);
+    expect(document.body.textContent).not.toMatch(/Pedir material|problema/i);
   });
   it("y si lo intenta igual, la app lo rechaza", () => {
     const r = useAppStore.getState().registerUsage(STAR_PROJECT_ID, { materialId: "multilaminado-18", materialName: "Multilaminado 18 mm", unit: "placa", consumed: 1, waste: 0, date: "2026-10-16" });

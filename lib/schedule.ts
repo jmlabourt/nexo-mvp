@@ -61,14 +61,14 @@ export interface DayCapacity {
 }
 
 export function dayCapacity(
-  operator: Pick<Operator, "id" | "workDays">,
+  operator: Pick<Operator, "id" | "workDays" | "hoursPerDay">,
   date: string,
   exceptions: DayException[],
   hoursPerDay: number,
 ): DayCapacity {
   const exception = exceptions.find((x) => x.operatorId === operator.id && x.date === date);
   if (exception) {
-    const hours = exception.works ? round2(exception.hours ?? hoursPerDay) : 0;
+    const hours = exception.works ? round2(exception.hours ?? operator.hoursPerDay ?? hoursPerDay) : 0;
     const what = exception.works ? `trabaja ${hours} h` : "no trabaja";
     return { working: exception.works, hours, exception, reason: `Excepción: ${what}${exception.note ? ` (${exception.note})` : ""}` };
   }
@@ -76,14 +76,14 @@ export function dayCapacity(
   const working = days.includes(dayOfWeek(date));
   return {
     working,
-    hours: working ? round2(hoursPerDay) : 0,
+    hours: working ? round2(operator.hoursPerDay ?? hoursPerDay) : 0,
     reason: working ? `Trabaja ${workDaysLabel(days)}` : `No trabaja los ${plural(dayOfWeek(date))} (trabaja ${workDaysLabel(days)})`,
   };
 }
 
 /** Días laborables del operario entre `from` y `to` (inclusive), según sus días y excepciones. Máximo 60. */
 export function operatorWorkdays(
-  operator: Pick<Operator, "id" | "workDays">,
+  operator: Pick<Operator, "id" | "workDays" | "hoursPerDay">,
   exceptions: DayException[],
   from: string,
   to: string,
@@ -114,7 +114,7 @@ export interface CalendarCell {
 }
 
 export function calendarCell(
-  operator: Pick<Operator, "id" | "workDays">,
+  operator: Pick<Operator, "id" | "workDays" | "hoursPerDay">,
   date: string,
   assignments: WorkAssignment[],
   exceptions: DayException[],

@@ -372,6 +372,10 @@ export function registerInternalHours(
   if (!input.employeeId) throw new DomainError("Elegí la persona.");
   if (!isDate(input.date)) throw new DomainError("Indicá la fecha.");
   if (!(input.hours > 0) || input.hours > 24) throw new DomainError("Las horas van de más de 0 a 24.");
+  if (!Number.isFinite(input.hours)) throw new DomainError("Indicá horas válidas.");
+  const total = ledger.internalHours.filter((h) => h.employeeId === input.employeeId && h.date === input.date).reduce((s,h) => s+h.hours,0) + input.hours;
+  if (total > 24) throw new DomainError("La suma de las horas personales del día no puede superar 24.");
+  if (input.hourlyCost !== undefined && (!Number.isFinite(input.hourlyCost) || input.hourlyCost < 0)) throw new DomainError("Costo horario inválido.");
   if (input.task.trim().length < 2) throw new DomainError("Contá brevemente en qué trabajaste.");
   const h: InternalHours = {
     id: createId("hint"),
@@ -380,7 +384,7 @@ export function registerInternalHours(
     date: input.date,
     hours: round2(input.hours),
     task: input.task.trim(),
-    hourlyCost: input.projectId ? round2(input.hourlyCost ?? 0) : undefined,
+    hourlyCost: input.hourlyCost === undefined ? undefined : round2(input.hourlyCost),
     createdAt: ctx.now,
   };
   return { ...ledger, internalHours: [...ledger.internalHours, h] };
@@ -388,7 +392,7 @@ export function registerInternalHours(
 
 /** Costo de las horas propias (Administración, Compras, Jefe) imputadas a un proyecto. */
 export function staffHoursCost(ledger: Pick<Ledger, "internalHours">, projectId: string): number {
-  return sum(ledger.internalHours.filter((h) => h.projectId === projectId).map((h) => h.hours * (h.hourlyCost ?? 0)));
+  return sum(ledger.internalHours.map((h) => h.projectId === projectId ? h.hours * (h.hourlyCost ?? 0) : (h.allocations ?? []).filter((a) => a.projectId === projectId).reduce((s,a) => s+a.amount,0)));
 }
 
 // ── Catálogo de rubros (Gerencia: texto libre, sin lista cerrada) ──
@@ -521,4 +525,13 @@ function trimTo(schedule: Array<{ amount: number; date: string }>, price: number
       return { ...x, amount };
     })
     .filter((x) => x.amount > 0);
+}
+
+/** Financing accrued through a date, using only real collections. Future promises never count as cash. */
+export function accruedFinancialInput(p: Pick<Project, "id" | "startDate" | "salesPrice" | "baseline" | "status">, ledger: Ledger, asOf: string) {
+  const price = p.status === "quotation" ? 0 : currentContract(p,ledger);
+  const approved = p.baseline?.capturedAt.slice(0,10);
+  const startDate = approved && approved > p.startDate ? approved : p.startDate;
+  const schedule = trimTo(ledger.collections.filter((c) => c.projectId === p.id && c.date <= asOf).map((c) => ({ amount:c.amount,date:c.date })),price);
+  return { price,monthlyRatePct:ledger.financialMonthlyRatePct,startDate,deliveryDate:asOf < startDate ? startDate : asOf,daysAfterDelivery:0,schedule };
 }

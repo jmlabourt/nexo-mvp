@@ -65,11 +65,11 @@ export const INDICATORS: Indicator[] = [
   },
   {
     id: "financial_cost",
-    name: "Gasto financiero estimado",
+    name: "Costo financiero estimado",
     meaning: "Lo que cuesta financiar la obra hasta que el cliente paga.",
     formula: "Precio sin IVA × tasa mensual / 100 × días financiados / 30. Días financiados = producción (inicio → entrega) + días que tarda en pagar. Con seña o cuotas, por tramos sobre el saldo pendiente.",
     source: "Fechas y condiciones de pago de la cotización.",
-    params: "Tasa mensual (Configuración → Gasto financiero).",
+    params: "Tasa mensual (Configuración → Costo financiero).",
     period: "Del inicio al último cobro.",
     limits: "Es una estimación: nunca un costo pagado. El presupuesto aprobado guarda su valor; el actualizado se muestra aparte. No entra en su propia base.",
     updates: "Al cambiar la tasa, las fechas o las cuotas.",

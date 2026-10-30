@@ -1,7 +1,7 @@
 "use client";
 // Administración → proyecto → Contrato y pagos (modo demostración). La aprobación congela el presupuesto y el contrato
 // original; el contrato vigente cambia solo con motivo y queda auditado. Las condiciones de pago (seña, cuotas, días
-// para pagar después de la entrega) alimentan lo previsto de facturar y el gasto financiero.
+// para pagar después de la entrega) alimentan lo previsto de facturar y el costo financiero.
 import { useState } from "react";
 import type { Project, ScheduledPayment } from "@/types";
 import { currentContract, originalContract, reviseContract, setPaymentTerms, termsOf } from "@/lib/ledger";

@@ -38,6 +38,8 @@ import * as circuit from "@/lib/circuit";
 import { EMPTY_LEDGER, normalizeLedger, type LedgerCtx } from "@/lib/ledger";
 import { closeCheck } from "@/lib/tablero";
 import { setRubroNames } from "@/lib/rubros";
+import { afterPublishedBom, afterMaterialArrival, configuredOperators } from "@/lib/frontend-work";
+import { executeWork, correctExecution, type ExecutionInput, type ExecutionCorrection } from "@/lib/work-execution";
 import { correctHours, type HoursCorrectionInput } from "@/lib/hours-review";
 import { demoScenario } from "@/lib/demo/escenario";
 import { demoDataChanged, pickDemoData, readDemo, setDemoActive, writeDemo } from "./demo-local";
@@ -273,6 +275,8 @@ interface AppState {
   confirmHoursLocal: (key: string) => Result;
   /** Demo: el Jefe redistribuye horas con motivo (en una empresa real, planta_correct_hours). */
   correctHoursLocal: (input: HoursCorrectionInput) => Result;
+  executeWorkLocal: (input: ExecutionInput) => Result;
+  correctExecutionLocal: (input: ExecutionCorrection) => Result;
   /** Borra todos los datos de la empresa para empezar de cero. */
   clearData: () => Promise<Result>;
   dismissSyncError: () => void;
@@ -451,7 +455,12 @@ export const useAppStore = create<AppState>()(
       /** Guarda en memoria lo que cambió y encola su escritura. Todas las vistas leen de acá. */
       const commit = (next: { projects?: Project[]; stock?: StockState; operators?: Operator[]; requests?: MaterialRequest[] }) => {
         const prev = get();
-        const projects = next.projects ?? prev.projects;
+        let projects = next.projects ?? prev.projects;
+        if (prev.demoLocal && next.stock) {
+          const old = new Set(prev.stock.movements.map((m) => m.id));
+          const arrived = next.stock.movements.filter((m) => !old.has(m.id) && m.to.type === "project").map((m) => m.to.type === "project" ? m.to.projectId : "");
+          projects = afterMaterialArrival(projects,arrived,ctx());
+        }
         const stock = next.stock ?? prev.stock;
         const operators = next.operators ?? prev.operators;
         const requests = next.requests ?? prev.requests;
@@ -701,7 +710,7 @@ export const useAppStore = create<AppState>()(
             if (get().demoLocal || get().ledgerReady) {
               // Cierra solo Gerencia, con todo terminado, la entrega real y sin materiales sin rendir.
               if (effectiveIdentity(get()).session !== "gerencia") throw new ops.DomainError("El cierre lo hace Gerencia.");
-              const check = closeCheck(project, get().ledger, get().stock, get().orders, get().deliveries);
+              const check = closeCheck(project, get().ledger, get().stock, get().orders, get().deliveries, { assignments:get().assignments,operators:get().operators,today:todayISO(),threshold:{ pct:get().settings.hoursDeviationPct,hours:get().settings.hoursDeviationHours },reviewed:get().reviewedHoursKeys });
               if (check.blockers.length) throw new ops.DomainError(check.blockers.join(" "));
               const closed = ops.closeProject(project, get().stock, ctx());
               const closure = { projectId: id, date: ctx().now.slice(0, 10), by: ctx().actor, pendingCosts: check.warnings };
@@ -1038,7 +1047,8 @@ export const useAppStore = create<AppState>()(
             const who = effectiveIdentity(get()).roleKey;
             if (who !== "admin" && who !== "jefe_planta") throw new ops.DomainError("Las asignaciones las hace el Jefe de planta.");
             const { projects, operators, assignments } = get();
-            const error = assignmentError(input, { projects, operators });
+            if (!get().demoLocal && get().organizationId && !input.itemId) throw new ops.DomainError("La planificación sin mueble está preparada en frontend; el backend actual todavía exige producto. No se guardó la asignación.");
+            const error = assignmentError(input, { projects, operators: configuredOperators(operators,get().ledger) });
             if (error) throw new ops.DomainError(error);
             const previous = input.id ? assignments.find((a) => a.id === input.id) : undefined;
             const a: WorkAssignment = {
@@ -1075,6 +1085,7 @@ export const useAppStore = create<AppState>()(
           run(() => {
             const who = effectiveIdentity(get()).roleKey;
             if (who !== "admin" && who !== "jefe_planta") throw new ops.DomainError("Los días laborales los define el Jefe de planta.");
+            if (change.workDays && effectiveIdentity(get()).session !== "gerencia") throw new ops.DomainError("Los días habituales se configuran en Gerencia; Planta registra excepciones.");
             const operator = get().operators.find((o) => o.id === operatorId);
             if (!operator) throw new ops.DomainError("Operario no encontrado.");
             const error = (change.workDays ? workDaysError(change.workDays) : null) ?? (change.add ?? []).map(exceptionError).find(Boolean) ?? null;
@@ -1167,7 +1178,7 @@ export const useAppStore = create<AppState>()(
             const res = receiveOrderLines(o, receipts, get().projects, { actor, now: new Date().toISOString(), today: todayISO() });
             if (res.sent.length === 0) throw new ops.DomainError("Indicá cuánto llegó de cada material.");
             // La base crea el mismo lote y movimiento: se actualiza la memoria sin volver a escribir el stock.
-            set({ stock: applyChange(get().stock, res.change) });
+            set({ stock: applyChange(get().stock, res.change), ...(get().demoLocal ? { projects: afterMaterialArrival(get().projects,res.change.movements.filter((m) => m.to.type === "project").map((m) => m.to.type === "project" ? m.to.projectId : ""),ctx()) } : {}) });
             replaceOrder(res.order);
             void persistRemote((db) => remote.orderStatus(db, { id, action: "receive", receipts: res.sent }));
             return undefined;
@@ -1230,6 +1241,25 @@ export const useAppStore = create<AppState>()(
             if (!get().reviewedHoursKeys.includes(key)) set({ reviewedHoursKeys: [...get().reviewedHoursKeys, key] });
             return undefined;
           }),
+        executeWorkLocal: (input) => run(() => {
+          const state = get();
+          const who = effectiveIdentity(state);
+          if (!state.demoLocal || who.session !== "operario" || who.operator?.id !== input.operatorId) throw new ops.DomainError("Esta carga flexible está disponible para el operario en el frontend local; falta integración backend.");
+          const op = state.operators.find((o) => o.id === input.operatorId);
+          if (!op) throw new ops.DomainError("Operario no encontrado.");
+          const internal = state.ledger.internalHours.filter((h) => h.employeeId === op.id && h.date === input.date).reduce((s,h) => s+h.hours,0);
+          const combined = checkHours(state.projects.flatMap((p) => p.actualEntries),op.id,input.date,input.hours+internal,todayISO(),state.costSettings.hoursPerDay);
+          if (combined.level === "block") throw new ops.DomainError(combined.message);
+          const cost = laborCostAt({ valuation: state.costSettings.laborValuation, operator: op, laborRate: state.hourRates.find((r) => r.id === "labor")?.hourlyRate, history: state.priceHistory, date: input.date });
+          set({ projects: executeWork(state.projects,configuredOperators(state.operators,state.ledger),state.assignments,input,{ actor: who.actor, now: new Date().toISOString(), today: todayISO(), cost, hoursPerDay: state.costSettings.hoursPerDay }) });
+          return undefined;
+        }),
+        correctExecutionLocal: (input) => run(() => {
+          const state = get(); const who = effectiveIdentity(state);
+          if (!state.demoLocal || !["gerencia","jefe_planta"].includes(who.session)) throw new ops.DomainError("Esta corrección está disponible en el frontend local; falta integración backend.");
+          set({ projects: correctExecution(state.projects,configuredOperators(state.operators,state.ledger),input,{ actor: who.actor, now: new Date().toISOString(), today: todayISO(), hoursPerDay: state.costSettings.hoursPerDay }) });
+          return undefined;
+        }),
         correctHoursLocal: (input) =>
           run(() => {
             if (!get().demoLocal) throw new ops.DomainError("Solo en el modo demostración.");
@@ -1247,7 +1277,8 @@ export const useAppStore = create<AppState>()(
             // Las reglas son las de lib/ledger.ts (puras): si algo no corresponde, lanza acá y no se guarda nada.
             const ledger = fn(state.ledger, { actor: who.actor, now: new Date().toISOString() }, state);
             if (ledger === state.ledger) return undefined;
-            set({ ledger });
+            if (!state.demoLocal && (ledger.externalWork !== state.ledger.externalWork || ledger.personnel !== state.ledger.personnel || ledger.capacityAdjustments !== state.ledger.capacityAdjustments || ledger.externalRates !== state.ledger.externalRates || ledger.staffCategories !== state.ledger.staffCategories || ledger.projectNomenclature !== state.ledger.projectNomenclature)) throw new ops.DomainError("Esta configuración está preparada en frontend; su persistencia requiere integración backend.");
+            set({ ledger, ...(state.demoLocal ? { projects: afterPublishedBom(state.projects,state.ledger,ledger,{ actor:who.actor, now:new Date().toISOString() }) } : {}) });
             // Demo local: queda en el navegador. Empresa real: se guarda en la base lo que cambió (la base valida de nuevo
             // el permiso y las reglas) y, si fue lo último pendiente, se relee para tomar lo que puso el servidor.
             if (!state.demoLocal) {

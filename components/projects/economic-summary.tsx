@@ -1,4 +1,9 @@
 "use client";
+import { useAppStore } from "@/store/use-app-store";
+import { profitView } from "@/lib/tablero";
+import { todayISO } from "@/lib/formatting";
+import { staffHoursCost } from "@/lib/ledger";
+import { externalCost, pendingExternal } from "@/lib/frontend-work";
 import type { Project } from "@/types";
 import type { ProjectEconomics } from "@/lib/calculations";
 import { remainingBudgetText } from "@/lib/insights";
@@ -22,7 +27,22 @@ function Money({ label, value, hint, tooltip }: { label: string; value: string; 
 }
 
 
-export function EconomicSummary({ project, econ }: { project: Project; econ: ProjectEconomics }) {
+export function EconomicSummary({ project, econ: originalEcon }: { project: Project; econ: ProjectEconomics }) {
+  const ledger = useAppStore((s) => s.ledger);
+  const result = profitView(project,ledger,todayISO());
+  const extra = result.toDate.cost - originalEcon.actualCostToDate;
+  const pending = pendingExternal(ledger,project.id);
+  const econ = { ...originalEcon,
+    salesPrice:result.toDate.contract,
+    actualCostToDate: originalEcon.actualCostToDate + extra,
+    projectedFinalCost: originalEcon.projectedFinalCost + extra,
+    currentMargin: originalEcon.currentMargin === null ? null : result.toDate.contract > 0 ? (result.toDate.contract-originalEcon.projectedFinalCost-extra)/result.toDate.contract*100 : null,
+    projectedProfit: originalEcon.projectedProfit === null ? null : result.toDate.contract - originalEcon.projectedFinalCost - extra,
+    projectedMargin: originalEcon.projectedMargin === null ? null : result.toDate.contract > 0 ? (result.toDate.contract-originalEcon.projectedFinalCost-extra)/result.toDate.contract*100 : null,
+    finalActualCost: originalEcon.finalActualCost === null ? null : originalEcon.finalActualCost + extra,
+    finalProfit: originalEcon.finalProfit === null ? null : result.toDate.profit,
+    finalMargin: originalEcon.finalMargin === null ? null : result.toDate.margin,
+  };
   const completed = project.status === "completed";
   const noData = !completed && !econ.hasExecutionData;
   const missingCosts = econ.categories.filter(c => c.budget > 0 && c.actual === 0);
@@ -45,6 +65,8 @@ export function EconomicSummary({ project, econ }: { project: Project; econ: Pro
         ) : (
           <MarginShift from={econ.expectedMargin} to={econ.currentMargin} size="xl" toLabel={completed ? "Real final" : "Proyectada"} />
         )}
+        {extra > 0 && <p className="mt-2 text-xs text-slate-600">Incluye costo de horas propias y distribuidas: {formatCurrency(staffHoursCost(ledger,project.id))}; externos y tercerizaciones: {formatCurrency(externalCost(ledger,project.id))}. Registrados una sola vez.</p>}
+        {pending.length > 0 && <p role="status" className="mt-2 rounded bg-amber-50 p-3 text-sm text-amber-900">Rentabilidad parcial: {pending.length} trabajos externos con costo pendiente de confirmar por Gerencia.</p>}
         {missingCosts.length > 0 && <p className="mt-3 rounded-md bg-amber-50 p-3 text-sm text-amber-900">Sin costos registrados en {missingCosts.map(c=>CATEGORY_LABELS[c.category]).join(", ")}. Esto no confirma un costo cero. Revisá las cargas antes de interpretar la rentabilidad{completed ? " final" : ""}.</p>}
         <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <Money label="Precio de venta" value={priceText} hint={noPriceHint} />

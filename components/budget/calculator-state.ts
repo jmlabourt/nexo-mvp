@@ -58,6 +58,7 @@ export interface RubroRow {
  * y horas de diseño y de administración de ese rubro en ese mueble.
  */
 export interface ProductRubroRow {
+  staffHours?: Array<{ rateId: string; name: string; category: "design" | "admin"; hours: string; hourlyCost: number }>;
   key: string;
   rubro: RubroId;
   hours: string;
@@ -190,7 +191,7 @@ export const productLabel = (p: Pick<ProductRow, "name">, index: number) => p.na
 
 /** ¿El rubro del mueble tiene algo cargado además de las horas? (materiales, diseño o administración) */
 const rubroHasExtras = (r: ProductRubroRow) =>
-  (r.materials ?? []).some((m) => m.name.trim() && n(m.quantity) > 0) || n(r.designHours ?? "") > 0 || n(r.adminHours ?? "") > 0;
+  (r.materials ?? []).some((m) => m.name.trim() && n(m.quantity) > 0) || n(r.designHours ?? "") > 0 || n(r.adminHours ?? "") > 0 || (r.staffHours ?? []).some((h) => n(h.hours) > 0);
 
 /** Rubro con horas de operarios escritas: es mano de obra del mueble (y lo que el Jefe de planta asigna). */
 const hasLaborHours = (r: ProductRubroRow) => r.hours.trim() !== "";
@@ -269,6 +270,7 @@ function productQuoteRubros(s: Pick<CalcState, "products">): Array<{ productKey:
           ...(labor ? { totalHours: labor.totalHours } : {}),
           designHours: n(r.designHours ?? ""),
           adminHours: n(r.adminHours ?? ""),
+          staffHours: (r.staffHours ?? []).map((h) => ({ ...h,hours:n(h.hours) })),
           amount: 0,
         };
         return { productKey: row.key, rubroKey: r.key, quote };
