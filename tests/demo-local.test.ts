@@ -2,7 +2,7 @@
 // Modo demostración local: guardado versionado en el navegador, un único estado compartido, restaurar y salir sin
 // tocar ninguna empresa real.
 import { beforeEach, describe, expect, it } from "vitest";
-import { DEMO_ACTIVE_KEY, DEMO_DATA_KEY, DEMO_SCHEMA_VERSION, demoDataChanged, isDemoActive, pickDemoData, readDemo, writeDemo, type DemoStorage } from "@/store/demo-local";
+import { DEMO_ACTIVE_KEY, DEMO_DATA_KEY, DEMO_SCHEMA_VERSION, backupDemoScenario, createDemoScenario, demoDataChanged, isDemoActive, parseDemoScenario, pickDemoData, readDemo, restoreDemoScenario, validateDemoScenario, writeDemo, type DemoStorage } from "@/store/demo-local";
 import { useAppStore } from "@/store/use-app-store";
 import type { Ledger } from "@/types";
 import { EMPTY_LEDGER } from "@/lib/ledger";
@@ -31,6 +31,68 @@ describe("almacenamiento de la demo (funciones puras)", () => {
     expect(pickDemoData(state)).toEqual({ projects });
     expect(demoDataChanged({ ...state }, state)).toBe(false);
     expect(demoDataChanged({ ...state, projects: [] }, state)).toBe(true);
+  });
+
+  it("exporta e importa un escenario demo con versión y estructura válidas", () => {
+    const st = memory();
+    const data = {
+      projects: [{ id: "p-ot1060", code: "OT1060", name: "AUDIT-001", status: "production", budgetLines: [], items: [] }],
+      assignments: [{ id: "asg-1", projectId: "p-ot1060", itemId: "itm-1", rubro: "carpinteria_madera", operatorId: "op-juan", date: "2026-10-30", plannedHours: 8 }],
+      orders: [],
+      dayExceptions: [],
+      deliveries: [],
+      operators: [{ id: "op-juan", name: "Juan", role: "operario", active: true }],
+      stock: [],
+      requests: [],
+      settings: { name: "Demo test" },
+      resolvedAlertIds: [],
+      reviewedHoursKeys: [],
+      costSettings: { laborValuation: "operator", hoursPerDay: 8 },
+      hourRates: [{ id: "labor", name: "Labor", hourlyRate: 15000 }],
+      priceHistory: [],
+      corrections: [],
+      ledger: { ...EMPTY_LEDGER },
+    };
+
+    writeDemo(data, st, "2026-10-30T00:00:00Z");
+    const scenario = createDemoScenario(data, "audit-ot1060", "2026-10-30T00:00:00Z", "http://127.0.0.1:3000");
+    expect(validateDemoScenario(scenario)).toEqual(scenario);
+    expect(parseDemoScenario(JSON.stringify(scenario))).toEqual(scenario);
+
+    const st2 = memory();
+    expect(restoreDemoScenario(scenario, st2, scenario.savedAt)).toBe(true);
+    expect(readDemo(st2)).toEqual(data);
+  });
+
+  it("rechaza archivos inválidos y crea respaldo antes de importar", () => {
+    const st = memory();
+    const validData = {
+      projects: [{ id: "p-1", code: "P-1", name: "Proyecto", status: "approved", budgetLines: [], items: [] }],
+      assignments: [],
+      orders: [],
+      dayExceptions: [],
+      deliveries: [],
+      operators: [],
+      stock: [],
+      requests: [],
+      settings: {},
+      resolvedAlertIds: [],
+      reviewedHoursKeys: [],
+      costSettings: { laborValuation: "operator", hoursPerDay: 8 },
+      hourRates: [],
+      priceHistory: [],
+      corrections: [],
+      ledger: { ...EMPTY_LEDGER },
+    };
+    writeDemo(validData, st, "2026-10-30T00:00:00Z");
+
+    expect(validateDemoScenario({ kind: "demo-scenario", version: DEMO_SCHEMA_VERSION - 1, savedAt: "2026-10-30", name: "x", data: validData })).toBeNull();
+    expect(validateDemoScenario({ kind: "demo-scenario", version: DEMO_SCHEMA_VERSION, savedAt: "2026-10-30", name: "x", data: {} })).toBeNull();
+
+    const backup = backupDemoScenario(st, "2026-10-30T00:00:00Z");
+    expect(backup).not.toBeNull();
+    expect(backup?.data).toEqual(validData);
+    expect(backup?.kind).toBe("demo-scenario");
   });
 });
 

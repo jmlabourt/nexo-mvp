@@ -8,8 +8,10 @@
 
 export const DEMO_DATA_KEY = "blerp-demo:datos";
 export const DEMO_ACTIVE_KEY = "blerp-demo:activa";
+export const DEMO_BACKUP_KEY_PREFIX = "blerp-demo:backup:";
 /** Subir este número cuando cambie la forma de los datos guardados: una copia vieja se descarta y se restaura el fixture. */
 export const DEMO_SCHEMA_VERSION = 2;
+export const DEMO_SCENARIO_KIND = "demo-scenario";
 
 /** Lo que se guarda: los datos de la demo, sin identidad de usuario ni estado de sincronización. */
 export type DemoData = Record<string, unknown>;
@@ -18,6 +20,18 @@ export interface DemoSnapshot {
   version: number;
   savedAt: string;
   data: DemoData;
+}
+
+export interface DemoScenarioFile {
+  kind: typeof DEMO_SCENARIO_KIND;
+  version: number;
+  savedAt: string;
+  name: string;
+  data: DemoData;
+  source?: {
+    host?: string;
+    url?: string;
+  };
 }
 
 /** Almacenamiento mínimo (localStorage en el navegador; un objeto en memoria en los tests). */
@@ -88,6 +102,81 @@ export function clearDemo(storage: DemoStorage | null = browserStorage()): void 
   } catch {
     // nada que borrar
   }
+}
+
+export function formatDemoScenarioName(name?: string): string {
+  const cleaned = (name ?? "demo-scenario").trim().toLowerCase().replace(/[^a-z0-9-_]+/g, "-").replace(/^-+|-+$/g, "");
+  return cleaned || "demo-scenario";
+}
+
+export function createDemoScenario(data: DemoData, name = "demo-scenario", now = new Date().toISOString(), origin?: string): DemoScenarioFile {
+  return {
+    kind: DEMO_SCENARIO_KIND,
+    version: DEMO_SCHEMA_VERSION,
+    savedAt: now,
+    name: name || "demo-scenario",
+    data,
+    source: origin ? { host: origin } : undefined,
+  };
+}
+
+export function validateDemoScenario(value: unknown): DemoScenarioFile | null {
+  if (!value || typeof value !== "object") return null;
+  const candidate = value as Partial<DemoScenarioFile> & Record<string, unknown>;
+  if (candidate.kind !== DEMO_SCENARIO_KIND) return null;
+  if (candidate.version !== DEMO_SCHEMA_VERSION) return null;
+  if (typeof candidate.savedAt !== "string" || candidate.savedAt.length === 0) return null;
+  if (typeof candidate.name !== "string" || candidate.name.length === 0) return null;
+  if (!candidate.data || typeof candidate.data !== "object") return null;
+  const keys = Object.keys(candidate.data as Record<string, unknown>);
+  if (keys.length === 0) return null;
+  for (const field of DEMO_DATA_FIELDS) {
+    if (!Object.prototype.hasOwnProperty.call(candidate.data, field)) return null;
+  }
+  return candidate as DemoScenarioFile;
+}
+
+export function parseDemoScenario(raw: string): DemoScenarioFile | null {
+  try {
+    return validateDemoScenario(JSON.parse(raw));
+  } catch {
+    return null;
+  }
+}
+
+export function downloadDemoScenario(scenario: DemoScenarioFile, filename = `blerp-demo-${formatDemoScenarioName(scenario.name)}.json`): boolean {
+  if (typeof window === "undefined" || typeof document === "undefined") return false;
+  try {
+    const blob = new Blob([JSON.stringify(scenario, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    link.click();
+    URL.revokeObjectURL(url);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function backupDemoScenario(storage: DemoStorage | null = browserStorage(), now = new Date().toISOString()): DemoScenarioFile | null {
+  const data = readDemo(storage);
+  if (!data) return null;
+  const snapshot = createDemoScenario(data, `backup-${new Date(now).toISOString().replace(/[:.]/g, "-")}`, now, typeof window !== "undefined" ? window.location.origin : undefined);
+  try {
+    const key = `${DEMO_BACKUP_KEY_PREFIX}${Date.now()}`;
+    storage?.setItem(key, JSON.stringify(snapshot));
+    return snapshot;
+  } catch {
+    return null;
+  }
+}
+
+export function restoreDemoScenario(scenario: DemoScenarioFile, storage: DemoStorage | null = browserStorage(), now = scenario.savedAt): boolean {
+  const valid = validateDemoScenario(scenario);
+  if (!valid || !storage) return false;
+  return writeDemo(valid.data, storage, now);
 }
 
 /** Claves del estado que forman los datos de la demo (todo lo demás es sesión, identidad o interfaz). */
