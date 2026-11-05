@@ -80,7 +80,7 @@ Existen exactamente **cinco vistas de Blerp**. Los puestos «Comercial», «Dise
 | Vista | Responsabilidad principal | Datos que origina o modifica | Qué no debe hacer |
 |---|---|---|---|
 | **Gerencia** | Control económico y operativo; configuración; costos, capacidad, cobros, rentabilidad y cierre | Parámetros, personal y acceso demo, cobros, decisiones económicas, costos externos confirmados, cierre | No inventar consumos/horas para alimentar indicadores ni cerrar con costos sin confirmar. |
-| **Administración** | Cotizar, gestionar proyectos/clientes, definir muebles/rubros y publicar BOM | Cotizaciones, presupuesto, condiciones de cobro, clientes, BOM y revisiones | No registrar compras desde un módulo duplicado ni fijar categorías «Diseño/Administración» para todas las empresas. |
+| **Administración** | Cotizar, gestionar proyectos/clientes, definir muebles/rubros y publicar BOM; registrar otros costos autorizados y operar la facturación/pagos existentes | Cotizaciones, presupuesto, condiciones de cobro, clientes, BOM y revisiones; otros costos directos, rectificaciones auditadas y movimientos administrativos habilitados en el ledger compartido | No registrar compras desde un módulo duplicado, ni acceder a salarios individuales o rentabilidad reservada a Gerencia, ni fijar categorías «Diseño/Administración» para todas las empresas. |
 | **Compras** | Detectar necesidades, gestionar órdenes, proveedores, recepciones y stock de abastecimiento | OCs, partidas/asignaciones vinculadas, recepción, catálogo de proveedores compartido | No exponer el detalle de consumo productivo, horas o avances; no requerir carga de comprobantes. |
 | **Jefe de Planta** | Planificar semanalmente, gestionar disponibilidad, materiales, avance, externos, corrección de horas y alertas | Asignaciones, excepciones, movimientos productivos, unidades terminadas, tercerizaciones y rectificaciones auditadas | No volver a cargar las horas internas de todos como fuente duplicada; no cambiar salarios o costo base. |
 | **Operario** | Consultar asignación y registrar las horas que realmente trabajó | Registro individual de horas por fecha/proyecto/rubro y mueble cuando se conoce; trabajo interno general | No registrar costos, precios, cobros, rentabilidad ni necesariamente materiales. |
@@ -129,6 +129,8 @@ No incorporar automáticamente una etapa obligatoria de «Instalación», «Visu
 3. **Inicio real de fabricación:** primer trabajo productivo efectivamente registrado; **no** primera compra ni primera recepción.
 4. **Entrega prevista:** compromiso de entrega; sirve para urgencias y capacidad futura.
 
+El **inicio normal de fabricación** no debe exigir un «motivo operativo» artificial: si el flujo permite registrar o confirmar el inicio manualmente, la fecha efectiva es obligatoria y el motivo puede ser opcional. Exigir motivo únicamente para excepciones, correcciones o cambios retroactivos que lo justifiquen. Un cambio de estado a «Producción» por recepción/asignación **no** crea una fecha falsa de primer trabajo real.
+
 Conservar fechas reales de entrega, cobro y otras marcas de auditoría si existen. No asumir `aprobación = inicio real` ni `Producción = inicio real`. Un proyecto puede necesitar compras antes de que empiece a fabricarse.
 
 **Históricos:** preservar la fecha del evento, no reemplazarla por «hoy» al reabrir o corregir. Para reportes usar la fecha relevante de cada indicador (aprobación, cobro efectivo, trabajo realizado, etc.).
@@ -156,6 +158,9 @@ Preferir en nombres de componentes y textos genéricos «identificador de proyec
 - **Costo de mano de obra interna de proyecto**: registros de horas reales atribuibles × costo horario aplicable al empleado/categoría, contabilizados **una sola vez**. No usar las horas planificadas como reales. Si existen reglas de horas extra configuradas, aplicarlas sin hardcodear porcentajes.
 - **Costos de externos y tercerizaciones**: una única imputación por hecho económico, diferenciando costo estimado, pendiente y confirmado. No duplicar como «otros gastos».
 - **Trabajo interno general**: costo indirecto distribuido según la regla de la sección 6.5, sin crear horas ficticias en rubros.
+- **Otros costos directos:** un hecho económico identificable (por ejemplo, flete, instalación o gasto administrativo directamente atribuible) puede registrarse desde Gerencia y desde Administración conforme a permisos, con proyecto, categoría, descripción, importe, fecha efectiva, autor y referencia/origen cuando exista. Ambos roles deben operar **el mismo registro compartido**, sin duplicarlo.
+- **Rectificaciones económicas:** permitir corregir o anular un costo real mal registrado sin borrar la trazabilidad. Conservar registro original, valores anterior y nuevo, autor, fecha y motivo, y recalcular los resultados afectados una sola vez.
+- **Ahorro** puede significar (a) una **diferencia calculada** entre presupuesto y costo efectivamente constatado —que en proyectos abiertos es solo parcial— o (b) un **beneficio económico real documentado**, como descuento confirmado, nota de crédito o devolución. No crear un ingreso, costo negativo ni «ahorro» por intuición. Una bonificación efectiva solo ajusta el costo imputable correspondiente cuando la operación de origen y su tratamiento están verificados; evitar doble conteo con cobros, pagos, stock y otras correcciones.
 - Conservar otros componentes previstos por el modelo (otros gastos directos, fletes, etc.) si están implementados correctamente. **No cambiar fórmulas específicas del cotizador por conjetura**; revisar su origen y aplicar la regla solicitada sin inventar supuestos.
 - Resultado por proyecto, conceptualmente: `ganancia = venta neta pertinente − costos imputables no duplicados`; `margen % = ganancia / venta neta pertinente × 100`. Respetar en la implementación la definición vigente de descuentos, impuestos y costo financiero; no mezclar importes con y sin IVA.
 - Los proyectos abiertos muestran **resultados parciales o proyecciones**, nunca «rentabilidad real final» si faltan consumos y horas. La rentabilidad final exige costos suficientemente conciliados y cierre.
@@ -187,6 +192,7 @@ Sumar tramos según anticipos y cuotas: el cobro reduce el saldo desde la fecha 
 - Si una hora se conoce solamente a nivel **proyecto + rubro**, conservar esa granularidad. No prorratearla silenciosamente entre muebles para que cierren los gráficos. Mostrar como «sin mueble identificado» o pendiente de asignar cuando corresponda.
 - Las **horas de operarios externos** las registra Planta y se computan separadas de las internas. Nunca generar falsa diferencia interna al conciliarlas.
 - La **calculadora rápida** `n.º operarios × horas por persona` es ayuda para estimar/controlar, **no** segunda fuente de horas reales ni de costos. El total real interno proviene de entradas individuales verificadas.
+- La auditoría de **correcciones de horas, cobros, pagos y otros costos** debe permitir reconstruir el estado anterior y posterior: identificador del movimiento, valor anterior, valor nuevo, fecha efectiva, fecha de corrección, autor y motivo. No limitar el historial a IDs técnicos incomprensibles; los datos subyacentes deben existir aunque su presentación visual se refine después.
 - Una diferencia respecto a la **planificación** puede ser legítima; no tratar automáticamente como fraude/error. Alertar registros incompletos, inconsistencias comprobables y faltantes vencidos, con acceso a corrección.
 
 ### 6.4. Capacidad y demanda semanal
@@ -229,10 +235,28 @@ No imputar estas horas a rubros productivos ni usarlas para los gráficos de hor
 - La comparación cotizado vs. real debe tener **igual alcance** (proyecto, mueble, rubro, fechas, unidad) y aclarar registros sin atribución granular.
 - El porcentaje de desvío requiere denominador cotizado válido; evitar dividir por cero y falsos `100%` cuando falta referencia.
 - Separar gráficos/tablas de **trabajos terminados** de los **parciales** o etiquetar explícitamente el segundo grupo.
-- Las tarjetas de dinero cobrado usan **cobros efectivamente registrados**; los saldos pendientes usan contrato vigente menos cobros reales hasta la fecha de corte. No sumar nuevamente un anticipo.
+- Las tarjetas de dinero cobrado usan **cobros efectivamente registrados**; los saldos pendientes usan contrato vigente menos cobros reales hasta la fecha de corte. No sumar nuevamente un anticipo. **Pendiente contractual** y **saldo de facturas emitidas** no son sinónimos: deben distinguirse en su definición, cálculo y etiqueta. Un cobro del mes y un pendiente acumulado al corte pueden tener alcances temporales distintos, pero debe decirlo explícitamente.
 - **Proyectos aprobados** considera el **evento de aprobación del período**, incluso si el proyecto ya avanzó a Compras/Producción/Cerrado; no filtrar solo por estado actual `Aprobado`.
 - El subtotal de «Costos del período» pedido para dashboard se refiere a `desperdicios + otros gastos directos + costo financiero`; **no** es el costo total de fabricar. Si desperdicio ya está en costo real de material, mostrarlo como desglose sin agregarlo dos veces al resultado económico.
 - Los KPIs y tablas con filtro global deben usar el tipo de fecha correcto para cada métrica. No interpretar datos faltantes como `0` real y no comparar períodos incompatibles.
+- Los desvíos y alertas deben explicar el **registro que los origina**. Si «¿Dónde se está desviando?» muestra un costo introducido como «Otro costo», permitir identificar su categoría, detalle, importe, fecha y procedencia; no presentarlo como un gasto genérico sin origen. Los estados visuales («dentro del presupuesto», «excedido», etc.) deben concordar con la comparación real.
+
+### 6.7. Diccionario obligatorio de indicadores y cálculos de Gerencia
+
+**Todo indicador, valor derivado o cálculo visible en Gerencia → Dashboard debe tener su explicación accesible en Gerencia → Configuración → Indicadores y cálculos.** Esto incluye **todas** las tarjetas —también las acumuladas y parciales—, tablas, series y barras de gráficos, porcentajes, subtotales, comparaciones, desvíos, alertas numéricas y detalles plegables. No documentar solamente los KPI principales.
+
+Para **cada indicador**, explicar de forma sencilla pero precisa:
+
+1. **Qué es y para qué sirve**, qué unidad representa (pesos, horas, porcentaje, cantidad, etc.).
+2. **Fórmula o regla de cálculo exacta** y significado de cada variable; para métricas no expresables como fórmula, condiciones y reglas de inclusión.
+3. **De dónde sale cada dato**: movimientos, entidades y atributos concretos (por ejemplo, contratos aprobados, registros de cobros efectivos, horas trabajadas, consumo y desperdicio de materiales, otros costos, fechas de aprobación). La explicación debe apuntar a la **misma fuente de verdad y función compartida** que utiliza realmente el indicador, no a una fórmula idealizada o copiada.
+4. **Qué proyectos, estados, conceptos y movimientos incluye/excluye**, y cómo evita duplicaciones, rectificaciones anuladas o sumar costos que ya forman parte de otro subtotal.
+5. **Qué fecha usa y cómo interactúa con Desde/Hasta**: fecha efectiva de cobro, aprobación, horas, corte o período acumulado, indicando claramente cuándo un indicador es del período seleccionado y cuándo representa el total al corte de todos los proyectos relevantes.
+6. **Cómo se actualiza** al cargar, modificar, anular o corregir datos y qué otras vistas deberían reflejar el mismo hecho.
+7. **Cómo interpretar el resultado**: estimado, parcial, proyectado, final, pendiente o no disponible; definición de signo positivo/negativo en desvíos y casos de denominador cero, faltantes o sin movimientos.
+8. **Ejemplo breve y consistente** si mejora la comprensión, identificado como ilustrativo y sin presentarlo como datos reales de la empresa.
+
+La sección debe funcionar como **diccionario completo y mantenido**, con un apartado por indicador/cálculo (o agrupación inequívoca que permita encontrar cada uno). Si se crea o modifica un cálculo del Dashboard, su documentación se **agrega o actualiza en la misma intervención** y se prueba que coincide con el código y los registros de origen. No inventar una fórmula para completar documentación: investigar la implementación, y si no puede justificarse, señalarlo como pendiente en lugar de ofrecer una explicación falsa.
 
 ## 7. Materiales, BOM, Compras y stock — invariantes
 
@@ -248,12 +272,15 @@ BOM por proyecto/mueble/rubro
 ```
 
 - **Una OC puede incluir materiales para varios proyectos**: conservar atribución por línea y cantidades asignadas; evitar comprar dos veces lo ya disponible, reservado o pedido.
+- **Compras para stock general:** Compras debe poder crear OCs **sin proyecto asociado** para reponer depósito, con proveedor, materiales, cantidades, costos unitarios y fechas reales. Admitir recepciones parciales y registrar lotes/origen/costo histórico cuando corresponda. Lo recibido queda como **stock libre** hasta una asignación real. Administración debe poder consultar la información administrativa pertinente de estas compras desde el flujo compartido existente, **sin crear un módulo paralelo de Compras**. No computar la OC, su recepción o el pago como costo productivo de un proyecto si todavía no se consumió/desperdició material.
+- **Responsabilidad de la asignación:** Compras administra el abastecimiento y la asignación/reserva a proyectos. Planta registra consumo, desperdicio y sobrantes del material efectivamente atribuido al proyecto. Si existe un acceso directo desde depósito libre a consumo, debe producir un movimiento trazable y autorizado que preserve esta responsabilidad, **sin inventar una asignación implícita opaca** ni introducir pasos burocráticos innecesarios. Si el diseño vigente contradice esta decisión, informar el conflicto antes de reestructurarlo.
 - **Las compras pueden ocurrir antes de producción**, y pueden tener recepciones parciales. Una OC abierta no equivale a stock físico.
 - **La compra no se imputa inmediatamente como costo de material real**. Reconocer lo efectivamente consumido o desperdiciado conforme a la valoración del origen. El sobrante reutilizable retorna a stock; preservar su valor y procedencia para imputarlo correctamente cuando otro proyecto lo consuma.
 - Mantener trazabilidad de lote/costo histórico **cuando esté disponible**; no inventar valores históricos ni reconstruir costos con el precio actual si hay un costo real de origen guardado.
 - Los cambios de BOM deben quedar **versionados** y generar diferencias/necesidades nuevas; no editar retroactivamente OCs, recepciones o consumos.
 - Para material asignado/liberado, conservar cantidades: `asignado/entregado = consumido + desperdiciado + retornado como sobrante + todavía asignado`, teniendo en cuenta transferencias y ajustes registrados. No permitir stock negativo silencioso ni movimientos imposibles.
 - Si una misma pieza circula entre proyectos, registrar la **transferencia de stock** y ajustar ambas atribuciones; no duplicar existencias ni costos.
+- El **sobrante reutilizable es parte de las existencias físicas** (libres o asignadas): no se suma como una existencia adicional. Al transferir o devolver, mantener la conservación de cantidades, costo de origen y material/lote. Asegurar que «Por comprar» y cobertura de BOM consideren pedidos pendientes y existencias disponibles sin duplicar la misma unidad.
 - Planta registra **por proyecto → mueble → rubro → material** y marca unidades terminadas **del mueble completo**. Materiales extra pedidos por Planta deben generar una necesidad trazable de Compras; un rubro de trabajo nuevo no debe aparecer por arte de magia: requiere actualización autorizada de la estructura del proyecto/BOM según el flujo de Administración.
 - Un proyecto en ejecución puede tener materiales todavía asignados. Al cierre, esos materiales deben quedar rendidos: consumidos, desperdiciados, sobrantes o transferidos según regla vigente.
 
@@ -272,13 +299,13 @@ Estas son **decisiones funcionales vigentes**, no órdenes de reconstruir pantal
 ### 8.1. Gerencia
 
 - Preservar Dashboard, Proyectos, Personal, Stock y Configuración, más las funciones existentes que no contradigan reglas actuales.
-- Cuatro tarjetas: **Dinero cobrado, Pendiente de cobrar, Rentabilidad total y Proyectos aprobados** (importe y cantidad). Preservar filtro global de fechas.
+- **Preservar las tarjetas que ya muestra el Dashboard vigente** —incluidas Ganancia económica acumulada (parcial), Proyectos aprobados, Dinero cobrado, Pendiente de cobro y Rentabilidad total al corte (parcial), observadas en la versión actual—. La indicación histórica de «cuatro tarjetas» **no autoriza eliminar la quinta**. Priorizar definiciones, fechas y cálculos correctos sobre una cantidad fija de tarjetas. Preservar el filtro global y aclarar cuáles métricas lo aplican como período y cuáles usan corte acumulado.
 - **Dinero cobrado por proyecto:** tabla sencilla con código visible, cliente, cobro efectivo del período y acceso al detalle; **no** gráfico horizontal de cobros.
 - **Eliminar «Cobros por semana»** del Dashboard; no agregar otro equivalente sin solicitud.
 - **Desvíos de producción:** tres gráficos compactos: (a) horas cotizadas vs. reales por proyecto, (b) desvíos de horas por rubro —barras horizontales—, (c) materiales cotizados vs. reales por proyecto en pesos. Abrir detalle por mueble/rubro/material al seleccionar; tablas detalladas plegables. No sobrecargar etiquetas: en el eje usar el **identificador corto del nomenclador** y tooltip con nombre completo.
 - Conservar rentabilidad cotizada vs. real, capacidad por rubro, alertas y detalle/trazabilidad de cálculos. No usar cifras aleatorias para llenar gráficos.
 - **Personal:** única gestión de empleados, con categoría/puesto, jornada, días, rubros habilitados y costo horario visible; acceso habilitado y **Vista de Blerp** (exactamente cinco opciones) en la misma ficha. Los costos se modifican desde la configuración económica correspondiente, no desde un duplicado.
-- **Configuración → Indicadores y cálculos:** diccionario de desplegables que explica qué es, fórmula, origen y actualización del indicador. No selector de «OT para los ejemplos», controles de demo, botones de indicadores o filtros redundantes. Los cálculos por proyecto van en su detalle/«Ver cálculo».
+- **Configuración → Indicadores y cálculos:** diccionario **exhaustivo** y accesible desde Gerencia de **todos** los indicadores, gráficos, tablas, subtotales, porcentajes, desvíos y alertas numéricas del Dashboard, con nombre, significado, fórmula exacta, fuente real de cada dato, inclusiones/exclusiones, fechas/filtros, actualización y estado parcial/final (sección 6.7). No selector de «OT para los ejemplos», controles de demo, botones de indicadores o filtros redundantes. Los cálculos particulares por proyecto pueden ampliarse en su detalle/«Ver cálculo», pero el indicador general del Dashboard **también debe estar explicado en Configuración**.
 - **Configuración:** nomenclatura de **proyectos**, costos por hora, márgenes, tasa financiera, capacidad y criterios de alerta editables; no parámetros fijos de By Braun.
 
 ### 8.2. Administración
@@ -288,6 +315,8 @@ Estas son **decisiones funcionales vigentes**, no órdenes de reconstruir pantal
 - Publicación de BOM comunica automáticamente las necesidades a Compras. Mantener versiones y adicionales autorizados sin alterar el presupuesto aprobado original.
 - Cliente se agrega desde la pestaña **Clientes**; no duplicar clientes en dos módulos.
 - No reintroducir la carga de OCs desde Administración si Compras es quien debe registrarlas.
+- Permitir **«Registrar otro costo»** directo de un proyecto en Administración, además de Gerencia, con clasificación, fecha, importe, descripción, autor y referencia disponibles; conservar auditoría de corrección/anulación y una sola imputación económica. El resultado compartido se refleja en Gerencia, pero Administración no debe ver costos salariales internos confidenciales, márgenes ni rentabilidad reservada.
+- **Conservar «Administración → Facturación y pagos»** y las operaciones de facturas, cobros, solicitudes/pagos a proveedores y sus rectificaciones **ya implementadas**. No duplicar el ledger ni crear un segundo módulo; una compra/pago no cambia por sí sola el costo productivo real.
 
 ### 8.3. Compras
 
@@ -327,7 +356,7 @@ Distinguir:
 
 El Jefe de Planta puede ingresar un **costo provisional/conocido**. **Gerencia lo confirma o reemplaza por el definitivo**. Hasta entonces aparece **«Pendiente de confirmar»** o «Estimado», no $0 confirmado. Registrar solo una imputación económica por el mismo refuerzo/trabajo.
 
-**Cierre exclusivo de Gerencia** y condicionado a: muebles finalizados; entrega/rendición requerida registrada según el flujo existente; materiales conciliados; registros de horas suficientemente completos/revisados; costos de externos y tercerizaciones confirmados; otros costos indispensables no pendientes. Informar exactamente qué bloquea el cierre. **No exigir cobro total para cerrar la fabricación**: las cuentas por cobrar y sus cobros posteriores siguen activos.
+**Cierre exclusivo de Gerencia** y condicionado a: muebles finalizados; entrega/rendición requerida registrada según el flujo existente; materiales conciliados; registros de horas suficientemente completos/revisados; costos de externos y tercerizaciones confirmados; otros costos indispensables no pendientes. Informar exactamente qué bloquea el cierre. **No convertir costos reales ausentes en $0 confirmado** ni informar ganancia o margen «final» cuando persisten costos productivos/administrativos obligatorios sin conciliar: bloquear la confirmación cuando corresponda o identificar explícitamente el resultado como provisional, sin ocultar faltantes. **No exigir cobro total para cerrar la fabricación**: las cuentas por cobrar y sus cobros posteriores siguen activos.
 
 ## 10. Reglas para modificar el MVP
 
@@ -338,7 +367,7 @@ El Jefe de Planta puede ingresar un **costo provisional/conocido**. **Gerencia l
 - Mantener datos demo coherentes y conectados; si hay datos ficticios, identificarlos como demo. No generar valores al azar por cada tarjeta/serie para que un gráfico parezca completo. Si faltan registros, mostrar estado vacío o pendiente.
 - Preservar mecanismo actual de persistencia local y reset de demo. **No exigir Supabase ni credenciales externas para usar el modo demo que ya funciona.** No reinicializar el estado cada vez que renderiza ni perder cambios del usuario al navegar.
 - Si hay código de Supabase o integraciones ya presentes, **no tocarlos** sin autorización. No afirmar que el frontend demuestra permisos de seguridad de backend.
-- No introducir QR, módulo nuevo de facturación, integración contable o automatizaciones no solicitadas.
+- No introducir QR, **un módulo de facturación duplicado** ni ampliaciones contables no solicitadas. **Conservar el módulo existente «Administración → Facturación y pagos»** y su ledger compartido: la prohibición histórica de «módulo nuevo» no es motivo para eliminar funcionalidades ya implementadas. No añadir integración contable o automatizaciones no solicitadas.
 
 ### 10.2. Límites de autorización
 
@@ -381,7 +410,9 @@ Si algo no está definido, implementar solo la parte segura y comunicar **el pun
 - **Tercerización:** costo desconocido queda pendiente; costo provisional del jefe requiere confirmación; se bloquea cierre y no se duplica costo ni capacidad.
 - **Financiero:** anticipo y saldo, cuotas, retraso efectivo, tasa editable y tasa cero. No aplicar porcentaje fijo por defecto basado en un cliente.
 - **Trabajo interno:** un registro se distribuye monetariamente entre proyectos activos **de su fecha**, sin duplicar horas ni costo; ausencia de proyectos no genera una división inválida.
-- **Dashboard:** indicadores coinciden con las fuentes; proyectos abiertos son parciales; desvíos comparan alcances homogéneos; cobrado es cobrado real, no cobro previsto.
+- **Dashboard:** indicadores coinciden con las fuentes; proyectos abiertos son parciales; desvíos comparan alcances homogéneos; cobrado es cobrado real, no cobro previsto. **Cada** indicador y cálculo del Dashboard está explicado en **Configuración → Indicadores y cálculos** con la fórmula, origen, alcance y fechas realmente implementados.
+- **Stock general y otros costos:** OC sin proyecto y recepciones parciales incrementan stock libre, nunca costo productivo automáticamente; asignación/consumo posterior conserva lote y costo. Administración registra y rectifica un costo directo una sola vez; un ahorro o crédito documentado no duplica reducción de costos.
+- **Auditoría:** cambios a horas, otros costos, cobros y pagos permiten reconstruir antes/después, autor, motivo y fechas; los totales se reconcilian tras cada corrección.
 - **Demo:** carga, navegación, edición, persistencia local y reinicio intencional siguen funcionando; ningún cambio exige conexión a Supabase si antes no la requería.
 
 ## 12. Pendientes y límites de conocimiento — NO resolver por suposición
