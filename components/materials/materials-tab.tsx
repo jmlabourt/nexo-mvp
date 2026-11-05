@@ -173,8 +173,9 @@ export function MaterialsTab({
 }) {
   const stock = useAppStore((s) => s.stock);
   const projects = useAppStore((s) => s.projects);
-  const { isManager } = useIdentity();
-  const canManage = isManager && !project.isClosed && canExecute(project.status);
+  const { isManager,session } = useIdentity();
+  const local = useAppStore((s)=>s.demoLocal);
+  const canManage = isManager && (!local || session !== "gerencia") && !project.isClosed && canExecute(project.status);
   const rows = useMemo(() => materialRows(project), [project]);
   const insights = useMemo(() => materialInsights(project, stock), [project, stock]);
   const usages = [...project.materialUsages].sort((a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt));

@@ -1,4 +1,7 @@
 "use client";
+import { useAppStore } from "@/store/use-app-store";
+import { profitView } from "@/lib/tablero";
+import { todayISO } from "@/lib/formatting";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { ProjectView } from "@/store/selectors";
@@ -22,7 +25,7 @@ export function GeneralStateBadge({ state }: { state: GeneralState }) {
  * cerrados). Sin `economic` (Administración): muebles y avance, ningún importe gerencial.
  */
 export function ProjectsTable({ views, economic }: { views: ProjectView[]; economic: boolean }) {
-  const router = useRouter();
+  const router = useRouter();const ledger=useAppStore(s=>s.ledger),cutoff=todayISO();
   return (
     <Table>
       <THead>
@@ -37,8 +40,8 @@ export function ProjectsTable({ views, economic }: { views: ProjectView[]; econo
               <TH className="text-right">Precio de venta</TH>
               <TH className="text-right">Costo presupuestado</TH>
               <TH className="text-right">Costo proyectado</TH>
-              <TH className="text-right">Ganancia proyectada</TH>
-              <TH className="text-right">Rentabilidad proyectada</TH>
+              <TH className="text-right">Ganancia acumulada al {cutoff}</TH>
+              <TH className="text-right">Margen acumulado</TH>
             </>
           ) : (
             <>
@@ -53,8 +56,9 @@ export function ProjectsTable({ views, economic }: { views: ProjectView[]; econo
         {views.map(({ project: p, econ }) => {
           const state = generalState(p);
           const closed = state === "closed";
-          const profit = closed ? econ.finalProfit : econ.projectedProfit;
-          const margin = closed ? econ.finalMargin : econ.projectedMargin;
+          const result=profitView(p,ledger,cutoff);
+          const profit=p.status==="quotation"?null:result.toDate.profit;
+          const margin=p.status==="quotation"?null:result.toDate.margin;
           const production = projectProduction(p);
           return (
             <TR key={p.id} className="cursor-pointer hover:bg-slate-50" onClick={() => router.push(`/projects/${p.id}`)}>
@@ -69,10 +73,10 @@ export function ProjectsTable({ views, economic }: { views: ProjectView[]; econo
               <TD className="whitespace-nowrap tabular">{formatDate(p.dueDate)}</TD>
               {economic ? (
                 <>
-                  <TD className="text-right tabular">{formatCurrencyOrDash(p.salesPrice > 0 ? p.salesPrice : null)}</TD>
+                  <TD className="text-right tabular">{formatCurrencyOrDash((p.status==="quotation"?p.salesPrice:result.toDate.contract)>0?(p.status==="quotation"?p.salesPrice:result.toDate.contract):null)}</TD>
                   <TD className="text-right tabular">{formatCurrency(econ.budgetTotal)}</TD>
                   <TD className={cn("text-right tabular", econ.costOverrun > 0 && "text-red-700")}>{formatCurrency(econ.projectedFinalCost)}</TD>
-                  <TD className={cn("text-right tabular", (profit ?? 0) < 0 ? "text-red-700" : "text-slate-900")}>{formatCurrencyOrDash(profit)}</TD>
+                  <TD className={cn("text-right tabular", (profit ?? 0) < 0 ? "text-red-700" : "text-slate-900")}>{formatCurrencyOrDash(profit)}{p.status!=="quotation"&&<span className="block text-xs">{result.toDate.partial?`Parcial al ${cutoff}`:"Final"}</span>}</TD>
                   <TD className="text-right tabular">
                     {formatPercent(margin)}
                     {closed && <span className="block text-xs text-slate-500">real final</span>}

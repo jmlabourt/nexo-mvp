@@ -1,5 +1,6 @@
 "use client";
 import { addDays } from "@/lib/plant";
+import { useConfiguredOperators } from "@/store/selectors";
 import { useIdentity } from "@/store/selectors";
 import { useConfirmedAction } from "@/store/confirmed-action";
 // Días laborales de un operario y sus excepciones por fecha (Lote 6 · Fase 3). Lo edita el Jefe de planta (o un
@@ -29,7 +30,7 @@ export function ScheduleDialog({ operatorId, onClose }: { operatorId: string | n
 function ScheduleForm({ operatorId, onClose }: { operatorId: string; onClose: () => void }) {
   const { session } = useIdentity();
   const canEditHabitual = session === "gerencia";
-  const operator = useAppStore((s) => s.operators.find((o) => o.id === operatorId));
+  const operator = useConfiguredOperators().find((o) => o.id === operatorId);
   const allExceptions = useAppStore((s) => s.dayExceptions);
   const hoursPerDay = useAppStore((s) => s.costSettings.hoursPerDay);
   const saveSchedule = useConfirmedAction("saveSchedule");

@@ -29,10 +29,10 @@ describe("cada sesión ve exactamente sus pestañas (23 en total)", () => {
     expect(menu("gerencia")).toEqual(["Dashboard", "Proyectos", "Personal", "Stock", "Configuración"]);
   });
   it("Administración / Comercial / Diseño: 7", () => {
-    expect(menu("administracion")).toEqual(["Dashboard", "Proyectos", "Cotizador", "Stock", "Clientes", "Configuración"]);
+    expect(menu("administracion")).toEqual(["Dashboard", "Proyectos", "Cotizador", "Facturación y pagos", "Stock", "Clientes", "Configuración"]);
   });
   it("Compras: 6", () => {
-    expect(menu("compras")).toEqual(["Dashboard", "Necesidades", "Órdenes de compra", "Stock", "Alertas", "Proveedores"]);
+    expect(menu("compras")).toEqual(["Dashboard", "Por comprar", "Órdenes de compra", "Stock", "Alertas", "Proveedores"]);
   });
   it("Jefe de planta: 4 (las asignaciones están dentro de Operarios)", () => {
     expect(menu("jefe_planta")).toEqual(["Hoy", "Planificación", "Proyectos", "Operarios", "Alertas"]);
@@ -41,7 +41,7 @@ describe("cada sesión ve exactamente sus pestañas (23 en total)", () => {
     expect(menu("operario")).toEqual(["Mi día"]);
   });
   it("total: 23 pestañas", () => {
-    expect(SESSION_KEYS.reduce((s, k) => s + navFor(k).length, 0)).toBe(23);
+    expect(SESSION_KEYS.reduce((s, k) => s + navFor(k).length, 0)).toBe(24);
   });
   it("el inicio de cada sesión es su primera pestaña; el de un rol de la base, el de su primera sesión", () => {
     expect(SESSION_KEYS.map(homeFor)).toEqual(["/dashboard", "/administracion", "/compras", "/planta", "/taller"]);

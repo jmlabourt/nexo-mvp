@@ -1,0 +1,14 @@
+"use client";
+import { useState } from "react";
+import type {Project} from "@/types";
+import { useAppStore } from "@/store/use-app-store";
+import { correctCollection,correctInvoice } from "@/lib/post-meeting";
+import { parseDecimal } from "@/lib/schemas";
+import { Input,Select } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+export function FinancialCorrections({project:p}:{project:Project}){
+ const l=useAppStore(s=>s.ledger);const [error,setError]=useState("");
+ return <details><summary>Correcciones y anulaciones con historial</summary>{l.salesInvoices.filter(i=>i.projectId===p.id).map(i=><form key={i.id} className="my-2 flex flex-wrap gap-2 rounded border p-2" onSubmit={e=>{e.preventDefault();const f=new FormData(e.currentTarget);const r=useAppStore.getState().recordLedger(["administracion"],(l,ctx)=>correctInvoice(l,i.id,{amount:parseDecimal(String(f.get("amount"))),dueDate:String(f.get("dueDate"))||undefined,condition:String(f.get("condition")),cancelled:f.get("cancelled")==="on"},String(f.get("reason")),ctx));setError(r.ok?"":r.error);}}><strong>Factura {i.number}</strong><label>Importe factura<Input name="amount" defaultValue={i.amount} required/></label><label>Vencimiento factura<Input name="dueDate" type="date" defaultValue={i.dueDate}/></label><label>Condición factura<Input name="condition" defaultValue={i.condition}/></label><label><input type="checkbox" name="cancelled" defaultChecked={i.cancelled}/> Anulada</label><label>Motivo factura<Input name="reason" required/></label><Button type="submit">Corregir factura</Button></form>)}
+ {l.collections.filter(c=>c.projectId===p.id).map(c=><form key={c.id} className="my-2 flex flex-wrap gap-2 rounded border p-2" onSubmit={e=>{e.preventDefault();const f=new FormData(e.currentTarget);const r=useAppStore.getState().recordLedger(["administracion"],(l,ctx)=>correctCollection(l,p,c.id,{amount:parseDecimal(String(f.get("amount"))),date:String(f.get("date")),invoiceId:String(f.get("invoiceId"))||undefined,notes:String(f.get("notes"))},String(f.get("reason")),ctx));setError(r.ok?"":r.error);}}><strong>Cobro {c.id}</strong><label>Importe cobro<Input name="amount" required defaultValue={c.amount}/></label><label>Fecha efectiva cobro<Input name="date" type="date" required defaultValue={c.date}/></label><label>Aplicación del cobro<Select name="invoiceId" defaultValue={c.invoiceId??""}><option value="">Anticipo sin aplicar</option>{l.salesInvoices.filter(i=>i.projectId===p.id&&!i.cancelled).map(i=><option key={i.id} value={i.id}>{i.number}</option>)}</Select></label><label>Referencia del cobro<Input name="notes" defaultValue={c.notes}/></label><label>Motivo cobro<Input name="reason" required/></label><Button type="submit">Corregir cobro</Button></form>)}
+ {(l.financialCorrections??[]).map(h=><p key={h.id} className="text-xs">{h.at} · {h.by} · {h.entity} {h.targetId}: {h.reason}</p>)}{error&&<p role="alert">{error}</p>}</details>;
+}

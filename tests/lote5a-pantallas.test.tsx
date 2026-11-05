@@ -3,10 +3,8 @@
 import "@testing-library/jest-dom/vitest";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, within } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
 import { buildSeed } from "@/lib/seed-data";
 import { DEFAULT_HOUR_RATES } from "@/lib/constants";
-import { todayISO } from "@/lib/formatting";
 import { useAppStore } from "@/store/use-app-store";
 
 const nav = vi.hoisted(() => ({ pathname: "/dashboard", replace: vi.fn() }));
@@ -60,7 +58,7 @@ describe("menú y acceso por sesión", () => {
     useAppStore.setState({ currentMode: "compras" });
     nav.pathname = "/projects";
     render(<AppShell>contenido secreto</AppShell>);
-    expect(menuItems()).toEqual(["Dashboard", "Necesidades", "Órdenes de compra", "Stock", "Alertas", "Proveedores"]);
+    expect(menuItems()).toEqual(["Dashboard", "Por comprar", "Órdenes de compra", "Stock", "Alertas", "Proveedores"]);
     expect(screen.getAllByText("Martín Ruiz")[0]).toBeInTheDocument();
     expect(screen.getByRole("alert")).toHaveTextContent("No tenés acceso a esta sección");
     expect(screen.queryByText("contenido secreto")).toBeNull();
@@ -86,7 +84,7 @@ describe("menú y acceso por sesión", () => {
   it("Administración: 7 pestañas, sin el Dashboard gerencial", () => {
     useAppStore.setState({ currentMode: "administracion" });
     render(<AppShell>contenido</AppShell>);
-    expect(menuItems()).toEqual(["Dashboard", "Proyectos", "Cotizador", "Stock", "Clientes", "Configuración"]);
+    expect(menuItems()).toEqual(["Dashboard", "Proyectos", "Cotizador", "Facturación y pagos", "Stock", "Clientes", "Configuración"]);
     expect(nav.replace).toHaveBeenCalledWith("/administracion");
   });
 
@@ -99,48 +97,12 @@ describe("menú y acceso por sesión", () => {
   });
 });
 
-describe("tarifas con vigente desde", () => {
-  it("un cambio con fecha futura queda programado: hoy sigue la tarifa actual y se ve en el historial", async () => {
-    const user = userEvent.setup();
+describe("configuración sin criterios salariales paralelos", () => {
+  it("conserva accesos reales y retira la configuración salarial duplicada", () => {
     render(<SettingsPage />);
-    await user.click(screen.getByRole("tab", { name: "Costos horarios" }));
-    const labor = screen.getByLabelText("Mano de obra");
-    await user.clear(labor);
-    await user.type(labor, "25000");
-    const date = screen.getByLabelText("Vigente desde", { selector: "#rates-valid-from" });
-    await user.clear(date);
-    await user.type(date, "2999-01-01");
-    await user.click(screen.getAllByRole("button", { name: "Guardar" })[0]);
-
-    const s = useAppStore.getState();
-    expect(s.hourRates.find((r) => r.id === "labor")?.hourlyRate).toBe(19_000);
-    expect(s.priceHistory.filter((r) => r.kind === "hour_rate").map((r) => [r.value, r.validFrom])).toEqual([
-      [19_000, "2000-01-01"],
-      [25_000, "2999-01-01"],
-    ]);
-    expect(labor).toHaveValue("19000");
-    await user.click(screen.getAllByText(/Ver historial/)[0]);
-    expect(screen.getByRole("list", { name: "Historial de Mano de obra" })).toHaveTextContent("programado");
-  });
-
-  it("un cambio desde hoy se usa desde hoy", async () => {
-    const user = userEvent.setup();
-    render(<SettingsPage />);
-    await user.click(screen.getByRole("tab", { name: "Costos horarios" }));
-    const labor = screen.getByLabelText("Mano de obra");
-    await user.clear(labor);
-    await user.type(labor, "21000");
-    expect(screen.getByLabelText("Vigente desde", { selector: "#rates-valid-from" })).toHaveValue(todayISO());
-    await user.click(screen.getAllByRole("button", { name: "Guardar" })[0]);
-    expect(useAppStore.getState().hourRates.find((r) => r.id === "labor")?.hourlyRate).toBe(21_000);
-  });
-
-  it("Configuración tiene la pestaña Usuarios y el costo real de las horas marcado como hipótesis", async () => {
-    const user = userEvent.setup();
-    render(<SettingsPage />);
-    expect(screen.getByRole("tab", { name: "Usuarios y permisos" })).toBeInTheDocument();
-    await user.click(screen.getByRole("tab", { name: "Costos horarios" }));
-    expect(screen.getByText("Hipótesis a confirmar con el cliente")).toBeInTheDocument();
+    expect(screen.getByRole("tab",{ name:"Usuarios y permisos" })).toBeInTheDocument();
+    expect(screen.queryByRole("tab",{ name:"Costos horarios" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Costo real de las horas")).not.toBeInTheDocument();
   });
 });
 

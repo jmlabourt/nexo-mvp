@@ -328,7 +328,7 @@ const hoursRow = (key: string, label: string, budget: number, actual: number): H
 
 /** Horas cargadas (operarios y personal) dentro del período, si se indica. */
 const laborHours = (p: Project, period?: Pick<Period, "from" | "to">) =>
-  p.actualEntries.filter((e) => e.labor && (!period || inPeriod(e.date, period)));
+  p.actualEntries.filter((e) => e.category === "labor" && e.labor && (!period || inPeriod(e.date, period)));
 
 /** Horas presupuestadas de producción: las de los muebles; de Diseño/Administración: sus líneas en horas. */
 const budgetHours = (p: Project, category: "labor" | "design" | "admin") =>
@@ -345,7 +345,7 @@ export type HoursGroup = "project" | "furniture" | "rubro";
 export function hoursRows(projects: Project[], group: HoursGroup, period?: Pick<Period, "from" | "to">): HoursRow[] {
   if (group === "project") {
     return projects.map((p) => {
-      const budget = budgetHours(p, "labor") + budgetHours(p, "design") + budgetHours(p, "admin");
+      const budget = budgetHours(p, "labor");
       return hoursRow(p.id, `${p.code} ${p.name}`, budget, sum(laborHours(p, period).map((e) => e.labor?.hours ?? 0)));
     });
   }
@@ -364,11 +364,9 @@ export function hoursRows(projects: Project[], group: HoursGroup, period?: Pick<
   for (const p of projects) {
     for (const i of p.items) for (const r of i.rubros) add(rubroLabel(r.rubro), r.hours, 0);
     for (const e of laborHours(p, period)) {
-      const label = e.category === "design" ? "Diseño" : e.category === "admin" ? "Administración" : e.rubro ? rubroLabel(e.rubro) : "Sin rubro";
+      const label = e.rubro ? rubroLabel(e.rubro) : "Sin rubro";
       add(label, 0, e.labor?.hours ?? 0);
     }
-    add("Diseño", budgetHours(p, "design"), 0);
-    add("Administración", budgetHours(p, "admin"), 0);
   }
   return [...map.entries()].filter(([, v]) => v.budget > 0 || v.actual > 0).map(([label, v]) => hoursRow(label, label, v.budget, v.actual));
 }
@@ -384,8 +382,6 @@ export function opportunities(projects: Project[], info: Opportunity[]): Opportu
       const extra = byProject.get(p.id);
       const hoursByRubro: Record<string, number> = {};
       for (const i of p.items) for (const r of i.rubros) hoursByRubro[rubroLabel(r.rubro)] = round2((hoursByRubro[rubroLabel(r.rubro)] ?? 0) + r.hours);
-      const design = budgetHours(p, "design");
-      if (design > 0) hoursByRubro["Diseño"] = round2((hoursByRubro["Diseño"] ?? 0) + design);
       return {
         id: `opp-${p.id}`,
         projectId: p.id,
@@ -446,8 +442,6 @@ export function loadByRubro(projects: Project[], opps: Opportunity[], from: stri
       const done = sum(p.actualEntries.filter((e) => e.category === "labor" && e.rubro === rubro && e.date <= today).map((e) => e.labor?.hours ?? 0));
       add(out.confirmed, rubroLabel(rubro), spread(Math.max(0, quoted - done), begin, end, from, to,workDays));
     }
-    const designLeft = budgetHours(p, "design") - sum(p.actualEntries.filter((e) => e.category === "design").map((e) => e.labor?.hours ?? 0));
-    add(out.confirmed, "Diseño", spread(Math.max(0, designLeft), begin, end, from, to,workDays));
   }
   for (const o of opps) {
     if (!o.startDate) continue;

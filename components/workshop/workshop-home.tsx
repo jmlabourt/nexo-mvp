@@ -1,4 +1,5 @@
 "use client";
+import { demoOperatorEligible, laborCategories } from "@/lib/personnel";
 import { FlexibleWork } from "./flexible-work";
 import { useConfirmedAction } from "@/store/confirmed-action";
 // "Mi día" del Operario (Lote 6): lo mínimo posible, pensado para el celular.
@@ -24,6 +25,8 @@ import { Input, Select } from "@/components/ui/input";
 export function WorkshopHome() {
   const projects = useAppStore((s) => s.projects);
   const operators = useAppStore((s) => s.operators);
+  const ledger = useAppStore((s)=>s.ledger);
+  const local = useAppStore((s)=>s.demoLocal);
   const assignments = useAppStore((s) => s.assignments);
   const setActingOperator = useAppStore((s) => s.setActingOperator);
   const userId = useAppStore((s) => s.userId);
@@ -54,7 +57,7 @@ export function WorkshopHome() {
         <div className="mb-4 rounded-lg border border-slate-200 bg-slate-50 p-3">
           <label htmlFor="acting-op" className="mb-1.5 block text-xs font-medium text-slate-600">Demo: ver el día de</label>
           <Select id="acting-op" value={operator?.id ?? ""} onChange={(e) => setActingOperator(e.target.value)}>
-            {activeOperators(operators).map((o) => (
+            {activeOperators(operators).filter((o)=>!local || demoOperatorEligible(ledger,o)).map((o) => (
               <option key={o.id} value={o.id}>{o.name} · {o.role}</option>
             ))}
           </Select>
@@ -103,6 +106,10 @@ export function WorkshopHome() {
 function AssignmentCard({ item, onSaved }: { item: MyDayItem; onSaved: (msg: string) => void }) {
   const logHours = useConfirmedAction("logHours");
   const local = useAppStore((s) => s.demoLocal);
+  const ledger = useAppStore((s) => s.ledger);
+  const [categoryId, setCategoryId] = useState("");
+  const categories = laborCategories(ledger, item.assignment.operatorId).filter((c) => c.category === (item.assignment.hourKind ?? "labor"));
+  const selectedCategory = categories.some((c) => c.id === categoryId) ? categoryId : categories.length === 1 ? categories[0].id : undefined;
   const operator = useAppStore((s) => s.operators.find((o) => o.id === item.assignment.operatorId));
   const hoursPerDay = useAppStore((s) => s.costSettings.hoursPerDay);
   const projects = useAppStore((s) => s.projects);
@@ -121,7 +128,7 @@ function AssignmentCard({ item, onSaved }: { item: MyDayItem; onSaved: (msg: str
     if (check.level === "block") return setError(check.message ?? "Horas inválidas.");
     if (check.level === "warn" && !confirmed) return setWarn(check.message ?? "");
     requestId.current ??= createId("act");
-    const r = await logHours(item.project.id, { requestId: requestId.current, assignmentId: a.id, hours: h, confirmHighHours: true });
+    const r = await logHours(item.project.id, { requestId: requestId.current, assignmentId: a.id, categoryId: selectedCategory, hours: h, confirmHighHours: true });
     if (!r.ok) return setError(r.error);
     requestId.current = null;
     setHours("");
@@ -143,6 +150,7 @@ function AssignmentCard({ item, onSaved }: { item: MyDayItem; onSaved: (msg: str
           <CheckCircle2 className="size-4" aria-hidden /> Cargaste {formatNumber(item.logged)} h
         </p>
       )}
+      {local && categories.length > 1 && <label className="mt-2 block text-sm">Categoría laboral<Select value={selectedCategory ?? ""} onChange={(e) => setCategoryId(e.target.value)}><option value="">Elegí la categoría…</option>{categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</Select></label>}
         <form
           noValidate
           className="mt-3 flex items-end gap-2"

@@ -161,8 +161,10 @@ describe("una sola estructura: pantalla", () => {
     expect(within(add).queryByRole("option", { name: "Carpintería madera" })).toBeNull();
     await user.selectOptions(add, "embalaje");
     const emb = within(card).getByRole("region", { name: "Embalaje de Mesa ratona" });
-    // Dentro del rubro, todo junto.
-    for (const label of ["Horas", "Operarios", "Horas de diseño", "Horas de administración"]) expect(within(emb).getByLabelText(label)).toBeInTheDocument();
+    // Horas productivas y categorías configurables; sin campos fijos.
+    expect(within(emb).queryByLabelText("Horas de diseño")).not.toBeInTheDocument();
+    expect(within(emb).getByText("Trabajo no operativo")).toBeInTheDocument();
+    for (const label of ["Horas", "Operarios"]) expect(within(emb).getByLabelText(label)).toBeInTheDocument();
     expect(within(emb).getByRole("button", { name: "Material" })).toBeInTheDocument();
     expect(within(within(card).getByLabelText("Agregar rubro a Mesa ratona")).queryByRole("option", { name: "Embalaje" })).toBeNull();
   });

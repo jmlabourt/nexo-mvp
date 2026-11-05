@@ -7,8 +7,8 @@ import { HOURS_MAX_PER_DAY, checkHours } from "@/lib/project-rules";
 import { parseDecimal } from "@/lib/schemas";
 import { formatCurrency, formatNumber, todayISO } from "@/lib/formatting";
 import { useAppStore } from "@/store/use-app-store";
-import { useCategoryRate, useIdentity } from "@/store/selectors";
-import { laborCostAt } from "@/lib/price-history";
+import { useIdentity } from "@/store/selectors";
+import { employeeCost, laborCategories } from "@/lib/personnel";
 import { rubroLabel } from "@/lib/rubros";
 import { Button } from "@/components/ui/button";
 import { Input, Select, Textarea } from "@/components/ui/input";
@@ -48,16 +48,21 @@ export function HoursForm({ project, onDone, showCost = true }: { project: Proje
 
   const isOperator = identity.role === "operator";
   const operator = isOperator ? identity.operator : operators.find((o) => o.id === pickedOperator);
-  // El costo se muestra calculado como lo valoriza la app (Configuración); acá no se escribe.
-  const laborValuation = useAppStore((s) => s.costSettings.laborValuation);
-  const priceHistory = useAppStore((s) => s.priceHistory);
-  const laborRate = useCategoryRate("labor");
-  const hourCost = operator ? laborCostAt({ valuation: laborValuation, operator, laborRate, history: priceHistory, date }) : 0;
+  const ledger = useAppStore((s) => s.ledger);
+  const costHistory = useAppStore((s) => s.priceHistory);
+  const [categoryId, setCategoryId] = useState("");
+  const categories = operator ? laborCategories(ledger, operator.id).filter((c) => c.category === "labor") : [];
+  const selectedCategory = categories.some((c) => c.id === categoryId) ? categoryId : categories.length === 1 ? categories[0].id : undefined;
+  let hourCost: number | undefined;
+  let costError = "";
+  try { if (operator) hourCost = employeeCost(ledger, operator, date, selectedCategory, costHistory).hourlyCost; }
+  catch (e) { costError = e instanceof Error ? e.message : "Sin tarifa laboral vigente."; }
   const hoursN = parseDecimal(hours || "0");
   const check = operator && Number.isFinite(hoursN) && hoursN > 0 ? checkHours(projects.flatMap(p=>p.actualEntries), operator.id, date, hoursN, todayISO(), hoursPerDay) : null;
 
   const submit = async () => {
     if (!operator) return setError(isOperator ? "Tu usuario no está vinculado a un operario." : "Elegí el operario.");
+    if (costError) return setError(costError);
     if (!item || !chosenRubro) return setError("Elegí el producto y el rubro.");
     if (!Number.isFinite(hoursN) || hoursN <= 0) return setError("Indicá las horas trabajadas.");
     if (check?.level === "block") return setError(check.message ?? "Horas inválidas.");
@@ -66,6 +71,7 @@ export function HoursForm({ project, onDone, showCost = true }: { project: Proje
     const res = await logHoursManual(project.id, {
       requestId: requestId.current,
       operatorId: operator.id,
+      categoryId: selectedCategory,
       itemId: item.id,
       rubro: chosenRubro,
       date,
@@ -134,6 +140,7 @@ export function HoursForm({ project, onDone, showCost = true }: { project: Proje
         </div>
       )}
 
+      {categories.length > 1 && <div><label htmlFor="h-category" className={label}>Categoría laboral</label><Select id="h-category" value={selectedCategory ?? ""} onChange={(e) => setCategoryId(e.target.value)}><option value="">Elegí la categoría…</option>{categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</Select></div>}
       <QuantityInput id="h-hours" label="Horas" value={hours} onChange={setHours} unit="h" step={0.5} />
 
       <div>
@@ -161,16 +168,17 @@ export function HoursForm({ project, onDone, showCost = true }: { project: Proje
       )}
 
       {/* Administración / Comercial / Diseño no ve remuneraciones: carga las horas sin su costo. */}
-      {showCost && operator && hoursN > 0 && (
+      {showCost && operator && hourCost !== undefined && hoursN > 0 && (
         <div className="rounded-md bg-slate-50 p-3 text-sm">
           Costo: <strong className="tabular">{formatCurrency(hoursN * hourCost)}</strong>
           <span className="text-slate-500">
-            {" "}({formatNumber(hoursN, 1)} h × {formatCurrency(hourCost)}, {laborValuation === "general" ? "tarifa de Mano de obra de Configuración" : `costo guardado de ${operator.name} (Configuración: valorizar por operario)`})
+            {" "}({formatNumber(hoursN, 1)} h × {formatCurrency(hourCost)}, tarifa vigente de Personal)
           </span>
         </div>
       )}
       <p className="text-xs text-slate-500">Máximo {HOURS_MAX_PER_DAY} horas por persona y día.</p>
 
+      {costError && <p role="alert" className="text-sm text-red-700">{costError}</p>}
       {error && (
         <p role="alert" className="rounded-md bg-red-50 p-3 text-sm text-red-700">
           {error}

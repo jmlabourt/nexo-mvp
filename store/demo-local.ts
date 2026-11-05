@@ -45,9 +45,8 @@ export interface DemoStorage {
 export function browserStorage(): DemoStorage | null {
   try {
     if (typeof window === "undefined" || !window.localStorage) return null;
-    const probe = "blerp-demo:prueba";
-    window.localStorage.setItem(probe, "1");
-    window.localStorage.removeItem(probe);
+    // Reading the last durable snapshot must still work when the storage quota is full.
+    // writeDemo is responsible for detecting write failures.
     return window.localStorage;
   } catch {
     return null;

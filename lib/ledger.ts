@@ -108,6 +108,7 @@ export function setPaymentTerms(ledger: Ledger, terms: PaymentTerms): Ledger {
 // ── Facturación y cobros de ventas (Gerencia). Cotizado ≠ contratado ≠ facturado ≠ cobrado ──
 
 export interface SalesInvoiceInput {
+  dueDate?:string; condition?:string; milestoneId?:string;
   number: string;
   date: string;
   amount: number;
@@ -119,14 +120,15 @@ export function salesInvoiceError(ledger: Pick<Ledger, "salesInvoices">, p: Pick
   if (!i.number.trim()) return "Indicá el número o la referencia de la factura.";
   if (ledger.salesInvoices.some((x) => x.number.trim().toLowerCase() === i.number.trim().toLowerCase())) return "Ya hay una factura con ese número.";
   if (!isDate(i.date)) return "Indicá la fecha de emisión.";
-  if (!(i.amount > 0)) return "Indicá el importe sin IVA.";
+  if (i.dueDate && (!isDate(i.dueDate) || i.dueDate < i.date)) return "Vencimiento inválido: debe ser posterior o igual a emisión.";
+  if (!(Number.isFinite(i.amount) && i.amount > 0)) return "Indicá el importe sin IVA.";
   return null;
 }
 
 export function registerSalesInvoice(ledger: Ledger, p: Project, i: SalesInvoiceInput, ctx: LedgerCtx): Ledger {
   const error = salesInvoiceError(ledger, p, i);
   if (error) throw new DomainError(error);
-  const inv: SalesInvoice = { id: createId("fv"), projectId: p.id, number: i.number.trim(), date: i.date, amount: round2(i.amount), notes: i.notes?.trim() || undefined, createdBy: ctx.actor, createdAt: ctx.now };
+  const inv: SalesInvoice = { id: createId("fv"), projectId: p.id, number: i.number.trim(), date: i.date, amount: round2(i.amount), notes: i.notes?.trim() || undefined,dueDate:i.dueDate,condition:i.condition,milestoneId:i.milestoneId, createdBy: ctx.actor, createdAt: ctx.now };
   return { ...ledger, salesInvoices: [...ledger.salesInvoices, inv] };
 }
 
@@ -141,17 +143,17 @@ export interface CollectionInput {
 /** Lo que falta cobrar de una factura (importe − cobros aplicados). */
 export function invoiceBalance(ledger: Pick<Ledger, "collections" | "salesInvoices">, invoiceId: string): number {
   const inv = ledger.salesInvoices.find((x) => x.id === invoiceId);
-  if (!inv) return 0;
+  if (!inv || inv.cancelled) return 0;
   return round2(inv.amount - sum(ledger.collections.filter((c) => c.invoiceId === invoiceId).map((c) => c.amount)));
 }
 
 export function collectionError(ledger: Pick<Ledger, "collections" | "salesInvoices">, p: Pick<Project, "id" | "status">, c: CollectionInput): string | null {
   if (p.status === "quotation") return "Una cotización no tiene cobros.";
   if (!isDate(c.date)) return "Indicá la fecha de ingreso.";
-  if (!(c.amount > 0)) return "Indicá el monto cobrado.";
+  if (!(Number.isFinite(c.amount) && c.amount > 0)) return "Indicá el monto cobrado.";
   if (c.invoiceId) {
     const inv = ledger.salesInvoices.find((x) => x.id === c.invoiceId);
-    if (!inv || inv.projectId !== p.id) return "La factura no es de este proyecto.";
+    if (!inv || inv.cancelled || inv.projectId !== p.id) return "La factura no es de este proyecto.";
     if (c.amount - invoiceBalance(ledger, c.invoiceId) > 0.005) return `Esa factura tiene ${invoiceBalance(ledger, c.invoiceId).toFixed(2)} pendientes: el cobro no puede superarlo.`;
   }
   return null;
@@ -160,18 +162,21 @@ export function collectionError(ledger: Pick<Ledger, "collections" | "salesInvoi
 export function registerCollection(ledger: Ledger, p: Project, c: CollectionInput, ctx: LedgerCtx): Ledger {
   const error = collectionError(ledger, p, c);
   if (error) throw new DomainError(error);
+  const total=ledger.collections.filter((x)=>x.projectId===p.id).reduce((s,x)=>s+x.amount,0);
+  if(total+c.amount-currentContract(p,ledger)>0.005) throw new DomainError("El cobro supera el saldo del contrato vigente.");
   const col: Collection = { id: createId("cob"), projectId: p.id, invoiceId: c.invoiceId || undefined, date: c.date, amount: round2(c.amount), notes: c.notes?.trim() || undefined, createdBy: ctx.actor, createdAt: ctx.now };
   return { ...ledger, collections: [...ledger.collections, col] };
 }
 
 /** Aplica un anticipo (cobro sin factura) a una factura: el mismo dinero, sin contarlo dos veces. */
-export function applyAdvance(ledger: Ledger, collectionId: string, invoiceId: string): Ledger {
+export function applyAdvance(ledger: Ledger, collectionId: string, invoiceId: string,ctx?:LedgerCtx): Ledger {
   const col = ledger.collections.find((c) => c.id === collectionId);
   if (!col || col.invoiceId) throw new DomainError("Ese cobro ya está aplicado a una factura.");
   const inv = ledger.salesInvoices.find((x) => x.id === invoiceId);
-  if (!inv || inv.projectId !== col.projectId) throw new DomainError("La factura no es del mismo proyecto.");
+  if (!inv || inv.cancelled || inv.projectId !== col.projectId) throw new DomainError("La factura no es del mismo proyecto.");
   if (col.amount - invoiceBalance(ledger, invoiceId) > 0.005) throw new DomainError("El anticipo supera lo pendiente de esa factura.");
-  return { ...ledger, collections: ledger.collections.map((c) => (c.id === collectionId ? { ...c, invoiceId } : c)) };
+  const next={...col,invoiceId};
+  return { ...ledger, collections: ledger.collections.map((c) => (c.id === collectionId ? next : c)),...(ctx?{financialCorrections:[...(ledger.financialCorrections??[]),{id:createId("fc"),entity:"collection" as const,targetId:col.id,before:col,after:next,reason:"Aplicación del anticipo a factura del mismo proyecto",by:ctx.actor,at:ctx.now}]}:{}) };
 }
 
 export interface BillingStatus {
@@ -194,7 +199,7 @@ export interface BillingStatus {
 /** Estado de facturación y cobranza de un proyecto, derivado de los registros (nunca se marca a mano). */
 export function billingStatus(p: Project, ledger: Ledger): BillingStatus {
   const contracted = p.status === "quotation" ? 0 : currentContract(p, ledger);
-  const invoices = ledger.salesInvoices.filter((i) => i.projectId === p.id);
+  const invoices = ledger.salesInvoices.filter((i) => i.projectId === p.id && !i.cancelled);
   const cols = ledger.collections.filter((c) => c.projectId === p.id);
   const invoiced = sum(invoices.map((i) => i.amount));
   const collected = sum(cols.map((c) => c.amount));
@@ -240,17 +245,18 @@ export interface SupplierPaymentInput {
   reference: string;
 }
 
-export function supplierPaymentError(order: Pick<PurchaseOrder, "status" | "invoiceAmount">, i: SupplierPaymentInput): string | null {
-  if (order.status !== "invoiced" || !(order.invoiceAmount && order.invoiceAmount > 0)) return "Primero Compras carga la factura del proveedor.";
+export function supplierPaymentError(order: Pick<PurchaseOrder, "status" | "invoiceAmount">, i: SupplierPaymentInput, allowSentOrder = false): string | null {
+  if (!(allowSentOrder && order.status === "sent") && (order.status !== "invoiced" || !(order.invoiceAmount && order.invoiceAmount > 0))) return "El circuito histórico requiere factura del proveedor; pagos sobre órdenes enviadas disponibles en demo local.";
   if (!isDate(i.date)) return "Indicá la fecha del pago.";
   if (!(i.amount > 0)) return "Indicá el monto pagado.";
   if (!i.reference.trim()) return "Indicá la referencia del pago (transferencia, cheque…).";
   return null;
 }
 
-export function confirmSupplierPayment(ledger: Ledger, order: PurchaseOrder, i: SupplierPaymentInput, ctx: LedgerCtx): Ledger {
-  const error = supplierPaymentError(order, i);
+export function confirmSupplierPayment(ledger: Ledger, order: PurchaseOrder, i: SupplierPaymentInput, ctx: LedgerCtx, options: { allowSentOrder?: boolean } = {}): Ledger {
+  const error = supplierPaymentError(order, i, options.allowSentOrder);
   if (error) throw new DomainError(error);
+  if(paidOf(ledger,order.id)+i.amount-(order.invoiceAmount ?? order.lines.reduce((s,l)=>s+l.quantity*l.unitCost,0))>0.005) throw new DomainError("El pago supera el saldo de la obligación.");
   const pay: SupplierPayment = { id: createId("pago"), orderId: order.id, date: i.date, amount: round2(i.amount), reference: i.reference.trim(), by: ctx.actor, at: ctx.now };
   return { ...ledger, supplierPayments: [...ledger.supplierPayments, pay] };
 }
@@ -275,15 +281,16 @@ export function draftBom(ledger: Pick<Ledger, "boms">, projectId: string, itemId
 }
 
 /** Materiales cotizados de un mueble (líneas con "Mueble: <nombre> ×" en las notas). Sin mueble = pendiente de asignación. */
-export function quotedMaterialsOf(p: Pick<Project, "budgetLines">, itemName: string): BomVersionLine[] {
+export function quotedMaterialsOf(p: Pick<Project, "budgetLines"> & Partial<Pick<Project,"items">>, itemName: string, itemId?:string): BomVersionLine[] {
+  const originalName=p.items?.find(i=>i.id===itemId)?.quotationName??itemName;
   return p.budgetLines
-    .filter((l) => l.category === "materials" && l.quantity !== null && l.notes?.startsWith(`Mueble: ${itemName} × `))
+    .filter((l) => l.category === "materials" && l.quantity !== null && (l.quotationItemId ? l.quotationItemId===itemId : (p.items?.filter((i)=>(i.quotationName??i.name)===originalName).length ?? 1) <= 1 && l.notes?.startsWith(`Mueble: ${originalName} × `)))
     .map((l) => ({ id: `bl-${l.id}`, material: l.description, materialId: l.materialId, quantity: l.quantity as number, unit: l.unit, budgetLineId: l.id }));
 }
 
 /** Materiales cotizados que no están en ningún mueble ("Pendiente de asignación": nunca se reparten solos). */
 export function unassignedMaterials(p: Pick<Project, "budgetLines">): Project["budgetLines"] {
-  return p.budgetLines.filter((l) => l.category === "materials" && l.quantity !== null && !l.notes?.startsWith("Mueble: "));
+  return p.budgetLines.filter((l) => l.category === "materials" && l.quantity !== null && !l.quotationItemId && !l.notes?.startsWith("Mueble: "));
 }
 
 /** Abre un borrador: copia de la última publicada o, la primera vez, los materiales cotizados del mismo mueble. */
@@ -294,7 +301,7 @@ export function startBomDraft(ledger: Ledger, p: Project, itemId: string, ctx: L
   if (draftBom(ledger, p.id, itemId)) return ledger;
   const last = publishedBom(ledger, p.id, itemId);
   const version = (bomsOf(ledger, p.id, itemId).at(-1)?.version ?? 0) + 1;
-  const lines = (last?.lines ?? quotedMaterialsOf(p, item.name)).map((l) => ({ ...l, id: createId("bomL") }));
+  const lines = (last?.lines ?? quotedMaterialsOf(p, item.name,item.id)).map((l) => ({ ...l }));
   const draft: BomVersion = { id: createId("bom"), projectId: p.id, itemId, version, status: "draft", lines, createdBy: ctx.actor, createdAt: ctx.now };
   return { ...ledger, boms: [...ledger.boms, draft] };
 }
@@ -443,15 +450,15 @@ export function hourlyCostAt(ledger: Pick<Ledger, "rates">, input: { employeeId?
 
 export function upsertClient(ledger: Ledger, c: Omit<ClientEntry, "id" | "createdAt"> & { id?: string }, ctx: LedgerCtx): Ledger {
   if (c.name.trim().length < 2) throw new DomainError("Escribí el nombre del cliente.");
-  if (ledger.clients.some((x) => x.id !== c.id && normalizeName(x.name) === normalizeName(c.name))) throw new DomainError("Ya hay un cliente con ese nombre.");
-  if (c.id) return { ...ledger, clients: ledger.clients.map((x) => (x.id === c.id ? { ...x, ...c, name: c.name.trim() } : x)) };
+  if (ledger.clients.some((x) => x.id !== c.id && [x.name,...(x.previousNames ?? [])].some((name)=>normalizeName(name) === normalizeName(c.name)))) throw new DomainError("Ya hay un cliente con ese nombre.");
+  if (c.id) return { ...ledger, clients: ledger.clients.map((x) => (x.id === c.id ? { ...x, ...c, name: c.name.trim(),previousNames:[...new Set([...(x.previousNames ?? []),...(x.name!==c.name.trim() ? [x.name] : [])])] } : x)) };
   return { ...ledger, clients: [...ledger.clients, { ...c, name: c.name.trim(), id: createId("cli"), createdAt: ctx.now }] };
 }
 
 export function upsertSupplier(ledger: Ledger, s: Omit<SupplierEntry, "id" | "createdAt"> & { id?: string }, ctx: LedgerCtx): Ledger {
   if (s.name.trim().length < 2) throw new DomainError("Escribí el nombre del proveedor.");
-  if (ledger.suppliers.some((x) => x.id !== s.id && normalizeName(x.name) === normalizeName(s.name))) throw new DomainError("Ya hay un proveedor con ese nombre.");
-  if (s.id) return { ...ledger, suppliers: ledger.suppliers.map((x) => (x.id === s.id ? { ...x, ...s, name: s.name.trim() } : x)) };
+  if (ledger.suppliers.some((x) => x.id !== s.id && [x.name,...(x.previousNames ?? [])].some((name)=>normalizeName(name) === normalizeName(s.name)))) throw new DomainError("Ya hay un proveedor con ese nombre.");
+  if (s.id) return { ...ledger, suppliers: ledger.suppliers.map((x) => (x.id === s.id ? { ...x, ...s, name: s.name.trim(),previousNames:[...new Set([...(x.previousNames ?? []),...(x.name!==s.name.trim() ? [x.name] : [])])] } : x)) };
   return { ...ledger, suppliers: [...ledger.suppliers, { ...s, name: s.name.trim(), id: createId("prov"), createdAt: ctx.now }] };
 }
 

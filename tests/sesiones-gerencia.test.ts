@@ -238,10 +238,10 @@ describe("nomenclatura de proyectos", () => {
 
 describe("indicadores documentados en Configuración", () => {
   it("los indicadores tienen significado, fórmula, fuente, parámetros, período, límites y actualización (sin carga ponderada por probabilidad)", () => {
-    expect(INDICATORS).toHaveLength(28);
+    expect(INDICATORS).toHaveLength(30);
     expect(INDICATORS.some((i) => i.id === "load_weighted")).toBe(false);
     for (const i of INDICATORS) for (const k of ["meaning", "formula", "source", "params", "period", "limits", "updates"] as const) expect(i[k].length).toBeGreaterThan(3);
-    expect(new Set(INDICATORS.map((i) => i.id)).size).toBe(28);
+    expect(new Set(INDICATORS.map((i) => i.id)).size).toBe(30);
   });
   it("datos de ejemplo coherentes: cada factura es de un proyecto confirmado y no supera su precio", () => {
     const sums = new Map<string, number>();

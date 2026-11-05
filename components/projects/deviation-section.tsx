@@ -17,8 +17,10 @@ function statusFor(budget: number, actual: number, s: AlertSettings, completed: 
 }
 
 export function DeviationSection({ econ, settings, completed }: { econ: ProjectEconomics; settings: AlertSettings; completed: boolean }) {
-  const max = Math.max(1, ...econ.categories.map((c) => Math.max(c.budget, c.actual)));
+  const visibleCategories = econ.categories.filter((c) => c.category !== "financial");
+  const max = Math.max(1, ...visibleCategories.map((c) => Math.max(c.budget, c.actual)));
   const realLabel = completed ? "Costo real final" : "Costo real hasta hoy";
+  const hasFinancialCost = econ.categories.some((c) => c.category === "financial" && c.actual > 0);
   return (
     <Card>
       <CardHeader>
@@ -29,6 +31,11 @@ export function DeviationSection({ econ, settings, completed }: { econ: ProjectE
             : "Costo presupuestado vs. costo real hasta hoy, en las categorías de reporte. El proyectado considera cantidades pendientes identificables y nunca baja del presupuesto ni del costo real."}
         </CardDescription>
       </CardHeader>
+      {hasFinancialCost && (
+        <div className="px-4 pb-2 text-xs text-slate-600">
+          El costo financiero se muestra por separado en el resumen económico y no se duplica en la tabla de costos productivos.
+        </div>
+      )}
       <Table>
         <THead>
           <TR>
@@ -42,7 +49,7 @@ export function DeviationSection({ econ, settings, completed }: { econ: ProjectE
           </TR>
         </THead>
         <TBody>
-          {econ.categories.map((c) => {
+          {visibleCategories.map((c) => {
             const st = statusFor(c.budget, c.actual, settings, completed);
             const over = c.projectedVariance.amount;
             return (

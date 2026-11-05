@@ -1,4 +1,5 @@
 "use client";
+import { FINANCE_HREF,pendingPaymentCount } from "@/lib/finance-workspace";
 // Administración / Comercial / Diseño → Dashboard: lo operativo, sin información económica gerencial.
 // Cuántos proyectos hay en cada estado, qué diseños y planos esperan, qué vence pronto y qué necesita seguimiento.
 import Link from "next/link";
@@ -20,7 +21,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DESIGN_STATUS_LABELS } from "@/components/projects/furniture-panel";
 
 export function AdminDashboard() {
-  const today = useToday();
+  const today = useToday();const ledger=useAppStore(s=>s.ledger);const pendingPayments=pendingPaymentCount(ledger);
   const projects = useAppStore((s) => s.projects);
   const dueSoonDays = useAppStore((s) => s.settings.dueSoonDays);
   const materialsOf = useMaterialsStateOf();
@@ -45,7 +46,7 @@ export function AdminDashboard() {
   return (
     <div className="space-y-6">
       <PageHeader title="Dashboard" subtitle={`Hoy, ${formatDate(today)}. Proyectos, diseños y entregas que necesitan seguimiento.`} actions={<OwnHoursButton />} />
-      <CircuitPending session="administracion" />
+      <CircuitPending session="administracion" /><Card><CardHeader><CardTitle>Facturación y pagos</CardTitle></CardHeader><CardContent><Link className="text-blue-700 underline" href={FINANCE_HREF}>Facturación y cobros de clientes</Link><p><Link className="text-blue-700 underline" href={`${FINANCE_HREF}#proveedores`}>{pendingPayments} solicitudes de pago pendientes de gestión</Link></p></CardContent></Card>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
         <Stat label="En cotización" value={String(count("quotation"))} />
         <Stat label="Aprobados" value={String(count("approved"))} />

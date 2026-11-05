@@ -8,14 +8,14 @@ import { allAlerts, openAlertCount, projectHealth, sortAlerts, splitAlerts } fro
 import { designChangeAlerts } from "@/lib/circuit";
 import { dailyHoursReviews } from "@/lib/hours-review";
 import { thresholdOf } from "@/lib/plant";
-import { pendingExternal } from "@/lib/frontend-work";
+import { pendingDemandEstimates, withExternalHours, pendingExternal } from "@/lib/frontend-work";
 import { plantAlerts } from "@/lib/plant";
 import { materialNeeds, materialsState, plantMaterialAlerts, purchasingAlerts, type MaterialNeed, type MaterialsState } from "@/lib/purchasing";
 import type { RoleKey } from "@/lib/permissions";
 import { projectEconomics, type ProjectEconomics } from "@/lib/calculations";
 import { todayISO } from "@/lib/formatting";
 import { isBuyer, isManager, isQuoter } from "@/lib/project-rules";
-import { catalogPriceAt } from "@/lib/material-options";
+import { materialCatalog, catalogPriceAt } from "@/lib/material-options";
 import { withEconomicImpact } from "@/lib/deviations";
 import { deliveryReviewAlerts } from "@/lib/plant-materials";
 import { effectiveIdentity, useAppStore } from "./use-app-store";
@@ -53,6 +53,7 @@ export function usePlantAlerts(): Alert[] {
       sortAlerts([
         ...plantAlerts({ projects, assignments, operators, settings, hoursPerDay, today, dayExceptions }),
         ...plantMaterialAlerts(projects, stateOf, today, settings.purchaseLeadDays),
+        ...pendingDemandEstimates(withExternalHours(projects,ledger),today).map((r): Alert => ({ id:`pending-demand:${r.projectId}:${r.rubro}`,resolutionKey:`pending-demand:${r.projectId}:${r.rubro}`,projectId:r.projectId,projectCode:r.projectCode,projectName:r.projectName,kind:"hours",level:"warning",title:"Actualizar estimación de horas pendientes",message:`${r.rubro}: horas cotizadas agotadas y muebles pendientes. La demanda futura está sin confirmar.`,action:"Revisar la estimación pendiente con Gerencia." })),
         ...projects.filter((p) => !p.isClosed).flatMap((p): Alert[] => pendingExternal(ledger,p.id).map((e) => ({ id:`external:${e.id}`,resolutionKey:`external:${e.id}`,projectId:p.id,projectCode:p.code,projectName:p.name,kind:"hours",level:"warning",title:"Costo externo pendiente de confirmar",message:`${e.date} · ${e.description}. Gerencia debe completar o confirmar su costo.`,action:"Coordinar con Gerencia; el costo debe confirmarse antes del cierre." }))),
         ...deliveryReviewAlerts(projects,{ lots:[],movements:[] },deliveries,today).filter((a) => a.kind === "delivery_open").map((a) => ({ ...a,impactAmount:undefined,impactPoints:undefined })),
         ...dailyHoursReviews(projects,assignments,operators,today,thresholdOf(settings)).filter((r) => !reviewed.includes(r.key)).flatMap((r): Alert[] => { const p = projects.find((p) => p.id === r.assignments[0]?.projectId); return p ? [{ id:`review:${r.key}`,resolutionKey:`review:${r.key}`,projectId:p.id,projectCode:p.code,projectName:p.name,kind:"hours",level:"warning",title:`Revisar horas de ${r.worker}`,message:r.message,action:"Operarios → Correcciones de horas." }] : []; }),
@@ -168,6 +169,8 @@ export function useProjectView(id: string): ProjectView | undefined {
 /** Quién opera ahora: rol, operario (si corresponde) y nombre para los registros. */
 export function useIdentity() {
   const role = useAppStore((s) => s.role);
+  const ledger = useAppStore((s) => s.ledger);
+  const demoLocal = useAppStore((s) => s.demoLocal);
   const currentMode = useAppStore((s) => s.currentMode);
   const isDemo = useAppStore((s) => s.isDemo);
   const operators = useAppStore((s) => s.operators);
@@ -177,17 +180,22 @@ export function useIdentity() {
   const userName = useAppStore((s) => s.userName);
   return useMemo(
     () => {
-      const id = effectiveIdentity({ role, currentMode, isDemo, operators, userId, userEmail, actingOperatorId, userName });
+      const id = effectiveIdentity({ ledger,demoLocal,role, currentMode, isDemo, operators, userId, userEmail, actingOperatorId, userName });
       return { ...id, isManager: isManager(id.role), isQuoter: isQuoter(id.role), isBuyer: isBuyer(id.role), realRole: role };
     },
-    [role, currentMode, isDemo, operators, userId, userEmail, actingOperatorId, userName],
+    [ledger,demoLocal,role, currentMode, isDemo, operators, userId, userEmail, actingOperatorId, userName],
   );
 }
 
 /** Precio de catálogo vigente hoy de un material (precios con vigencia): lo usan las cotizaciones nuevas. */
 export function useCatalogPrice(): (materialId: string) => number {
   const history = useAppStore((s) => s.priceHistory);
-  return useCallback((materialId: string) => catalogPriceAt(history, materialId, todayISO()), [history]);
+  const catalog = useMaterialCatalog();
+  return useCallback((materialId: string) => {
+    const custom = catalog.find((m) => m.id === materialId);
+    const price = history.some((r) => r.subjectId === materialId && r.kind === "material_price" && r.validFrom <= todayISO());
+    return price ? catalogPriceAt(history, materialId, todayISO()) : custom?.referenceCost ?? 0;
+  }, [history,catalog]);
 }
 
 /**
@@ -203,4 +211,15 @@ export function useConfiguredOperators() {
   const operators = useAppStore((s) => s.operators);
   const ledger = useAppStore((s) => s.ledger);
   return useMemo(() => configuredOperators(operators,ledger),[operators,ledger]);
+}
+
+export function useMaterialCatalog() {
+  const entries = useAppStore((s) => s.ledger.materialCatalog);
+  return useMemo(() => materialCatalog({ materialCatalog:entries }),[entries]);
+}
+
+/** Live productive rubros from the shared company catalogue, retaining historic definitions. */
+export function useProductionRubros() {
+  const catalog = useAppStore((s) => s.ledger.rubroCatalog);
+  return useMemo(() => catalog.filter((r) => r.active).map((r) => ({ id:r.id as import("@/types").RubroId,label:r.name,kind:"full" as const })),[catalog]);
 }

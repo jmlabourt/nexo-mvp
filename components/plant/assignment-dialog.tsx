@@ -13,7 +13,7 @@ import { calendarCell, operatorWorkdays } from "@/lib/schedule";
 import { rubroLabel } from "@/lib/rubros";
 import { parseDecimal } from "@/lib/schemas";
 import { useAppStore } from "@/store/use-app-store";
-import { useMaterialsStateOf } from "@/store/selectors";
+import { useMaterialsStateOf, useIdentity } from "@/store/selectors";
 import { MATERIALS_STATE_LABELS } from "@/lib/purchasing";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
@@ -34,10 +34,11 @@ export function AssignmentDialog({ draft, onClose }: { draft: AssignmentDraft | 
 
 function AssignmentForm({ draft, onClose }: { draft: AssignmentDraft; onClose: () => void }) {
   const projects = useAppStore((s) => s.projects).filter(isAssignable);
-  const operators = activeOperators(useConfiguredOperators());
+  const operators = activeOperators(useConfiguredOperators()).filter((o) => o.productive !== false && (o.enabledRubros?.length ?? 0)>0);
   const saveAssignment = useConfirmedAction("saveAssignment");
   const removeAssignment = useConfirmedAction("removeAssignment");
   const editing = !!draft.id;
+  const { session } = useIdentity();
   const [hourKind, setHourKind] = useState<"labor" | "design" | "admin">(draft.hourKind ?? "labor");
   const materialsOf = useMaterialsStateOf();
   const [projectId, setProjectId] = useState(draft.projectId ?? projects[0]?.id ?? "");
@@ -87,7 +88,7 @@ function AssignmentForm({ draft, onClose }: { draft: AssignmentDraft; onClose: (
     if (total === 0) return setError(editing ? "Elegí el día." : "Elegí desde y hasta qué día: en ese rango no hay días laborales de esas personas.");
     for (const operatorId of picked) {
       for (const date of daysFor(operatorId)) {
-        const r = await saveAssignment({ id: draft.id, projectId, itemId: item?.id, rubro: chosenRubro, operatorId, date, plannedHours: parseDecimal(hours), hourKind });
+        const r = await saveAssignment({ id: draft.id, projectId, itemId: item?.id, rubro: chosenRubro, operatorId, date, plannedHours: parseDecimal(hours), hourKind: session === "gerencia" ? hourKind : "labor" });
         if (!r.ok) return setError(r.error);
       }
     }
@@ -101,7 +102,7 @@ function AssignmentForm({ draft, onClose }: { draft: AssignmentDraft; onClose: (
         <DialogDescription>Cada persona lo ve en &quot;Mi día&quot; con las horas estimadas y solo carga las horas que trabajó.</DialogDescription>
       </DialogHeader>
       <form onSubmit={save} noValidate className="space-y-4">
-        <Field label="Tipo de trabajo" htmlFor="as-kind"><Select id="as-kind" value={hourKind} onChange={e=>setHourKind(e.target.value as typeof hourKind)}><option value="labor">Producción</option><option value="design">Diseño</option><option value="admin">Administración</option></Select></Field>
+        {session === "gerencia" && <Field label="Tipo de trabajo" htmlFor="as-kind"><Select id="as-kind" value={hourKind} onChange={e=>setHourKind(e.target.value as typeof hourKind)}><option value="labor">Producción</option><option value="design">Diseño</option><option value="admin">Administración</option></Select></Field>}
         <Field label="Proyecto" htmlFor="as-project">
           <Select id="as-project" value={projectId} onChange={(e) => { setProjectId(e.target.value); setItemId(""); }}>
             {projects.map((p) => (

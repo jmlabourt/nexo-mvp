@@ -2,23 +2,24 @@
 // Filas de materiales de una cotización: descripción (con el catálogo), cantidad, unidad, costo unitario y desperdicio.
 // La usan un rubro del Cotizador y el Cotizador de materiales de Compras (Lote 5C).
 import { Plus } from "lucide-react";
-import { MATERIAL_CATALOG } from "@/lib/constants";
 import { materialBudgetQuantity } from "@/lib/budget-calculator";
 import { formatCurrency, formatNumber } from "@/lib/formatting";
 import { parseDecimal } from "@/lib/schemas";
+import { Select,Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { HelpTip } from "@/components/ui/help-tip";
-import { useCatalogPrice } from "@/store/selectors";
-import { NumField, RemoveButton, TextField } from "./fields";
+import { useMaterialCatalog, useCatalogPrice } from "@/store/selectors";
+import { NumField, RemoveButton } from "./fields";
 import { newMaterialRow, type MaterialRow } from "./calculator-state";
 
 /** Id del datalist con el catálogo de materiales: va una sola vez por pantalla (MaterialCatalogList). */
 const CATALOG_LIST = "calc-catalog";
 
 export function MaterialCatalogList() {
+  const catalog = useMaterialCatalog().filter((m) => m.active !== false);
   return (
     <datalist id={CATALOG_LIST}>
-      {MATERIAL_CATALOG.map((m) => (
+      {catalog.map((m) => (
         <option key={m.id} value={m.name} />
       ))}
     </datalist>
@@ -33,6 +34,7 @@ const num = (s: string) => {
 /** `owner`: de qué son los materiales (nombre del rubro), para las etiquetas accesibles. */
 export function MaterialRows({ materials, onChange, owner }: { materials: MaterialRow[]; onChange: (materials: MaterialRow[]) => void; owner: string }) {
   const catalogPrice = useCatalogPrice();
+  const catalog = useMaterialCatalog().filter((m) => m.active !== false);
   const setMaterial = (key: string, patch: Partial<MaterialRow>) => onChange(materials.map((m) => (m.key === key ? { ...m, ...patch } : m)));
 
   return (
@@ -53,20 +55,11 @@ export function MaterialRows({ materials, onChange, owner }: { materials: Materi
         {materials.map((m, i) => (
           <div key={m.key} className="grid grid-cols-2 gap-2 sm:grid-cols-[2fr_0.8fr_0.8fr_1fr_0.8fr_auto]">
             <div className="col-span-2 sm:col-span-1">
-              <TextField
-                id={`m-name-${m.key}`}
-                label="Descripción"
-                list={CATALOG_LIST}
-                value={m.name}
-                placeholder="Ej.: Melamina blanca 18 mm"
-                onChange={(v) => {
-                  const cat = MATERIAL_CATALOG.find((c) => c.name === v);
-                  setMaterial(m.key, { name: v, ...(cat ? { unit: cat.unit, unitCost: m.unitCost || String(catalogPrice(cat.id)) } : {}) });
-                }}
-              />
+              <label htmlFor={`m-name-${m.key}`} className="text-xs font-medium text-slate-600">Descripción</label>
+              <Select id={`m-name-${m.key}`} value={m.materialId ?? ""} onChange={(e)=>{const cat=catalog.find((c)=>c.id===e.target.value);if(cat) setMaterial(m.key,{materialId:cat.id,name:cat.name,unit:cat.unit,unitCost:String(catalogPrice(cat.id))});}}><option value="">Seleccioná material…</option>{m.materialId && !catalog.some((c)=>c.id===m.materialId) && <option value={m.materialId} disabled>{m.name} · Histórico</option>}{catalog.map((c)=><option key={c.id} value={c.id}>{c.name}</option>)}</Select>
             </div>
             <NumField id={`m-qty-${m.key}`} label="Cantidad" value={m.quantity} onChange={(v) => setMaterial(m.key, { quantity: v })} />
-            <TextField id={`m-unit-${m.key}`} label="Unidad" value={m.unit} onChange={(v) => setMaterial(m.key, { unit: v })} />
+            <label className="text-xs">Unidad<Input id={`m-unit-${m.key}`} value={m.unit} readOnly /></label>
             <NumField id={`m-cost-${m.key}`} label="Costo unitario estimado" suffix="$" value={m.unitCost} onChange={(v) => setMaterial(m.key, { unitCost: v })} />
             <NumField id={`m-waste-${m.key}`} label="Desperdicio" suffix="%" value={m.wastePct} onChange={(v) => setMaterial(m.key, { wastePct: v })} />
             <RemoveButton label={`Quitar material ${i + 1} de ${owner}`} onClick={() => onChange(materials.filter((x) => x.key !== m.key))} />

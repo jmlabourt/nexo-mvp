@@ -84,6 +84,7 @@ export function assignmentError(input: AssignmentInput, ctx: { projects: Project
   const operator = ctx.operators.find((o) => o.id === input.operatorId);
   if (!operator) return "Elegí un operario.";
   if (!operator.active) return `${operator.name} está dado de baja.`;
+  if (operator.productive === false) return "La persona no está habilitada como operario productivo.";
   if (operator.enabledRubros && !operator.enabledRubros.includes(input.rubro)) return "Ese rubro no está habilitado para la persona.";
   if (!/^\d{4}-\d{2}-\d{2}$/.test(input.date)) return "Elegí el día.";
   if (!(input.plannedHours > 0)) return "Las horas previstas tienen que ser mayores a cero.";
@@ -197,7 +198,7 @@ export interface HoursRecord {
   hours: number;
 }
 
-const laborEntries = (p: Project) => p.actualEntries.filter((e) => e.type === "labor" && e.labor);
+const laborEntries = (p: Project) => p.actualEntries.filter((e) => e.category === "labor" && e.labor);
 
 const recordOf = (e: Project["actualEntries"][number]): HoursRecord => ({
   entryId: e.id,

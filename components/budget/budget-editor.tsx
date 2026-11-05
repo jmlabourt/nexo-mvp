@@ -10,11 +10,12 @@ import type { BudgetLineInput } from "@/lib/project-operations";
 import { Button } from "@/components/ui/button";
 import { Input, Select } from "@/components/ui/input";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
-import { useCatalogPrice } from "@/store/selectors";
+import { useMaterialCatalog, useCatalogPrice } from "@/store/selectors";
 import { useAppStore } from "@/store/use-app-store";
 
 /** Fila en edición: los números como texto para permitir vacíos. quantity vacío = monto directo. */
 export interface DraftLine {
+  materialId?: string;
   key: string;
   category: BudgetCategory;
   /** "" = sin rubro. */
@@ -34,6 +35,7 @@ function newDraftLine(category: BudgetCategory = "materials"): DraftLine {
 export function draftFromLine(l: BudgetLine): DraftLine {
   return {
     key: l.id,
+    materialId:l.materialId,
     category: l.category,
     rubro: l.rubro ?? "",
     description: l.description,
@@ -50,7 +52,7 @@ export function draftToInput(d: DraftLine): { input?: BudgetLineInput; error?: s
   const candidate = {
     category: d.category,
     description: d.description.trim(),
-    materialId: d.category === "materials" ? cat?.id : undefined,
+    materialId: d.category === "materials" ? d.materialId ?? cat?.id : undefined,
     quantity: num(d.quantity),
     unit: d.quantity.trim() === "" ? "global" : d.unit.trim() || "u",
     unitCost: num(d.unitCost) ?? NaN,
@@ -91,10 +93,11 @@ export function BudgetEditor({
       }),
     );
   const catalogPrice = useCatalogPrice();
+  const catalog = useMaterialCatalog().filter((m) => m.active !== false);
   return (
     <div>
       <datalist id="catalog-materials">
-        {MATERIAL_CATALOG.map((m) => (
+        {catalog.map((m) => (
           <option key={m.id} value={m.name} />
         ))}
       </datalist>
@@ -139,8 +142,8 @@ export function BudgetEditor({
                   value={l.description}
                   placeholder={l.category === "materials" ? "Ej.: Melamina blanca 18 mm" : "Concepto"}
                   onChange={(e) => {
-                    const cat = MATERIAL_CATALOG.find((m) => m.name === e.target.value);
-                    update(l.key, { description: e.target.value, ...(cat ? { unit: cat.unit, unitCost: l.unitCost || String(catalogPrice(cat.id)) } : {}) });
+                    const cat = catalog.find((m) => m.name === e.target.value);
+                    update(l.key, { description: e.target.value,materialId:cat?.id, ...(cat ? { unit: cat.unit, unitCost: l.unitCost || String(catalogPrice(cat.id)) } : {}) });
                   }}
                   aria-invalid={!!errors[l.key]}
                 />

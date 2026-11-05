@@ -44,15 +44,17 @@ const plazoOf = (s: CalcState) => {
 export function NewProjectWizard() {
   const router = useRouter();
   const projects = useAppStore((s) => s.projects);
+  const clients = useAppStore((s)=>s.ledger.clients);
   const { overtimeMultiplier, financialPct, hoursPerDay } = useAppStore((s) => s.costSettings);
   const rates = useAppStore((s) => s.hourRates);
   const isDemo = useAppStore((s) => s.isDemo);
   const monthlyRate = useMonthlyRate();
   const createProject = useConfirmedAction("createProject");
   const nomenclature = useAppStore((s) => s.ledger.projectNomenclature);
+  const defaults=useAppStore((s)=>s.ledger.quoteDefaults);
   const [draft] = useState(peekQuoteDraft);
   const [step, setStep] = useState(0);
-  const [calcState, setCalcState] = useState<CalcState>(() => draft?.state ?? initialCalcState(financialPct));
+  const [calcState, setCalcState] = useState<CalcState>(() => draft?.state ?? initialCalcState(financialPct,defaults));
   const [priceError, setPriceError] = useState("");
   const [formError, setFormError] = useState("");
 
@@ -127,7 +129,7 @@ export function NewProjectWizard() {
     const v = getValues();
     const f = calcState.finance;
     const dates = f ? { startDate: f.startDate, dueDate: f.deliveryDate } : {};
-    const res = await createProject({ ...v, ...dates, salesPrice: Number(v.salesPrice), code, budgetLines: calc.lines, items: productInputs(calcState) });
+    const res = await createProject({ ...v, ...dates, salesPrice: Number(v.salesPrice), code, budgetLines: calc.lines, items: productInputs(calcState), quotationParameters:{materialsTargetPct:calc.input.materialsTargetPct,laborTargetPct:calc.input.laborTargetPct,financialPct:calc.input.financialPct,deadlineDays:calc.input.deadlineDays} });
     if (!res.ok) return setFormError(res.error);
     if (f && (useAppStore.getState().demoLocal || useAppStore.getState().ledgerReady)) {
       // Demo: la seña y las cuotas pactadas quedan como condiciones de pago del proyecto.
@@ -166,7 +168,7 @@ export function NewProjectWizard() {
               <Input id="name" {...register("name")} aria-invalid={!!formState.errors.name} placeholder="Ej.: Local Palermo – Mobiliario comercial" />
             </Field>
             <Field label="Cliente" htmlFor="client" error={formState.errors.client?.message}>
-              <Input id="client" {...register("client")} aria-invalid={!!formState.errors.client} />
+              <datalist id="project-clients">{clients.filter((c)=>c.active!==false).map((c)=><option key={c.id} value={c.name} />)}</datalist><Input id="client" list="project-clients" {...register("client")} aria-invalid={!!formState.errors.client} />
             </Field>
             <Field label="Tipo" htmlFor="projectType" error={formState.errors.projectType?.message}>
               <Select id="projectType" {...register("projectType")}>

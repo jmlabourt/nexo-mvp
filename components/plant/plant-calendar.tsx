@@ -76,6 +76,7 @@ export function PlantCalendar({ operators, today, onAssign }: { operators: Opera
       </CardHeader>
       <CardContent className="space-y-3">
         <p className="text-sm text-slate-600">Horas disponibles: {formatNumber(capacity.available)} · Planificadas: {formatNumber(capacity.planned)} · Necesarias estimadas: {formatNumber(capacity.needed)}. La planificación no es ejecución ni se suma a la demanda.</p>
+        {capacity.pendingConfiguration && <p role="status" className="text-sm text-slate-600">Capacidad por rubro pendiente de configuración en Personal: hay personas productivas sin rubros habilitados.</p>}
         {copyMessage && <p role="status" className="text-xs text-slate-600">{copyMessage}</p>}
         {shown.size > 0 && (
           <ul aria-label="Proyectos de la semana" className="flex flex-wrap gap-1.5 text-xs">

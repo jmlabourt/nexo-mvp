@@ -16,7 +16,7 @@ export interface ChartColumn {
   id?: string;
   label: string;
   tooltip?: string;
-  values: Record<string, number>;
+  values: Record<string, number | null>;
   /** Línea de referencia de esa columna (ej. capacidad). */
   reference?: number;
 }
@@ -83,7 +83,7 @@ export function ColumnChart({
                 <tr key={c.label} className="border-b border-slate-100">
                   <td className="py-1.5 pr-3">{c.label}</td>
                   {series.map((s) => (
-                    <td key={s.key} className="py-1.5 pr-3 text-right">{format(c.values[s.key] ?? 0)}</td>
+                    <td key={s.key} className="py-1.5 pr-3 text-right">{c.values[s.key] === null ? "Sin registro" : format(c.values[s.key] ?? 0)}</td>
                   ))}
                   {referenceLabel && <td className="py-1.5 text-right">{c.reference === undefined ? "—" : format(c.reference)}</td>}
                 </tr>
@@ -95,7 +95,7 @@ export function ColumnChart({
         <div className="overflow-x-auto">
           <div className="flex min-w-max items-end gap-3 border-b border-slate-300 pb-0" style={{ height }} role="img" aria-label={`${title}. Abrí "Ver como tabla" para los valores.`}>
             {columns.map((c) => {
-              const tip = c.tooltip ?? [c.label, ...series.map((s) => `${s.label}: ${format(c.values[s.key] ?? 0)}`), ...(c.reference !== undefined && referenceLabel ? [`${referenceLabel}: ${format(c.reference)}`] : [])].join(" · ");
+              const tip = c.tooltip ?? [c.label, ...series.map((s) => `${s.label}: ${c.values[s.key] === null ? "Sin registro" : format(c.values[s.key] ?? 0)}`), ...(c.reference !== undefined && referenceLabel ? [`${referenceLabel}: ${format(c.reference)}`] : [])].join(" · ");
               return (
                 <div
                   key={c.id ?? c.label}

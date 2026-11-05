@@ -1,8 +1,8 @@
 "use client";
+import { MaterialArrivalNotices } from "./material-arrival-notices";
 // Jefe de planta: Dashboard, Proyectos, Operarios (con asignaciones y correcciones de horas) y Alertas. Sin importes:
 // ni costos, ni precios, ni rentabilidad.
 import { ProjectCard } from "./plant-projects";
-import { ExternalWorkSection } from "./external-work";
 import { AssignmentDialog, type AssignmentDraft } from "./assignment-dialog";
 import { HoursReviews } from "./hours-review";
 import { useMemo, useState } from "react";
@@ -17,7 +17,6 @@ import { usePlantAlerts, useToday } from "@/store/selectors";
 import { AlertItem } from "@/components/alerts/alert-item";
 import { OwnHoursButton } from "@/components/shared/own-hours";
 import { PageHeader } from "@/components/shared/page-header";
-import { CircuitPending } from "@/components/shared/pending-list";
 import { EmptyState } from "@/components/shared/empty-state";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -36,10 +35,9 @@ export function PlantSummaryPage() {
   const list = projects.filter((p) => !p.isClosed && ["production", "installation"].includes(p.status));
   return <div className="space-y-4">
     <PageHeader title="Hoy" subtitle={`Producción del ${formatDate(today)} · Proyecto → Mueble → Rubro → Materiales`} actions={<OwnHoursButton />} />
-    <CircuitPending session="jefe_planta" />
+    <MaterialArrivalNotices/>
     {!list.length && <p className="text-sm text-slate-500">No hay proyectos activos en producción.</p>}
-    {list.map((p) => <ProjectCard key={p.id} project={p} onAssign={setDraft} />)}
-    <ExternalWorkSection />
+    {list.map((p) => <ProjectCard key={p.id} project={p} onAssign={setDraft} todayOnly />)}
     <AssignmentDialog draft={draft} onClose={() => setDraft(null)} />
   </div>;
 }

@@ -1,7 +1,12 @@
 "use client";
+import { OperationalStage } from "@/components/projects/operational-actions";
+import { ExternalWorkSection } from "./external-work";
 import { ProductionMaterials } from "./production-materials";
 import { actualStart, withExternalHours } from "@/lib/frontend-work";
 import { useConfirmedAction } from "@/store/confirmed-action";
+// Jefe de planta → Proyectos (Lote 6): por producto, su estado y el contador de unidades terminadas (lo carga el
+// Jefe de planta); por rubro, horas estimadas, operarios pedidos/asignados y horas cargadas; por operario,
+// "cumplió / se pasó X h". Semáforo de entrega del proyecto. Sin importes.
 // Jefe de planta → Proyectos (Lote 6): por producto, su estado y el contador de unidades terminadas (lo carga el
 // Jefe de planta); por rubro, horas estimadas, operarios pedidos/asignados y horas cargadas; por operario,
 // "cumplió / se pasó X h". Semáforo de entrega del proyecto. Sin importes.
@@ -10,14 +15,14 @@ import { ClipboardList, Minus, Plus, UserPlus } from "lucide-react";
 import type { Project, ProjectItem } from "@/types";
 import { formatDate, formatNumber } from "@/lib/formatting";
 import { isAssignable, productRubroHours, thresholdOf, VERDICT_LABELS, type OperatorWork } from "@/lib/plant";
-import { projectProduction, scheduleSignal } from "@/lib/production";
+import { projectProduction } from "@/lib/production";
 import { rubroLabel } from "@/lib/rubros";
 import { useAppStore } from "@/store/use-app-store";
-import { useMaterialsStateOf, useToday, useLedgerBacked } from "@/store/selectors";
-import { MaterialsBadge } from "@/components/purchasing/purchasing-projects";
+import { useToday, useLedgerBacked } from "@/store/selectors";
+
 import { PageHeader } from "@/components/shared/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
-import { ProductionBadge, ScheduleBadge, StatusBadge } from "@/components/shared/badges";
+
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -26,7 +31,7 @@ import { cn } from "@/lib/utils";
 import { AssignmentDialog, type AssignmentDraft } from "./assignment-dialog";
 import { ProjectMaterials } from "./plant-materials";
 import { allUnitsDone, deliveryDecision } from "@/lib/circuit";
-import { MaterialChangesCard } from "@/components/projects/material-changes";
+
 import { AttachmentList } from "@/components/shared/attachments";
 import { PendingAction } from "@/components/shared/data-origin";
 import { confirmHandover, handoverOf } from "@/lib/ledger";
@@ -87,40 +92,46 @@ export function PlantProjectsPage() {
       ) : (
         list.map((p) => <ProjectCard key={p.id} project={p} onAssign={setDraft} />)
       )}
+      <ExternalWorkSection />
       <AssignmentDialog draft={draft} onClose={() => setDraft(null)} />
     </div>
   );
 }
 
-export function ProjectCard({ project: p, onAssign }: { project: Project; onAssign: (d: AssignmentDraft) => void }) {
+export function ProjectCard({ project: p, onAssign, todayOnly = false }: { project: Project; onAssign: (d: AssignmentDraft) => void; todayOnly?: boolean }) {
   const ledgerBacked = useLedgerBacked();
   const today = useToday();
   const assignments = useAppStore((s) => s.assignments);
   const settings = useAppStore((s) => s.settings);
   const operators = useAppStore((s) => s.operators);
-  const materialsOf = useMaterialsStateOf();
   const production = projectProduction(p);
-  const schedule = scheduleSignal(p, today, settings.dueSoonDays);
   const ledger = useAppStore((s) => s.ledger);
   const report = withExternalHours([p],ledger)[0];
   const rows = productRubroHours(report, assignments, thresholdOf(settings), today);
   const name = (id: string) => operators.find((o) => o.id === id)?.name ?? "Operario";
 
+  if (todayOnly) return <Card>
+    <CardHeader><CardTitle>{p.code} · {p.name}</CardTitle></CardHeader>
+    <CardContent className="space-y-4"><OperationalStage project={p}/>
+      {p.items.map((item) => <section key={item.id} className="rounded-lg border border-slate-200 p-3">
+        <h3 className="font-semibold">{item.name} × {item.quantity}</h3>
+        <UnitsTodayCounter project={p} item={item} />
+        {item.rubros.map((r) => <div key={r.rubro} className="mt-3 border-l-2 border-blue-200 pl-2"><h4 className="text-xs font-medium">{rubroLabel(r.rubro)}</h4><ProductionMaterials project={p} itemId={item.id} rubro={r.rubro} compact /></div>)}
+        <ProductionMaterials project={p} itemId={item.id} compact />
+      </section>)}
+      <ProjectMaterials project={p} simple />
+    </CardContent>
+  </Card>;
+
   return (
     <Card>
       <CardHeader>
         <CardTitle className="flex flex-wrap items-center gap-2">
-          <span className="text-slate-500">{p.code}</span> {p.name} <StatusBadge status={p.status} /> <MaterialsBadge state={materialsOf(p)} />
+          <span className="text-slate-500">{p.code}</span> {p.name}
         </CardTitle>
-        <div className="flex flex-wrap items-center gap-2 text-sm text-slate-600">
-          <span>Producción:</span> <ProductionBadge status={production.status} />
-          <span className="tabular">avance {Math.round(production.progress * 100)} %</span>
-          <span>· entrega {formatDate(p.dueDate)}</span> <ScheduleBadge view={schedule} />
-        </div>
-        <p className="text-xs text-slate-500">{schedule.reason}</p>
         <p className="text-xs text-slate-600">Cliente: {p.client} · Inicio previsto: {formatDate(p.startDate)} · Inicio real: {actualStart(p,ledger) ? formatDate(actualStart(p,ledger)!) : "Sin trabajo productivo registrado"}</p>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="space-y-4"><OperationalStage project={p}/>
         {production.products.length === 0 ? (
           <p className="text-sm text-slate-500">El proyecto todavía no tiene productos cargados (los carga el Administrativo).</p>
         ) : (
@@ -128,7 +139,7 @@ export function ProjectCard({ project: p, onAssign }: { project: Project; onAssi
             <section key={item.id} aria-label={item.name} className="rounded-lg border border-slate-200 p-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <h3 className="flex flex-wrap items-center gap-2 font-semibold text-slate-900">
-                  {item.name} <span className="font-normal text-slate-500">× {item.quantity}</span> <ProductionBadge status={status} />
+                  {item.name} <span className="font-normal text-slate-500">× {item.quantity}</span>
                 </h3>
                 <UnitsCounter project={p} item={item} />
               </div>
@@ -138,7 +149,7 @@ export function ProjectCard({ project: p, onAssign }: { project: Project; onAssi
                   <AttachmentList attachments={p.attachments.filter((a) => a.itemId === item.id)} projectId={p.id} canRemove={false} />
                 </div>
               )}
-              <ul className="mt-2 divide-y divide-slate-100">
+              <details className="mt-2"><summary className="cursor-pointer text-xs">Detalle de horas y asignaciones</summary><ul className="mt-2 divide-y divide-slate-100">
                 {rows
                   .filter((r) => r.itemId === item.id)
                   .map((r) => {
@@ -162,7 +173,6 @@ export function ProjectCard({ project: p, onAssign }: { project: Project; onAssi
                           )}
                         </div>
                         <p className="text-xs text-slate-600">{r.actual > r.estimated ? `Sobreconsumo: ${formatNumber(r.actual-r.estimated)} h` : `Horas pendientes estimadas: ${formatNumber(Math.max(0,r.estimated-r.actual))} h`} · Horas registradas hoy: {formatNumber(r.records.filter((e) => e.date === today).reduce((s,e) => s+e.hours,0))} h</p>
-                        <ProductionMaterials project={p} itemId={item.id} rubro={r.rubro} />
                         {r.operators.length > 0 && (
                           <div className="flex flex-wrap gap-1.5">
                             {r.operators.map((o) => (
@@ -173,8 +183,8 @@ export function ProjectCard({ project: p, onAssign }: { project: Project; onAssi
                       </li>
                     );
                   })}
-              </ul>
-              <ProductionMaterials project={p} itemId={item.id} />
+              </ul></details>
+              <ProductionMaterials project={p} itemId={item.id} allRubros />
             </section>
           ))
         )}
@@ -191,7 +201,6 @@ export function ProjectCard({ project: p, onAssign }: { project: Project; onAssi
           </section>
         )}
         {report.actualEntries.some((e) => e.labor && !e.itemId) && <section className="rounded border p-3 text-sm"><h3 className="font-semibold">Horas de proyecto/rubro sin atribuir a mueble</h3>{report.actualEntries.filter((e) => e.labor && !e.itemId).map((e) => <p key={e.id}>{e.date} · {e.rubro ? rubroLabel(e.rubro) : "Sin rubro"} · {formatNumber(e.labor!.hours)} h</p>)}</section>}
-        <MaterialChangesCard project={p} amounts={false} canCorrect={false} />
         <ProjectMaterials project={p} />
       </CardContent>
     </Card>
@@ -258,4 +267,26 @@ export function UnitsCounter({ project, item }: { project: Project; item: Projec
       {error && <p role="alert" className="text-xs text-red-600">{error}</p>}
     </div>
   );
+}
+
+/** Daily input updates the existing furniture total; its audit trail supplies today's figure. */
+function UnitsTodayCounter({ project, item }: { project: Project; item: ProjectItem }) {
+  const today = useToday();
+  const local = useAppStore((s) => s.demoLocal);
+  const save = useConfirmedAction("setCompletedUnits");
+  const [units,setUnits] = useState("");
+  const [error,setError] = useState("");
+  const entries = item.unitsHistory?.filter((h) => h.date === today) ?? [];
+  if (!local) return <UnitsCounter project={project} item={item} />;
+  return <form className="mt-2 flex flex-wrap gap-2 items-end" onSubmit={async (e) => {
+    e.preventDefault();const delta = Number(units);
+    if (!units || !Number.isInteger(delta) || delta <= 0) return setError("Indicá unidades completas mayores a cero.");
+    const result = await save(project.id,item.id,item.completedUnits + delta);
+    setError(result.ok ? "" : result.error);if (result.ok) setUnits("");
+  }}>
+    <label className="text-xs">Unidades terminadas hoy<Input className="mt-1 w-24" inputMode="numeric" value={units} onChange={(e) => setUnits(e.target.value)} /></label>
+    <Button size="sm" type="submit">Guardar unidades</Button>
+    <span className="text-xs text-slate-500">{entries.length ? `${entries.reduce((s,h) => s+h.next-h.previous,0)} registradas hoy` : "Sin registro diario"} · {item.completedUnits}/{item.quantity} acumuladas</span>
+    {error && <p role="alert" className="text-xs text-red-700">{error}</p>}
+  </form>;
 }

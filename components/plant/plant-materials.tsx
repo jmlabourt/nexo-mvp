@@ -1,12 +1,14 @@
 "use client";
 // Jefe de planta → Avance de proyectos: material en planta, "Entregar material" y "Cierre del día"
 // (docs/PLANTA_MATERIALES.md). Solo cantidades: el Jefe nunca ve ni manda costos.
+// Jefe de planta → Avance de proyectos: material en planta, "Entregar material" y "Cierre del día"
+// (docs/PLANTA_MATERIALES.md). Solo cantidades: el Jefe nunca ve ni manda costos.
 import { useState } from "react";
-import { PackageOpen, ClipboardCheck } from "lucide-react";
+import { ClipboardCheck } from "lucide-react";
 import type { MaterialDelivery, Project } from "@/types";
 import { activeOperators } from "@/lib/operators";
 import { formatDate, formatQty } from "@/lib/formatting";
-import { closeDayError, deliveryError, deliveryOptions, inProduction, openDeliveries, type CloseDeliveryInput } from "@/lib/plant-materials";
+import { closeDayError, deliveryOptions, inProduction, openDeliveries, type CloseDeliveryInput } from "@/lib/plant-materials";
 import { parseDecimal } from "@/lib/schemas";
 import { useAppStore } from "@/store/use-app-store";
 import { useConfirmedAction } from "@/store/confirmed-action";
@@ -23,10 +25,10 @@ const qty = (s: string) => {
 };
 
 /** Material entregado y sin cerrar, con los botones de entrega y cierre. */
-export function ProjectMaterials({ project }: { project: Project }) {
+export function ProjectMaterials({ project, simple = false }: { project: Project; simple?: boolean }) {
   const deliveries = useAppStore((s) => s.deliveries);
   const operators = useAppStore((s) => s.operators);
-  const [dialog, setDialog] = useState<"deliver" | "close" | null>(null);
+  const [dialog, setDialog] = useState<"direct" | "close" | null>(null);
   const open = openDeliveries(deliveries, project.id);
   const itemName = (id?: string) => project.items.find((i) => i.id === id)?.name ?? "—";
   const who = (id?: string) => operators.find((o) => o.id === id)?.name;
@@ -38,16 +40,17 @@ export function ProjectMaterials({ project }: { project: Project }) {
         <h3 className="text-sm font-semibold text-slate-900">Material en planta</h3>
         {canWork && (
           <div className="flex flex-wrap gap-2">
-            <Button size="sm" variant="outline" onClick={() => setDialog("deliver")}>
-              <PackageOpen /> Entregar material
+
+            <Button size="sm" variant="outline" onClick={() => setDialog("direct")}>
+              <ClipboardCheck /> Registrar materiales
             </Button>
-            <Button size="sm" onClick={() => setDialog("close")}>
+            {(open.length > 0) && <Button size="sm" onClick={() => setDialog("close")}>
               <ClipboardCheck /> Cierre del día
-            </Button>
+            </Button>}
           </div>
         )}
       </div>
-      {open.length === 0 ? (
+      {simple && open.length === 0 ? null : open.length === 0 ? (
         <p className="mt-1 text-sm text-slate-500">Nada entregado sin cerrar.</p>
       ) : (
         <ul className="mt-2 divide-y divide-slate-200 text-sm">
@@ -67,7 +70,7 @@ export function ProjectMaterials({ project }: { project: Project }) {
       )}
       <Dialog open={dialog !== null} onOpenChange={(o) => !o && setDialog(null)}>
         <DialogContent>
-          {dialog === "deliver" && <DeliveryForm project={project} onDone={() => setDialog(null)} />}
+          {dialog === "direct" && <DirectUsageForm project={project} onDone={() => setDialog(null)} />}
           {dialog === "close" && <CloseDayForm project={project} open={open} onDone={() => setDialog(null)} />}
         </DialogContent>
       </Dialog>
@@ -75,26 +78,45 @@ export function ProjectMaterials({ project }: { project: Project }) {
   );
 }
 
-function DeliveryForm({ project, onDone }: { project: Project; onDone: () => void }) {
+function DirectUsageForm({ project, onDone }: { project: Project; onDone: () => void }) {
   const today = useToday();
   const stock = useAppStore((s) => s.stock);
   const deliveries = useAppStore((s) => s.deliveries);
   const operators = activeOperators(useAppStore((s) => s.operators));
-  const deliver = useConfirmedAction("deliverMaterial");
+  const directUsage = useConfirmedAction("directMaterialUsage");
   const options = deliveryOptions(stock, deliveries, project.id);
   const [materialId, setMaterialId] = useState(options[0]?.materialId ?? "");
   const option = options.find((o) => o.materialId === materialId);
   const [source, setSource] = useState<"warehouse" | "project">(option && option.project > 0 ? "project" : "warehouse");
-  const [quantity, setQuantity] = useState("");
+  const [consumed, setConsumed] = useState("");
+  const [waste, setWaste] = useState("");
+  const [leftover, setLeftover] = useState("");
   const [itemId, setItemId] = useState(project.items[0]?.id ?? "");
   const [operatorId, setOperatorId] = useState("");
   const [error, setError] = useState("");
-  const input = { projectId: project.id, itemId, operatorId: operatorId || undefined, materialId, quantity: qty(quantity), source, date: today };
-  const problem = quantity.trim() ? deliveryError(project, stock, deliveries, input, today) : null;
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const r = await deliver(input);
+    const q = qty(consumed || "0") + qty(waste || "0") + qty(leftover || "0");
+    const c = qty(consumed || "0");
+    const w = qty(waste || "0");
+    const l = qty(leftover || "0");
+    if (!Number.isFinite(q) || !Number.isFinite(c) || !Number.isFinite(w) || !Number.isFinite(l)) {
+      return setError("Las cantidades deben ser numéricas.");
+    }
+    const r = await directUsage({
+      projectId: project.id,
+      itemId,
+      operatorId: operatorId || undefined,
+      materialId,
+      quantity: q,
+      source,
+      date: today,
+      consumed: c,
+      waste: w,
+      leftover: l,
+      units: project.items.map((i) => ({ itemId: i.id, units: i.completedUnits })),
+    });
     if (!r.ok) return setError(r.error);
     onDone();
   };
@@ -102,65 +124,47 @@ function DeliveryForm({ project, onDone }: { project: Project; onDone: () => voi
   return (
     <form onSubmit={submit} noValidate>
       <DialogHeader>
-        <DialogTitle>Entregar material · {project.code}</DialogTitle>
-        <DialogDescription>Qué material sale y para qué producto. Solo cantidades: todavía no es costo (lo es lo que se consume).</DialogDescription>
+        <DialogTitle>Registrar materiales · {project.code}</DialogTitle>
+        <DialogDescription>Usa el material disponible y cierra el consumo, desperdicio y sobrante en el mismo paso. No requiere una entrega previa.</DialogDescription>
       </DialogHeader>
       {options.length === 0 ? (
-        <p className="text-sm text-slate-600">No hay material libre en el depósito ni asignado a este proyecto.</p>
+        <p className="text-sm text-slate-600">No hay material disponible para registrar un consumo directo.</p>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2">
-          <Field label="Material" htmlFor="dl-material" className="sm:col-span-2">
-            <Select
-              id="dl-material"
-              value={materialId}
-              onChange={(e) => {
-                setMaterialId(e.target.value);
-                const o = options.find((x) => x.materialId === e.target.value);
-                setSource(o && o.project > 0 ? "project" : "warehouse");
-              }}
-            >
+          <Field label="Material" htmlFor="du-material" className="sm:col-span-2">
+            <Select id="du-material" value={materialId} onChange={(e) => { setMaterialId(e.target.value); const o = options.find((x) => x.materialId === e.target.value); setSource(o && o.project > 0 ? "project" : "warehouse"); }}>
               {options.map((o) => (
-                <option key={o.materialId} value={o.materialId}>
-                  {o.materialName}
-                </option>
+                <option key={o.materialId} value={o.materialId}>{o.materialName}</option>
               ))}
             </Select>
           </Field>
           {option && (
             <fieldset className="sm:col-span-2">
-              <legend className="mb-1 text-sm font-medium text-slate-700">Sale de</legend>
+              <legend className="mb-1 text-sm font-medium text-slate-700">Origen</legend>
               <div className="flex flex-col gap-1.5 text-sm sm:flex-row sm:gap-4">
-                <label className="flex items-center gap-2">
-                  <input type="radio" name="dl-source" checked={source === "project"} disabled={option.project <= 0} onChange={() => setSource("project")} />
-                  Asignado al proyecto ({formatQty(option.project, option.unit)})
-                </label>
-                <label className="flex items-center gap-2">
-                  <input type="radio" name="dl-source" checked={source === "warehouse"} disabled={option.warehouse <= 0} onChange={() => setSource("warehouse")} />
-                  Depósito libre ({formatQty(option.warehouse, option.unit)})
-                </label>
+                <label className="flex items-center gap-2"><input type="radio" name="du-source" checked={source === "project"} disabled={option.project <= 0} onChange={() => setSource("project")} />Asignado al proyecto ({formatQty(option.project, option.unit)})</label>
+                <label className="flex items-center gap-2"><input type="radio" name="du-source" checked={source === "warehouse"} disabled={option.warehouse <= 0} onChange={() => setSource("warehouse")} />Depósito libre ({formatQty(option.warehouse, option.unit)})</label>
               </div>
             </fieldset>
           )}
-          <Field label={`Cantidad${option ? ` (${option.unit})` : ""}`} htmlFor="dl-qty" error={problem ?? undefined}>
-            <Input id="dl-qty" inputMode="decimal" value={quantity} onChange={(e) => setQuantity(e.target.value)} aria-invalid={!!problem} aria-describedby={problem ? "dl-qty-error" : undefined} />
-          </Field>
-          <Field label="Producto" htmlFor="dl-item">
-            <Select id="dl-item" value={itemId} onChange={(e) => setItemId(e.target.value)}>
-              {project.items.map((i) => (
-                <option key={i.id} value={i.id}>
-                  {i.name} × {i.quantity}
-                </option>
-              ))}
+          <Field label="Producto" htmlFor="du-item">
+            <Select id="du-item" value={itemId} onChange={(e) => setItemId(e.target.value)}>
+              {project.items.map((i) => <option key={i.id} value={i.id}>{i.name} × {i.quantity}</option>)}
             </Select>
           </Field>
-          <Field label="Operario (opcional)" htmlFor="dl-op" className="sm:col-span-2">
-            <Select id="dl-op" value={operatorId} onChange={(e) => setOperatorId(e.target.value)}>
+          <Field label="Consumido" htmlFor="du-consumed">
+            <Input id="du-consumed" inputMode="decimal" value={consumed} onChange={(e) => setConsumed(e.target.value)} />
+          </Field>
+          <Field label="Desperdicio" htmlFor="du-waste">
+            <Input id="du-waste" inputMode="decimal" value={waste} onChange={(e) => setWaste(e.target.value)} />
+          </Field>
+          <Field label="Sobrante reutilizable" htmlFor="du-leftover">
+            <Input id="du-leftover" inputMode="decimal" value={leftover} onChange={(e) => setLeftover(e.target.value)} />
+          </Field>
+          <Field label="Operario (opcional)" htmlFor="du-op" className="sm:col-span-2">
+            <Select id="du-op" value={operatorId} onChange={(e) => setOperatorId(e.target.value)}>
               <option value="">Sin operario</option>
-              {operators.map((o) => (
-                <option key={o.id} value={o.id}>
-                  {o.name}
-                </option>
-              ))}
+              {operators.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
             </Select>
           </Field>
         </div>
@@ -168,7 +172,7 @@ function DeliveryForm({ project, onDone }: { project: Project; onDone: () => voi
       {error && <p role="alert" className="mt-3 text-sm text-red-600">{error}</p>}
       <DialogFooter>
         <Button type="button" variant="outline" onClick={onDone}>Cancelar</Button>
-        <Button type="submit" disabled={options.length === 0 || !quantity.trim() || !!problem}>Registrar entrega</Button>
+        <Button type="submit" disabled={options.length === 0 || !(qty(consumed || "0") + qty(waste || "0") + qty(leftover || "0") > 0)}>Guardar uso</Button>
       </DialogFooter>
     </form>
   );

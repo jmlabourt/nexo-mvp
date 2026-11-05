@@ -48,7 +48,7 @@ afterEach(cleanup);
 describe("Proyectos por sesión", () => {
   it("Gerencia ve precio, costos, ganancia y rentabilidad proyectadas", () => {
     render(<ProjectsPage />);
-    expect(screen.getAllByRole("columnheader", { name: "Rentabilidad proyectada" }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("columnheader", { name: "Margen acumulado" }).length).toBeGreaterThan(0);
     expect(screen.getAllByRole("columnheader", { name: "Costo proyectado" }).length).toBeGreaterThan(0);
   });
 
@@ -73,10 +73,9 @@ describe("Proyectos por sesión", () => {
 
 describe("Stock por sesión", () => {
   it("Gerencia solo consulta stock: sin ingresar, asignar, ubicación ni devolución al proveedor", async () => {
-    const user = userEvent.setup();
     render(<StockPage />);
     expect(screen.queryByRole("button", { name: /Ingresar stock/ })).not.toBeInTheDocument();
-    for (const b of screen.getAllByRole("button", { name: "Ver lotes" }).slice(0, 3)) await user.click(b);
+    expect(screen.queryByRole("button",{ name:"Ver lotes" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Asignar|Ubicación|proveedor/i })).not.toBeInTheDocument();
   });
 
@@ -97,8 +96,7 @@ describe("Configuración por sesión", () => {
     render(<SettingsPage />);
     const tabs = screen.getAllByRole("tab").map((t) => t.textContent);
     expect(tabs).toEqual([
-      "Rubros y capacidad",
-      "Costos horarios",
+      "Capacidad: consulta",
       "Costos",
       "Alertas",
       "Indicadores y cálculos",
@@ -130,8 +128,9 @@ describe("Configuración por sesión", () => {
   it("Administración no ve costos horarios, alertas ni usuarios", () => {
     useAppStore.setState({ currentMode: "administracion" });
     render(<SettingsPage />);
-    expect(screen.getAllByRole("tab").map((t) => t.textContent)).toEqual(["Nomenclatura", "Rubros"]);
-    expect(screen.queryByRole("button", { name: /Guardar/ })).not.toBeInTheDocument();
+    expect(screen.getAllByRole("tab").map((t) => t.textContent)).toEqual(["Materiales"]);
+    expect(screen.queryByRole("button", { name: /Guardar costos horarios/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("tab", { name: "Costos horarios" })).not.toBeInTheDocument();
   });
 });
 
@@ -153,6 +152,6 @@ describe("Jefe de planta y Compras", () => {
     expect(screen.getByRole("heading", { name: "Dashboard" })).toBeInTheDocument();
     cleanup();
     render(<PurchasingProjectsPage />);
-    expect(screen.getByRole("heading", { name: "Necesidades" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Por comprar" })).toBeInTheDocument();
   });
 });

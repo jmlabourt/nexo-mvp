@@ -20,6 +20,8 @@ export function CloseDialog({ project, open, onOpenChange }: { project: Project;
   const closeProject = useConfirmedAction("closeProject");
   const [step, setStep] = useState<0 | 1>(0);
   const stock = useAppStore((s) => s.stock);
+  const local = useAppStore((s)=>s.demoLocal);
+  const canMove = !local;
   const registerUsage = useConfirmedAction("registerUsage");
   const [error, setError] = useState("");
   const [act, setAct] = useState<{ action: StockAction; target: StockTarget } | null>(null);
@@ -82,7 +84,7 @@ export function CloseDialog({ project, open, onOpenChange }: { project: Project;
                 <div className="flex items-center gap-2 font-medium">
                   <TriangleAlert className="size-4" /> Hay material asignado sin destino
                 </div>
-                <p className="mt-1">No se puede cerrar con material en el aire. Elegí qué pasó con cada uno:</p>
+                <p className="mt-1">No se puede cerrar con material en el aire. Compras o Planta deben conciliarlo antes del cierre.</p>
               </div>
             )}
             {loose.length > 0 && (
@@ -93,9 +95,11 @@ export function CloseDialog({ project, open, onOpenChange }: { project: Project;
                       <div className="font-medium text-slate-900">{h.lot.materialName}</div>
                       <div className="text-xs text-slate-500">{formatQty(h.quantity, h.lot.unit)} · {formatCurrency(h.quantity * h.lot.unitCost)}</div>
                     </div>
+                    {canMove && <>
                     <Button size="sm" variant="outline" onClick={() => setAct({ action: "release", target: target(h) })}>Volver al stock</Button>
                     <Button size="sm" variant="outline" onClick={() => setAct({ action: "transfer", target: target(h) })}>Otro proyecto</Button>
                     <Button size="sm" variant="outline" onClick={() => setAct({ action: "leftover", target: target(h) })}>Sobrante</Button>                    <Button size="sm" variant="ghost" className="text-red-700" onClick={() => markWaste(h)}>Desperdicio</Button>
+                    </>}
                   </li>
                 ))}
               </ul>
@@ -122,7 +126,7 @@ export function CloseDialog({ project, open, onOpenChange }: { project: Project;
               </div>
             )}
             {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
-            {act && <StockActionDialog action={act.action} target={act.target} open onOpenChange={(o) => { if (!o) setAct(null); }} />}
+            {canMove && act && <StockActionDialog action={act.action} target={act.target} open onOpenChange={(o) => { if (!o) setAct(null); }} />}
           </div>
         ) : (
           <div className="space-y-5">
@@ -143,14 +147,14 @@ export function CloseDialog({ project, open, onOpenChange }: { project: Project;
               </div>
               <div className="pb-1 text-lg font-medium tabular text-slate-700">{formatMarginPoints(econ.marginDeltaPp, { signed: true })}</div>
             </div>
-            {econ.categories.some((c) => c.budget > 0 && c.actual === 0) && (
+            {econ.categories.filter((c) => c.category !== "financial" && c.budget > 0 && c.actual === 0).length > 0 && (
               <div className="rounded-md bg-amber-50 p-3 text-sm text-amber-900" role="alert">
                 <div className="flex items-center gap-2 font-medium">
                   <TriangleAlert className="size-4" /> Categorías presupuestadas sin costos registrados
                 </div>
                 <p className="mt-1">
                   {econ.categories
-                    .filter((c) => c.budget > 0 && c.actual === 0)
+                    .filter((c) => c.category !== "financial" && c.budget > 0 && c.actual === 0)
                     .map((c) => `${CATEGORY_LABELS[c.category]} (${formatCurrency(c.budget)})`)
                     .join(", ")}
                   . Si esos costos ya ocurrieron, registralos antes de cerrar: si no, la rentabilidad real va a quedar más alta de lo que fue.
@@ -171,14 +175,16 @@ export function CloseDialog({ project, open, onOpenChange }: { project: Project;
                 </TR>
               </THead>
               <TBody>
-                {econ.categories.map((c) => (
-                  <TR key={c.category}>
-                    <TD>{CATEGORY_LABELS[c.category]}</TD>
-                    <TD className="text-right tabular">{formatCurrency(c.budget)}</TD>
-                    <TD className="text-right tabular">{formatCurrency(c.actual)}</TD>
-                    <TD className={`text-right tabular ${c.actualVariance.amount > 0 ? "text-red-700" : "text-emerald-700"}`}>{formatSignedCurrency(c.actualVariance.amount)}</TD>
-                  </TR>
-                ))}
+                {econ.categories
+                  .filter((c) => c.category !== "financial")
+                  .map((c) => (
+                    <TR key={c.category}>
+                      <TD>{CATEGORY_LABELS[c.category]}</TD>
+                      <TD className="text-right tabular">{formatCurrency(c.budget)}</TD>
+                      <TD className="text-right tabular">{formatCurrency(c.actual)}</TD>
+                      <TD className={`text-right tabular ${c.actualVariance.amount > 0 ? "text-red-700" : "text-emerald-700"}`}>{formatSignedCurrency(c.actualVariance.amount)}</TD>
+                    </TR>
+                  ))}
               </TBody>
             </Table>
           </div>

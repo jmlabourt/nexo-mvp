@@ -48,42 +48,21 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("Jefe de planta", () => {
-  it("entrega material del depósito y cierra el día, solo con cantidades", async () => {
-    const user = userEvent.setup();
-    render(<PlantProjectsPage />);
-    const section = screen.getByRole("region", { name: "Material en planta de P-1058" });
-    expect(within(section).getByText("Nada entregado sin cerrar.")).toBeInTheDocument();
-
-    await user.click(within(section).getByRole("button", { name: /Entregar material/ }));
-    const dialog = await screen.findByRole("dialog");
-    await user.selectOptions(within(dialog).getByLabelText("Material"), "mel-blanca-18");
-    expect(within(dialog).getByLabelText(/Depósito libre \(3,5 placas\)/)).toBeChecked();
-    await user.type(within(dialog).getByLabelText(/Cantidad/), "9");
-    expect(within(dialog).getByRole("alert")).toHaveTextContent("No hay tanto material libre en el depósito (hay 3,5 placas).");
-    await user.clear(within(dialog).getByLabelText(/Cantidad/));
-    await user.type(within(dialog).getByLabelText(/Cantidad/), "2");
-    await user.selectOptions(within(dialog).getByLabelText("Operario (opcional)"), "op-juan");
+  it("registra materiales sin entregar ni generar una entrega artificial", async () => {
+    useAppStore.setState({ demoLocal:true });
+    const user = userEvent.setup();render(<PlantProjectsPage />);
+    const section = screen.getByRole("region",{ name:"Material en planta de P-1058" });
+    expect(within(section).queryByRole("button",{ name:/Entregar material/ })).not.toBeInTheDocument();
+    await user.click(within(section).getByRole("button",{ name:/Registrar materiales/ }));
+    const dialog = screen.getByRole("dialog");
+    await user.selectOptions(within(dialog).getByLabelText("Material"),"mel-blanca-18");
+    await user.type(within(dialog).getByLabelText("Consumido"),"1,5");
+    await user.type(within(dialog).getByLabelText("Sobrante reutilizable"),"0,5");
     expect(dialog.textContent).not.toMatch(/\$/);
-    await user.click(within(dialog).getByRole("button", { name: "Registrar entrega" }));
-
-    expect(useAppStore.getState().deliveries).toHaveLength(1);
-    expect(within(section).getByText(/de Melamina blanca 18 mm en producción → Mesa de comedor · Juan Pérez/)).toBeInTheDocument();
-
-    await user.click(within(section).getByRole("button", { name: /Cierre del día/ }));
-    const close = await screen.findByRole("dialog");
-    expect(within(close).getByRole("region", { name: "Unidades terminadas" })).toBeInTheDocument();
-    const consumed = within(close).getByLabelText("Consumido");
-    await user.clear(consumed);
-    await user.type(consumed, "1,5");
-    await user.clear(within(close).getByLabelText("Devuelto al depósito"));
-    await user.type(within(close).getByLabelText("Devuelto al depósito"), "0,5");
-    expect(close.textContent).not.toMatch(/\$/);
-    await user.click(within(close).getByRole("button", { name: "Cerrar el día" }));
-
-    const [d] = useAppStore.getState().deliveries;
-    expect(d).toMatchObject({ consumed: 1.5, waste: 0, leftover: 0.5 });
-    expect(within(section).getByText("Nada entregado sin cerrar.")).toBeInTheDocument();
-    expect(document.body.textContent).not.toMatch(/\$/);
+    await user.click(within(dialog).getByRole("button",{ name:"Guardar uso" }));
+    expect(useAppStore.getState().deliveries).toHaveLength(0);
+    const project = useAppStore.getState().projects.find((p) => p.code === "P-1058")!;
+    expect(project.materialUsages.filter((u) => u.notes?.startsWith("Registro de materiales")).reduce((sum,u) => sum+u.quantityConsumed,0)).toBe(1.5);
   });
 });
 

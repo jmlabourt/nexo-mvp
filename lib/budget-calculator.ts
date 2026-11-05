@@ -32,6 +32,7 @@ export interface QuoteMaterial {
 /** Un rubro de la cotización. Es un dato plano: un conjunto de rubros se puede guardar como plantilla. */
 export interface QuotedStaffHours { rateId: string; name: string; category: "design" | "admin"; hours: number; hourlyCost: number }
 export interface QuoteRubro {
+  productKey?: string;
   staffHours?: QuotedStaffHours[];
   rubro: RubroId;
   materials: QuoteMaterial[];
@@ -327,7 +328,7 @@ export function rubroLines(r: QuoteRubro, labor: RubroLabor | null, { rates, ove
     if (!(h.hours > 0)) continue;
     lines.push({ category:h.category,rubro:r.rubro,description:`${def.label}: ${h.name}`,quantity:h.hours,unit:"h",unitCost:h.hourlyCost,hourRateId:h.rateId,hourType:"normal",notes:`Personal no operario: ${h.name}. Tarifa congelada al cotizar.` });
   }
-  return lines;
+  return lines.map((line)=>({ ...line,quotationItem:r.product, ...(r.productKey ? {quotationItemKey:r.productKey} : {}) }));
 }
 
 /** Márgenes de seguridad: línea explícita y trazable dentro de su categoría, sin rubro. */

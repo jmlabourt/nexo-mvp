@@ -22,6 +22,10 @@ afterEach(cleanup);
 describe("flujo compartido entre vistas frontend", () => {
   it("precarga proyecto/rubro sin mueble y el operario registra otra imputación sin reescribir el plan", async () => {
     const st = useAppStore.getState();
+    expect(st.saveAssignment({ projectId:"p",rubro:"carpinteria_madera",operatorId:"op",date,plannedHours:8 }).ok).toBe(false);
+    useAppStore.setState({currentMode:"gerencia"});
+    const configured=st.recordLedger(["gerencia"],(l)=>({...l,rubroCatalog:[{id:"carpinteria_madera",name:"Carpintería madera",active:true}],personnel:[{employeeId:"op",enabled:true,view:"operario",productive:true,enabledRubros:["carpinteria_madera"]}]}));
+    expect(configured.ok).toBe(true);useAppStore.setState({currentMode:"jefe_planta"});
     const r = st.saveAssignment({ projectId:"p",rubro:"carpinteria_madera",operatorId:"op",date,plannedHours:8 });
     expect(r.ok).toBe(true);
     const assignment = useAppStore.getState().assignments[0];

@@ -167,8 +167,8 @@ describe("estados y ejecución", () => {
     expect(ops.changeStatus(approved, "production", ctx).status).toBe("production");
     const purchasing = ops.changeStatus(approved, "purchasing", ctx);
     expect(purchasing.status).toBe("purchasing");
-    expect(() => ops.changeStatus(purchasing, "approved", ctx)).toThrow(/corrección/);
-    expect(ops.changeStatus(purchasing, "approved", ctx, { confirmBack: true }).status).toBe("approved");
+    expect(() => ops.changeStatus(purchasing, "approved", ctx)).toThrow(/Compras/);
+    expect(()=>ops.changeStatus(purchasing, "approved", ctx, { confirmBack: true })).toThrow(/Compras/);
     expect(() => ops.changeStatus(purchasing, "production", { ...ctx, role: "operator" })).toThrow(/Administrativo/);
     expect(() => ops.changeStatus(purchasing, "completed", ctx)).toThrow(/Cerrar/);
   });
@@ -179,8 +179,9 @@ describe("estados y ejecución", () => {
     expect(approved.baseline?.budgetTotal).toBe(projectEconomics(quotation).budgetTotal);
     // Desde Aprobado el costo presupuestado queda congelado (Lote 5A): solo se corrige con registro.
     expect(() => ops.addBudgetLine(approved, { category: "contingency", description: "extra", quantity: null, unit: "global", unitCost: 500_000 }, ctx)).toThrow(/congelado/);
-    const back = ops.changeStatus(ops.changeStatus(approved, "purchasing", ctx), "approved", ctx, { confirmBack: true });
-    expect(back.baseline).toEqual(approved.baseline);
+    const purchasing=ops.changeStatus(approved,"purchasing",ctx);
+    expect(()=>ops.changeStatus(purchasing,"approved",ctx,{confirmBack:true})).toThrow(/Compras/);
+    expect(purchasing.baseline).toEqual(approved.baseline);
   });
 });
 

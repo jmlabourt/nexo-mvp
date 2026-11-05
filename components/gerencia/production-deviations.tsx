@@ -13,30 +13,38 @@ import { Table,TBody,TD,TH,THead,TR } from "@/components/ui/table";
 const series = [{ key: "quoted", label: "Cotizado", color: "#60a5fa" },{ key: "real", label: "Real registrado", color: "#1d4ed8" }];
 export function ProductionDeviations({ projects, ledger }: { projects: Project[]; ledger: Ledger }) {
   const [selected,setSelected] = useState(projects[0]?.id ?? "");
-  const reporting = withExternalHours(projects,ledger);
+  const [scope,setScope] = useState("partial");
+  const [table,setTable] = useState(false);
+  const reporting = withExternalHours(projects.filter((p) => scope === "closed" ? p.isClosed : !p.isClosed),ledger);
   const hours = hoursRows(reporting,"project");
   const rubros = hoursRows(reporting,"rubro").sort((a,b) => b.deviation-a.deviation);
-  const p = reporting.find((p) => p.id === selected);
-  const materials = projects.map((p) => ({ id:p.id, label:p.code, tooltip:`${p.code} · ${p.name}: cotizado ${formatCurrency((p.baseline?.lines ?? p.budgetLines).filter((l) => l.category === "materials").reduce((s,l) => s+l.total,0))} · real ${formatCurrency(materialActualCost(p.materialUsages))}` ,values:{ quoted:(p.baseline?.lines ?? p.budgetLines).filter((l) => l.category === "materials").reduce((s,l) => s+l.total,0),real:materialActualCost(p.materialUsages) } }));
+  const p = reporting.find((p) => p.id === selected) ?? reporting[0];
+  const materials = reporting.map((p) => ({ id:p.id, label:p.code, tooltip:`${p.code} · ${p.name}: cotizado ${formatCurrency((p.baseline?.lines ?? p.budgetLines).filter((l) => l.category === "materials").reduce((s,l) => s+l.total,0))} · ${p.materialUsages.length ? `real ${formatCurrency(materialActualCost(p.materialUsages))}` : "Sin registro de materiales"}` ,values:{ quoted:(p.baseline?.lines ?? p.budgetLines).filter((l) => l.category === "materials").reduce((s,l) => s+l.total,0),real:p.materialUsages.length ? materialActualCost(p.materialUsages) : null } }));
   const maxDeviation = Math.max(1,...rubros.map((r) => Math.abs(r.deviation)));
   const hourChartColumns = hours.map((r) => {
     const project = reporting.find((p) => p.id === r.key);
     return {
       id: r.key,
       label: project?.code ?? r.label,
-      tooltip: project ? `${project.code} · ${project.name}: cotizado ${formatNumber(r.budget)} h · real ${formatNumber(r.actual)} h` : r.label,
-      values: { quoted: r.budget, real: r.actual },
+      tooltip: project ? `${project.code} · ${project.name}: cotizado ${formatNumber(r.budget)} h · ${project.actualEntries.some((e) => e.category === "labor" && e.labor) ? `real ${formatNumber(r.actual)} h` : "Sin registro de horas"}` : r.label,
+      values: { quoted: r.budget, real: project?.actualEntries.some((e) => e.category === "labor" && e.labor) ? r.actual : null },
     };
   });
   return <section className="space-y-5" aria-label="Desvíos de producción">
     <h2 className="font-semibold">Desvíos de producción</h2>
+    <label className="block text-sm">Alcance<Select className="mt-1 max-w-md" value={scope} onChange={(e) => setScope(e.target.value)}><option value="partial">Proyectos abiertos · resultados parciales</option><option value="closed">Proyectos cerrados</option></Select></label>
+    {!reporting.length && <p className="text-sm text-slate-500">Sin datos para este alcance.</p>}
     <div><h3 className="text-sm font-medium mb-2">Horas cotizadas vs. reales por proyecto</h3><ColumnChart title="Horas cotizadas vs. reales por proyecto" series={series} columns={hourChartColumns} format={(n) => `${formatNumber(n)} h`} onColumnClick={(id) => id && setSelected(id)} /></div>
-    <div><h3 className="text-sm font-medium mb-2">Desvíos de horas por rubro</h3><p className="text-xs text-slate-500">Real − cotizado. En proyectos abiertos, las diferencias negativas son remanente estimado, no ahorro.</p><ul className="space-y-2 mt-2">{rubros.map((r) => <li key={r.key} className="text-xs"><div className="flex justify-between"><span>{r.label}</span><span>{r.deviation > 0 ? "+" : ""}{formatNumber(r.deviation)} h · {r.pct === null ? "Sin base" : `${formatNumber(r.pct)} %`}</span></div><div className="h-2 bg-slate-100 rounded"><div className={r.deviation > 0 ? "h-2 bg-red-500 rounded" : "h-2 bg-blue-400 rounded"} style={{ width:`${Math.abs(r.deviation)/maxDeviation*100}%` }} /></div></li>)}</ul></div>
+    <div><h3 className="text-sm font-medium mb-2">Desvíos de horas por rubro</h3>
+      <p className="text-xs text-slate-500">Real − cotizado. Negativo = menor utilización registrada; en proyectos abiertos es una diferencia parcial, no ahorro.</p>
+      <button type="button" className="text-xs text-blue-700" onClick={() => setTable(!table)}>{table ? "Ver gráfico de rubros" : "Ver tabla de rubros"}</button>
+      {table ? <Table><THead><TR><TH>Rubro</TH><TH>Cotizado</TH><TH>Real registrado</TH><TH>Diferencia</TH></TR></THead><TBody>{rubros.map((r) => <TR key={r.key}><TD>{r.label}</TD><TD>{formatNumber(r.budget)} h</TD><TD>{formatNumber(r.actual)} h</TD><TD>{formatNumber(r.deviation)} h</TD></TR>)}</TBody></Table> : <ul className="space-y-2 mt-2">{rubros.map((r) => <li key={r.key} className="text-xs"><div className="flex justify-between"><span>{r.label}</span><span>{r.deviation > 0 ? "+" : ""}{formatNumber(r.deviation)} h · {r.pct === null ? "Sin base" : `${formatNumber(r.pct)} %`}</span></div><div className="relative h-3 bg-slate-100 rounded"><span className="absolute left-1/2 h-3 border-l border-slate-400" /><div className={r.deviation > 0 ? "absolute h-3 bg-red-500 rounded" : "absolute h-3 bg-blue-400 rounded"} style={{ left:r.deviation >= 0 ? "50%" : `${50-Math.abs(r.deviation)/maxDeviation*50}%`,width:`${Math.abs(r.deviation)/maxDeviation*50}%` }} /></div></li>)}</ul>}
+    </div>
     <div><h3 className="text-sm font-medium mb-2">Materiales cotizados vs. reales por proyecto ($)</h3><ColumnChart title="Materiales cotizados vs. reales en pesos" series={series} columns={materials} format={formatCurrency} onColumnClick={(id) => id && setSelected(id)} /></div>
-    <label className="block text-sm">Detalle del proyecto<Select className="mt-1 max-w-md" value={selected} onChange={(e) => setSelected(e.target.value)}>{projects.map((p) => <option key={p.id} value={p.id}>{p.code} · {p.name}</option>)}</Select></label>
+    <label className="block text-sm">Detalle del proyecto<Select className="mt-1 max-w-md" value={p?.id ?? ""} onChange={(e) => setSelected(e.target.value)}>{reporting.map((p) => <option key={p.id} value={p.id}>{p.code} · {p.name}</option>)}</Select></label>
     {p && <details><summary className="cursor-pointer text-sm font-medium">Ver detalle por mueble, rubro y material · {p.isClosed ? "Cerrado" : "Parcial"}</summary>
       <Table><THead><TR><TH>Mueble / rubro</TH><TH>Cotizadas</TH><TH>Reales</TH><TH>Diferencia</TH><TH>%</TH></TR></THead><TBody>{p.items.flatMap((i) => i.rubros.map((r) => {
-        const actual = p.actualEntries.filter((e) => e.itemId === i.id && e.rubro === r.rubro && e.labor).reduce((s,e) => s+e.labor!.hours,0);
+        const actual = p.actualEntries.filter((e) => e.itemId === i.id && e.rubro === r.rubro && e.category === "labor" && e.labor).reduce((s,e) => s+e.labor!.hours,0);
         return <TR key={`${i.id}:${r.rubro}`}><TD>{i.name} · {rubroLabel(r.rubro)}</TD><TD>{formatNumber(r.hours)} h</TD><TD>{formatNumber(actual)} h</TD><TD>{formatNumber(actual-r.hours)} h</TD><TD>{r.hours ? `${formatNumber((actual-r.hours)/r.hours*100)} %` : "Sin base"}</TD></TR>;
       }))}{hoursRows([p],"furniture").filter((r) => r.key.endsWith(":unattributed") && r.actual > 0).map((r) => <TR key={r.key}><TD>{r.label}</TD><TD>Sin atribuir</TD><TD>{formatNumber(r.actual)} h</TD><TD>—</TD><TD>—</TD></TR>)}</TBody></Table>
       {p.items.map((i) => {

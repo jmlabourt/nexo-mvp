@@ -12,6 +12,7 @@ export interface Crumb {
 export const SECTION_LABELS: Record<string, string> = {
   dashboard: "Dashboard",
   administracion: "Dashboard",
+  "administracion/facturacion":"Facturación y pagos",
   projects: "Proyectos",
   alerts: "Alertas",
   quotes: "Cotizador",
@@ -22,7 +23,7 @@ export const SECTION_LABELS: Record<string, string> = {
   clientes: "Clientes",
   proveedores: "Proveedores",
   compras: "Compras",
-  "compras/proyectos": "Necesidades",
+  "compras/proyectos": "Por comprar",
   "compras/ordenes": "Órdenes de compra",
   "compras/alertas": "Alertas",
   "compras/proveedores": "Proveedores",

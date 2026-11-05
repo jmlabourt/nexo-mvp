@@ -34,12 +34,13 @@ const BY_ID = new Map(RUBROS.map((r) => [r.id, r]));
 
 export function rubroDef(id: RubroId): RubroDef {
   const def = BY_ID.get(id);
+  if (!def && customNames.has(id)) return { id,label:customNames.get(id)!,kind:"full" };
   if (!def) throw new Error(`Rubro desconocido: ${id}`);
   return def;
 }
 
 export function isRubroId(value: unknown): value is RubroId {
-  return typeof value === "string" && BY_ID.has(value as RubroId);
+  return typeof value === "string" && (BY_ID.has(value as RubroId) || customNames.has(value));
 }
 
 /**

@@ -5,7 +5,8 @@ import { useAppStore } from "@/store/use-app-store";
 import { useToday } from "@/store/selectors";
 import { createId } from "@/lib/activity";
 import { generalAllocations } from "@/lib/frontend-work";
-import { hourlyCostAt, registerInternalHours } from "@/lib/ledger";
+import { employeeCost, laborCategories } from "@/lib/personnel";
+import { registerInternalHours } from "@/lib/ledger";
 import { rubroLabel } from "@/lib/rubros";
 import { parseDecimal } from "@/lib/schemas";
 import { Button } from "@/components/ui/button";
@@ -15,7 +16,10 @@ export function FlexibleWork({ operator, assignment, onSaved }: { operator: Oper
   const all = useAppStore((s) => s.projects);
   const local = useAppStore((s) => s.demoLocal);
   const today = useToday();
-  const [form,setForm] = useState({ projectId: assignment?.projectId ?? "", itemId: assignment?.itemId ?? "", rubro: assignment?.rubro ?? "", hours: "" });
+  const ledger = useAppStore((s) => s.ledger);
+  const costHistory = useAppStore((s) => s.priceHistory);
+  const categories = laborCategories(ledger,operator.id);
+  const [form,setForm] = useState({ projectId: assignment?.projectId ?? "", itemId: assignment?.itemId ?? "", rubro: assignment?.rubro ?? "", hours: "",categoryId:"" });
   const [error,setError] = useState("");
   const [busy,setBusy] = useState(false);
   const request = useRef<string | null>(null);
@@ -32,17 +36,19 @@ export function FlexibleWork({ operator, assignment, onSaved }: { operator: Oper
       const actual = all.flatMap((p) => p.actualEntries).filter((e) => e.operatorId === operator.id && e.date === today).reduce((s,e) => s+(e.labor?.hours ?? 0),0);
       const internal = l.internalHours.filter((h) => h.employeeId === operator.id && h.date === today).reduce((s,h) => s+h.hours,0);
       if (actual+internal+hours > 24) throw new Error("La suma de horas reales del día supera las 24 h.");
-      const rate = hourlyCostAt(l,{ employeeId: operator.id, date: today },operator.hourlyCost);
+      const valued = employeeCost(l,operator,today,form.categoryId || undefined,costHistory);
+      const rate = valued.hourlyCost;
       const next = registerInternalHours(l,{ employeeId: operator.id, date: today, hours, hourlyCost: rate, task: "Trabajo interno general" },ctx);
       const row = next.internalHours.at(-1)!;
-      return { ...next, internalHours: next.internalHours.map((h) => h.id === row.id ? { ...h, allocations: generalAllocations(all,today,Math.round(hours*rate*100)/100) } : h) };
-    }) : st.executeWorkLocal({ requestId: request.current, operatorId: operator.id, projectId: form.projectId, itemId: form.itemId || undefined, rubro: form.rubro as RubroId, date: assignment?.date ?? today, hours, assignmentId: assignment?.id });
+      return { ...next, internalHours: next.internalHours.map((h) => h.id === row.id ? { ...h, categoryId: valued.categoryId, allocations: generalAllocations(all,today,Math.round(hours*rate*100)/100) } : h) };
+    }) : st.executeWorkLocal({ requestId: request.current, categoryId:form.categoryId || undefined, operatorId: operator.id, projectId: form.projectId, itemId: form.itemId || undefined, rubro: form.rubro as RubroId, date: assignment?.date ?? today, hours, assignmentId: assignment?.id });
     setBusy(false); setError(result.ok ? "" : result.error);
     if (result.ok) { request.current = null; setForm({ ...form,hours:"" }); onSaved("Horas reales registradas una sola vez. La planificación original se conserva."); }
   }}>
     <p className="text-xs text-slate-600">{assignment ? `Planificado: ${assignment.plannedHours} h. Registrá lo que realmente trabajaste.` : "Agregá otro trabajo válido o trabajo interno general."}</p>
     <label className="block text-sm">Proyecto<Select required value={form.projectId} onChange={(e) => setForm({ ...form,projectId:e.target.value,itemId:"",rubro:"" })}><option value="">Elegí…</option>{projects.map((p) => <option key={p.id} value={p.id}>{p.code} · {p.name}</option>)}<option value="internal">Trabajo interno general</option></Select></label>
     {p && <><label className="block text-sm">Mueble (opcional)<Select value={form.itemId} onChange={(e) => setForm({ ...form,itemId:e.target.value,rubro:"" })}><option value="">Sin atribuir a mueble</option>{p.items.map((i) => <option key={i.id} value={i.id}>{i.name}</option>)}</Select></label><label className="block text-sm">Rubro<Select required value={form.rubro} onChange={(e) => setForm({ ...form,rubro:e.target.value })}><option value="">Elegí…</option>{rubros.map((r) => <option key={r.rubro} value={r.rubro}>{rubroLabel(r.rubro)}</option>)}</Select></label></>}
+    {categories.length > 1 && <label className="block text-sm">Categoría laboral<Select value={form.categoryId} onChange={(e) => setForm({ ...form,categoryId:e.target.value })}><option value="">Elegí…</option>{categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</Select></label>}
     <label className="block text-sm">Horas reales<Input required inputMode="decimal" value={form.hours} onChange={(e) => setForm({ ...form,hours:e.target.value })} /></label>
     <Button type="submit" disabled={busy || !form.projectId}>Registrar ejecución real</Button>
     {error && <p role="alert" className="text-sm text-red-700">{error}</p>}

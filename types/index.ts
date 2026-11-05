@@ -63,7 +63,12 @@ export type AlertLevel = "info" | "warning" | "critical";
 export type EconomicHealth = "no_data" | "healthy" | "attention" | "risk";
 
 export interface BudgetLine {
+  quotationItem?: string;
+  quotationItemKey?: string;
+  quotationItemId?: string;
   id: string;
+  /** Read-only BOM projection: historical need IDs, never written back to orders. */
+  historicalNeedIds?: string[];
   category: BudgetCategory;
   description: string;
   /** Solo para líneas de materiales: vincula con el catálogo para reconciliar. */
@@ -178,6 +183,10 @@ export interface PurchaseOrderLine {
 
 /** Orden de compra (registro manual: sin mail ni banco). */
 export interface PurchaseOrder {
+  /** Auditoría frontend local: no reconstruir recepciones históricas sin evidencia. */
+  localReceipts?: Array<{ movementId: string; lineId: string; lotId: string; quantity: number; date: string; by: string; reversedAt?: string; reversedBy?: string; reason?: string }>;
+  statusHistory?: Array<{ previous: OrderStatus; next: OrderStatus; at: string; by: string; reason: string }>;
+
   id: string;
   /** Correlativo de la empresa: OC-0001. */
   number: string;
@@ -245,6 +254,7 @@ export interface LaborDetail {
 }
 
 export interface ActualEntry {
+  categoryId?: string;
   corrections?: Array<{ previous: { date: string; projectId: string; itemId?: string; rubro?: RubroId; hours: number; amount: number }; next: { date: string; projectId: string; itemId?: string; rubro?: RubroId; hours: number; amount: number }; reason: string; by: string; at: string }>;
   id: string;
   projectId: string;
@@ -317,7 +327,17 @@ export interface ActivityEvent {
   message: string;
 }
 
+export interface QuotationParameters {
+  materialsTargetPct:number;
+  laborTargetPct:number;
+  financialPct:number;
+  deadlineDays:number|null;
+}
+
 export interface Project {
+  productionDecision?:{date:string;reason:string;by:string;at:string};
+  procurementNotifiedAt?:string;
+  quotationParameters?: QuotationParameters;
   id: string;
   code: string;
   name: string;
@@ -364,6 +384,10 @@ export interface ProductRubro {
 
 /** Producto del proyecto (ej. "Mesa × 10"). Antes "mueble": es el mismo registro (project_items). */
 export interface ProjectItem {
+  quotationName?:string;
+  quotationKey?: string;
+  /** Auditoría local de unidades: no reconstruir fechas de totales históricos. */
+  unitsHistory?: Array<{ date:string; previous:number; next:number; by:string; at:string }>;
   id: string;
   name: string;
   description?: string;
@@ -378,6 +402,8 @@ export interface ProjectItem {
 export type ProductionStatus = "pending" | "in_production" | "done";
 
 export interface ProjectBaseline {
+  quotationParameters?: QuotationParameters;
+  items?: ProjectItem[];
   capturedAt: string;
   capturedBy: string;
   salesPrice: number;
@@ -544,6 +570,7 @@ export interface StockLot {
 }
 
 export interface StockMovement {
+  reversalOf?: string;
   id: string;
   lotId: string;
   kind: MovementKind;
@@ -581,8 +608,8 @@ export interface CatalogMaterial {
   unit: string;
   /** Costo de referencia (último conocido). Solo se usa si no hay compra ni presupuesto. */
   referenceCost: number;
-  /** Rubro al que pertenece normalmente. */
-  rubro: RubroId;
+  /** Clasificación heredada opcional; no condiciona el uso del material. */
+  rubro?: RubroId;
 }
 
 export interface AlertSettings {
@@ -794,8 +821,12 @@ export interface CommercialRejection {
 // persistencia real en la base es del equipo de backend (PENDIENTES_BACKEND.md). Todos los importes son sin IVA.
 // ─────────────────────────────────────────────────────────────
 
-/** Factura de venta emitida al cliente (la registra Gerencia). Facturado ≠ cobrado. */
+/** Factura de venta emitida al cliente (la registra Administración). Facturado ≠ cobrado. */
 export interface SalesInvoice {
+  dueDate?:string;
+  condition?:string;
+  milestoneId?:string;
+  cancelled?:boolean;
   id: string;
   projectId: string;
   number: string;
@@ -821,10 +852,11 @@ export interface Collection {
 }
 
 /**
- * Pago a un proveedor, confirmado por Gerencia sobre la factura que Compras cargó en la orden de compra.
+ * Pago a un proveedor, registrado por Administración sobre la obligación vinculada en la orden de compra.
  * Un pago no es ingreso ni un costo nuevo: el costo del material ya está en el proyecto.
  */
 export interface SupplierPayment {
+  paymentRequestId?:string;
   id: string;
   orderId: string;
   date: string;
@@ -902,6 +934,8 @@ export interface ClientHandover {
  * costo por hora vigente, congelado al cargar); sin proyecto son "Trabajo interno" y no van a ninguna OT.
  */
 export interface InternalHours {
+  categoryId?: string;
+  itemId?: string;
   corrections?: Array<{ previous: { date: string; hours: number; allocations?: Array<{ projectId:string;amount:number }> }; next: { date:string;hours:number }; by:string;at:string;reason:string }>;
   id: string;
   /** Persona que trabajó (nombre de la sesión en la demo). */
@@ -938,11 +972,13 @@ export interface RateRecord {
 
 /** Cliente del directorio (alta y edición en la demo). */
 export interface ClientEntry extends ClientRecord {
+  previousNames?: string[];
   createdAt: string;
 }
 
 /** Proveedor del directorio compartido (alta y edición en la demo). */
 export interface SupplierEntry extends SupplierRecord {
+  previousNames?: string[];
   website?: string;
   active: boolean;
   createdAt: string;
@@ -966,6 +1002,10 @@ export interface GeneralCost {
 /** Todos los registros nuevos de la demo integral, en un solo lugar. */
 /** Registros frontend para integrar después, sin alterar contratos del backend. */
 export interface ExternalWork {
+  status?:"commissioned"|"completed";
+  completedDate?:string;
+  completedBy?:string;
+  completedAt?:string;
   id: string;
   kind: "hourly" | "workshop";
   projectId: string;
@@ -984,18 +1024,45 @@ export interface ExternalWork {
   createdAt: string;
 }
 export interface FrontendPersonnel {
+  views?: Array<"gerencia" | "administracion" | "compras" | "jefe_planta" | "operario">;
+  workDays?: number[];
   employeeId: string;
   enabled: boolean;
   view: "gerencia" | "administracion" | "compras" | "jefe_planta" | "operario";
   hoursPerDay?: number;
   enabledRubros?: RubroId[];
   productive?: boolean;
+  categoryIds?: string[];
+  contact?: string;
+  phone?: string;
+  joinedOn?: string;
+  accessEnabledOn?: string;
+}
+export interface PaymentRequest {
+  cancelled?:{at:string;by:string;reason:string;remaining:number};
+  id:string; orderId:string; amount:number; date:string; reason:string;
+  by:string; at:string;
+  banking?:{ instrument:"transfer"|"echeq"; issuedOn:string; reference:string; dueOn?:string };
+}
+export interface FinancialCorrection {
+  id:string; entity:"invoice"|"collection"|"payment"|"banking"; targetId:string;
+  before:unknown; after:unknown; reason:string; by:string; at:string;
+}
+export interface CapacityPlan {
+  id:string; rubro:RubroId; from:string; to:string; workers:number; hoursPerWorker:number;
+  note:string; by:string; at:string;
 }
 export interface Ledger {
+  paymentRequests?:PaymentRequest[];
+  financialCorrections?:FinancialCorrection[];
+  capacityPlans?:CapacityPlan[];
+  quoteDefaults?: { materialsTargetPct:number; laborTargetPct:number };
+  materialCatalog?: Array<CatalogMaterial & { active?: boolean; validFrom: string }>;
   /** Extensiones frontend locales; no se envían al backend. */
   externalWork?: ExternalWork[];
   projectNomenclature?: { pattern: string; prefix: string; nextNumber: number };
-  staffCategories?: Array<{ id: string; name: string; category: "design" | "admin"; hourlyCost: number }>;
+  staffCategories?: Array<{ kind?:"operator"; id: string; name: string; category: HourCategory; hourlyCost: number; active?: boolean; rates?: Array<{ validFrom:string; hourlyCost:number; by:string; at:string }> }>;
+  capacityBase?: Record<string, number>;
   capacityAdjustments?: Array<{ id: string; rubro?: RubroId; date: string; hours: number; note: string; by: string; at: string }>;
   externalRates?: Array<{ rubro: RubroId; hourlyCost: number; validFrom: string; by: string; at: string }>;
   personnel?: FrontendPersonnel[];

@@ -1,5 +1,6 @@
 // Frontend-only domain extensions. No remote calls or changes to auth/backend contracts.
 import type { ExternalWork, Ledger, Project, RubroId } from "@/types";
+import { manualCapacityAt } from "./capacity-plans";
 import { createId } from "./activity";
 import { DomainError } from "./project-operations";
 import { addDays } from "./plant";
@@ -15,7 +16,7 @@ export function approvalDate(p: Project): string | undefined {
 export function actualStart(p: Project, ledger?: Ledger): string | undefined {
   return [...p.actualEntries.filter((e) => e.category === "labor" && e.labor && e.labor.hours > 0).map((e) => e.date),
     ...p.materialUsages.filter((u) => u.quantityConsumed + u.wasteQuantity > 0).map((u) => u.date),
-    ...(ledger?.externalWork ?? []).filter((e) => e.projectId === p.id && e.kind === "hourly" && (e.hours ?? 0) > 0).map((e) => e.date)].sort()[0];
+    ...(ledger?.externalWork ?? []).filter((e) => e.projectId === p.id && e.status!=="commissioned" && e.kind === "hourly" && (e.hours ?? 0) > 0).map((e) => e.date)].sort()[0];
 }
 export function activeOn(p: Project, date: string): boolean {
   const approved = approvalDate(p);
@@ -29,10 +30,10 @@ export function generalAllocations(projects: Project[], date: string, cost: numb
   return active.map((p,i) => ({ projectId: p.id, amount: i === active.length - 1 ? round(cost - each * i) : each }));
 }
 export function externalCost(ledger: Ledger, projectId: string): number {
-  return round((ledger.externalWork ?? []).filter((e) => e.projectId === projectId).reduce((s,e) => s + (e.confirmedCost ?? e.estimatedCost ?? 0), 0));
+  return round((ledger.externalWork ?? []).filter((e) => e.projectId === projectId && e.status!=="commissioned").reduce((s,e) => s + (e.confirmedCost ?? e.estimatedCost ?? 0), 0));
 }
 export function pendingExternal(ledger: Ledger, projectId: string): ExternalWork[] {
-  return (ledger.externalWork ?? []).filter((e) => e.projectId === projectId && (e.confirmedCost === undefined || !e.confirmedBy));
+  return (ledger.externalWork ?? []).filter((e) => e.projectId === projectId && (e.status==="commissioned" || e.confirmedCost === undefined || !e.confirmedBy));
 }
 export function registerExternal(ledger: Ledger, projects: Project[], input: Omit<ExternalWork, "id" | "createdAt" | "createdBy" | "confirmedCost" | "confirmedBy" | "confirmedAt">, ctx: { actor: string; now: string }): Ledger {
   const p = projects.find((p) => p.id === input.projectId);
@@ -42,6 +43,7 @@ export function registerExternal(ledger: Ledger, projects: Project[], input: Omi
   if (input.itemId && !item) throw new DomainError("Mueble inválido.");
   if (!(item ? item.rubros : p.items.flatMap((i) => i.rubros)).some((r) => r.rubro === input.rubro)) throw new DomainError("Elegí un rubro del proyecto.");
   if (input.description.trim().length < 3) throw new DomainError("Describí el trabajo.");
+  if(input.kind==="hourly" && input.status==="commissioned")throw new DomainError("Las horas externas se registran cuando se realizan; un encargo no crea horas internas.");
   if (input.kind === "hourly" && !(Number.isFinite(input.hours) && input.hours! > 0 && input.hours! <= 24)) throw new DomainError("Indicá horas reales entre 0 y 24 por persona.");
   if (input.estimatedCost !== undefined && (!Number.isFinite(input.estimatedCost) || input.estimatedCost < 0)) throw new DomainError("Costo inválido.");
   const rate = input.kind === "hourly" ? externalHourlyRate(ledger,input.rubro,input.date) : undefined;
@@ -58,25 +60,30 @@ export function confirmExternal(ledger: Ledger, id: string, amount: number, ctx:
 }
 /** Read-only reporting projection, never persisted as a second productive entry. */
 export function withExternalHours(projects: Project[], ledger: Ledger): Project[] {
-  return projects.map((p) => ({ ...p, actualEntries: [...p.actualEntries, ...(ledger.externalWork ?? []).filter((e) => e.projectId === p.id && e.kind === "hourly").map((e) => ({
+  return projects.map((p) => ({ ...p, actualEntries: [...p.actualEntries, ...(ledger.externalWork ?? []).filter((e) => e.projectId === p.id && e.status!=="commissioned" && e.kind === "hourly").map((e) => ({
     id: e.id, projectId: p.id, date: e.date, type: "labor" as const, category: "labor" as const, description: e.description,
     amount: 0, itemId: e.itemId, rubro: e.rubro, labor: { role: rubroLabel(e.rubro), hours: e.hours ?? 0, hourlyCost: 0, workerName: e.supplier ?? "Externo" }, createdBy: e.createdBy, createdAt: e.createdAt,
   }))] }));
 }
 /** Shared availability and demand: each employee/day has one capacity, even with multiple skills. */
 export function weeklyCapacity(projects: Project[], operators: Operator[], assignments: WorkAssignment[], exceptions: DayException[], from: string, to: string, today: string, hoursPerDay: number, rubro?: RubroId, ledger?: Ledger) {
+  operators = ledger ? configuredOperators(operators, ledger) : operators;
+  const unconfiguredEmployeeIds = new Set<string>();
+  const rubros=(ledger?.rubroCatalog??[]).filter(r=>r.active).map(r=>r.id as RubroId);
   let available = 0;
   for (let date = from; date <= to; date = addDays(date, 1)) {
-    for (const op of operators.filter((o) => o.active && o.productive !== false)) {
-      const cap = dayCapacity(op, date, exceptions, hoursPerDay).hours;
-      if (!rubro) { available += cap; continue; }
-      const skills = op.enabledRubros ?? [];
-      // Across skills divide only the unplanned capacity; never create two simultaneous working days.
-      const mine = assignments.filter((a) => a.operatorId === op.id && a.date === date);
-      const planned = mine.reduce((s,a) => s + a.plannedHours, 0);
-      const used = mine.filter((a) => a.rubro === rubro).reduce((s,a) => s + a.plannedHours, 0);
-      if (skills.includes(rubro)) available += Math.min(cap, used) + Math.max(0, cap - planned) / skills.length;
+    const derived=new Map<RubroId,number>();let general=0;
+    const manual=Object.fromEntries(rubros.flatMap(id=>{const value=manualCapacityAt(ledger,id,date);return value===undefined?[]:[[id,value]];}));
+    const hasManual=Object.keys(manual).length>0;
+    for(const op of operators.filter(o=>o.active&&o.productive!==false)){
+      const cap=dayCapacity(op,date,exceptions,hoursPerDay).hours,skills=op.enabledRubros??[];
+      if(cap>0&&!skills.length)unconfiguredEmployeeIds.add(op.id);
+      if(!hasManual||skills.length)general+=cap;
+      const mine=assignments.filter(a=>a.operatorId===op.id&&a.date===date),planned=mine.reduce((s,a)=>s+a.plannedHours,0);
+      for(const skill of skills){const used=mine.filter(a=>a.rubro===skill).reduce((s,a)=>s+a.plannedHours,0);derived.set(skill,(derived.get(skill)??0)+(planned>cap?cap*used/planned:used)+Math.max(0,cap-planned)/skills.length);}
     }
+    if(rubro)available+=manual[rubro]!==undefined?manual[rubro]/7:derived.get(rubro)??0;
+    else {for(const [id,value] of Object.entries(manual))general+=value/7-(derived.get(id as RubroId)??0);available+=general;}
   }
   available += (ledger?.capacityAdjustments ?? []).filter((a) => a.date >= from && a.date <= to && (!rubro || a.rubro === rubro)).reduce((s,a) => s+a.hours,0);
   available = Math.max(0,available);
@@ -84,13 +91,13 @@ export function weeklyCapacity(projects: Project[], operators: Operator[], assig
   const load = loadByRubro(projects, [], from, to, today,workDays.length ? workDays : undefined).confirmed;
   const needed = rubro ? load[rubroLabel(rubro)] ?? 0 : Object.values(load).reduce((s,h) => s+h,0);
   const planned = assignments.filter((a) => a.date >= from && a.date <= to && (!rubro || a.rubro === rubro)).reduce((s,a) => s+a.plannedHours,0);
-  return { available: round(available), planned: round(planned), needed: round(needed) };
+  return { available: round(available), planned: round(planned), needed: round(needed), pendingConfiguration: unconfiguredEmployeeIds.size > 0 && (!rubro || (()=>{for(let d=from;d<=to;d=addDays(d,1))if(manualCapacityAt(ledger,rubro,d)===undefined)return true;return false;})()), unconfiguredEmployeeIds: [...unconfiguredEmployeeIds] };
 }
 
 export function configuredOperators(operators: Operator[], ledger: Ledger): Operator[] {
   return operators.map((o) => {
     const setup = ledger.personnel?.find((p) => p.employeeId === o.id);
-    return setup ? { ...o, productive:setup.productive, hoursPerDay: setup.hoursPerDay, enabledRubros: setup.enabledRubros } : o;
+    return setup ? { ...o, productive:setup.productive === true, hoursPerDay: setup.hoursPerDay ?? o.hoursPerDay, workDays:setup.workDays ?? o.workDays, enabledRubros: (setup.enabledRubros ?? []).filter((id) => ledger.rubroCatalog.some((r) => r.id === id && r.active)) } : o;
   });
 }
 export function externalHourlyRate(ledger: Ledger, rubro: RubroId, date: string): number | undefined {
@@ -100,8 +107,26 @@ export function externalHourlyRate(ledger: Ledger, rubro: RubroId, date: string)
 /** Event-driven frontend transitions; never rewrite the approved quotation or past BOM versions. */
 export function afterPublishedBom(projects: Project[], before: Ledger, after: Ledger, ctx: { actor: string; now: string }): Project[] {
   const published = new Set(after.boms.filter((b) => b.status === "published" && !before.boms.some((old) => old.id === b.id && old.status === "published")).map((b) => b.projectId));
-  return projects.map((p) => published.has(p.id) && !p.isClosed && p.status === "approved" ? { ...p,status:"purchasing",updatedAt:ctx.now,activity:[...p.activity,{ id:createId("stage"),kind:"status",at:ctx.now,actor:ctx.actor,message:"BOM publicado: pasa a Compras." }] } : p);
+  return projects.map((p) => published.has(p.id) && !p.isClosed && p.status === "approved" ? { ...p,status:"purchasing",procurementNotifiedAt:p.procurementNotifiedAt ?? ctx.now,updatedAt:ctx.now,activity:[...p.activity,{ id:createId("stage"),kind:"status",at:ctx.now,actor:ctx.actor,message:"BOM publicado: pasa a Compras." }] } : p);
 }
 export function afterMaterialArrival(projects: Project[], projectIds: string[], ctx: { actor: string; now: string }): Project[] {
   return projects.map((p) => projectIds.includes(p.id) && !p.isClosed && ["approved","purchasing"].includes(p.status) ? { ...p,status:"production",updatedAt:ctx.now,activity:[...p.activity,{ id:createId("stage"),kind:"status",at:ctx.now,actor:ctx.actor,message:"Material recibido o stock asignado: pasa a Producción. Inicio real pendiente de trabajo productivo." }] } : p);
+}
+
+/** Exhausted quotations do not prove that unfinished work has no future demand. */
+export function pendingDemandEstimates(projects: Project[], today: string) {
+  return projects.filter((p) => !p.isClosed && p.status !== "quotation").flatMap((p) => {
+    const rubros = [...new Set(p.items.filter((i) => i.completedUnits < i.quantity).flatMap((i) => i.rubros.map((r) => r.rubro)))];
+    return rubros.flatMap((rubro) => {
+      const quoted = p.items.flatMap((i) => i.rubros).filter((r) => r.rubro === rubro).reduce((s,r) => s+r.hours,0);
+      const actual = p.actualEntries.filter((e) => e.category === "labor" && e.rubro === rubro && e.date <= today).reduce((s,e) => s+(e.labor?.hours ?? 0),0);
+      return actual >= quoted ? [{ projectId:p.id,projectCode:p.code,projectName:p.name,rubro,quoted,actual }] : [];
+    });
+  });
+}
+
+export function completeExternal(ledger:Ledger,id:string,date:string,ctx:{actor:string;now:string}):Ledger {
+ const row=ledger.externalWork?.find(e=>e.id===id);if(!row||row.status!=="commissioned")throw new DomainError("El trabajo no está pendiente de realización.");
+ if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||date>ctx.now.slice(0,10)||date<row.date)throw new DomainError("Indicá fecha real no futura y posterior al encargo.");
+ return {...ledger,externalWork:ledger.externalWork!.map(e=>e.id===id?{...e,status:"completed",completedDate:date,completedBy:ctx.actor,completedAt:ctx.now}:e)};
 }

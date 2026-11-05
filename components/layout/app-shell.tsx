@@ -24,6 +24,7 @@ import {
   X,
   type LucideIcon,
 } from "lucide-react";
+import { FINANCE_HREF,pendingPaymentCount } from "@/lib/finance-workspace";
 import { cn } from "@/lib/utils";
 import { APP_NAME, APP_SUBTITLE } from "@/lib/constants";
 import { useAppStore } from "@/store/use-app-store";
@@ -76,6 +77,7 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
   const { roleKey, session, actor } = useIdentity();
   const count = useAlertCount(roleKey);
+  const ledger=useAppStore(s=>s.ledger);const paymentCount=pendingPaymentCount(ledger);
   const userEmail = useAppStore((s) => s.userEmail);
   const organizationName = useAppStore((s) => s.organizationName);
 
@@ -102,6 +104,7 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
             >
               <Icon className="size-4 shrink-0" aria-hidden />
               <span className="min-w-0 flex-1 break-words">{item.label}</span>
+              {item.href===FINANCE_HREF&&paymentCount>0&&<span aria-label={`${paymentCount} solicitudes de pago pendientes`} className="rounded-full bg-amber-100 px-1.5 text-xs text-amber-900">{paymentCount}</span>}
               {item.icon === "alerts" && count > 0 && (
                 <span className="shrink-0 rounded-full bg-red-100 px-1.5 text-xs font-semibold text-red-700 tabular">{count}</span>
               )}

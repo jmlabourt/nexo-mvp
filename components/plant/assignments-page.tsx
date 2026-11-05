@@ -1,4 +1,6 @@
 "use client";
+import { CapacityOverview } from "./capacity-overview";
+import { BaseCapacitySettings,FrontendProductionSettings } from "@/components/settings/frontend-production";
 // Jefe de planta → Operarios → Asignaciones: calendario operarios × días (capacidad según los días laborales de cada operario y sus
 // excepciones, Lote 6 · Fase 3) y producto + rubro pendientes de asignar. Sin importes.
 import { useMemo, useState } from "react";
@@ -23,7 +25,7 @@ import { PlantCalendar } from "./plant-calendar";
 export function AssignmentsPage({ embedded = false }: { embedded?: boolean } = {}) {
   const today = useToday();
   const projects = useAppStore((s) => s.projects);
-  const operators = activeOperators(useConfiguredOperators());
+  const operators = activeOperators(useConfiguredOperators()).filter((o) => o.productive !== false);
   const assignments = useAppStore((s) => s.assignments);
   const hoursPerDay = useAppStore((s) => s.costSettings.hoursPerDay);
   const [draft, setDraft] = useState<AssignmentDraft | null>(null);
@@ -48,6 +50,7 @@ export function AssignmentsPage({ embedded = false }: { embedded?: boolean } = {
         <PageHeader title="Asignaciones" subtitle={subtitle} actions={newButton} />
       )}
 
+      {!embedded&&<><CapacityOverview/><details><summary>Configurar capacidad y refuerzos</summary><div className="space-y-3"><BaseCapacitySettings/><FrontendProductionSettings kind="capacity"/></div></details></>}
       <PlantCalendar operators={operators} today={today} onAssign={setDraft} />
 
       <Card>

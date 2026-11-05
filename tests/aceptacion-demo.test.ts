@@ -1,3 +1,4 @@
+import { invoiceEntries } from "@/lib/purchasing";
 // @vitest-environment jsdom
 // Pruebas de aceptación (pedido §11) sobre UN SOLO estado: el modo demostración. Cada escenario recorre la misma OT
 // entre sesiones con las acciones del store, y las cifras se recomputan con los selectores puros (nunca se cargan dos
@@ -97,14 +98,18 @@ describe("4. Compras: una OC para dos OT, recepción parcial, factura; el pago d
     expect(order().received).toBe("partial");
     expect(st().stock.lots.length).toBe(lotsBefore + 1);
     const total = order().lines.reduce((s, l) => s + l.quantity * l.unitCost, 0);
-    ok(st().invoiceOrder(id, { invoiceNumber: "A-0001-00001234", invoiceAmount: Math.round(total * 100) / 100, invoiceDate: today }));
+    const historicalInvoice = { invoiceNumber:"A-0001-00001234",invoiceAmount:Math.round(total*100)/100,invoiceDate:today };
+    expect(st().invoiceOrder(id,historicalInvoice).ok).toBe(false);
+    // Historical supplier invoices still participate in payments; no new invoice form is introduced.
+    const entries = invoiceEntries(order(),historicalInvoice,"Histórico",`${today}T12:00:00Z`);
+    useAppStore.setState({ orders:st().orders.map((o) => o.id === id ? { ...o,status:"invoiced",...historicalInvoice } : o),projects:st().projects.map((p) => ({ ...p,purchaseEntries:[...p.purchaseEntries,...entries.filter((e) => e.projectId === p.id)] })) });
     expect(order().status).toBe("invoiced");
     expect(project("p-1051").purchaseEntries.some((e) => e.supplier === "Maderas del Sur")).toBe(true);
     expect(project("p-1053").purchaseEntries.some((e) => e.supplier === "Maderas del Sur")).toBe(true);
 
-    as("gerencia");
+    as("administracion");
     const sales = billingStatus(project("p-1051"), st().ledger);
-    ok(st().recordLedger(["gerencia"], (l, ctx) => confirmSupplierPayment(l, order(), { date: today, amount: order().invoiceAmount!, reference: "Transferencia 991" }, ctx)));
+    ok(st().recordLedger(["administracion"], (l, ctx) => confirmSupplierPayment(l, order(), { date: today, amount: order().invoiceAmount!, reference: "Transferencia 991" }, ctx)));
     expect(paidOf(st().ledger, id)).toBe(order().invoiceAmount);
     expect(billingStatus(project("p-1051"), st().ledger)).toEqual(sales);
     // Compras no paga.
@@ -143,6 +148,9 @@ describe("6. Horas de todos los roles", () => {
     const op = st().operators.find((o) => o.active)!;
     const A = project("p-1051");
     const B = project("p-1053");
+    as("gerencia");
+    ok(st().recordLedger(["gerencia"],(l)=>({...l,personnel:[...(l.personnel ?? []).filter((p)=>p.employeeId!==op.id),{employeeId:op.id,enabled:true,view:"operario",productive:true,enabledRubros:[...new Set([A.items[0].rubros[0].rubro,B.items[0].rubros[0].rubro])]}]})));
+    as("jefe_planta");
     const asgA = ok(st().saveAssignment({ projectId: A.id, itemId: A.items[0].id, rubro: A.items[0].rubros[0].rubro, operatorId: op.id, date: today, plannedHours: 4 }));
     const asgB = ok(st().saveAssignment({ projectId: B.id, itemId: B.items[0].id, rubro: B.items[0].rubros[0].rubro, operatorId: op.id, date: today, plannedHours: 4 }));
     // El operario solo ve sus tareas y carga 8 h en la primera.
@@ -187,11 +195,11 @@ describe("6. Horas de todos los roles", () => {
 
 describe("7. Dashboard de Gerencia: facturas, cobros y condiciones en distintas fechas", () => {
   it("por OT, por mes y total, sin duplicar; la rentabilidad de hoy es parcial y no definitiva", () => {
-    as("gerencia");
+    as("administracion");
     const p = project("p-1056");
-    ok(st().recordLedger(["gerencia"], (l) => setPaymentTerms(l, { projectId: p.id, daysAfterDelivery: 30, schedule: [{ id: "", label: "Seña", amount: 1_000_000, date: "2026-11-15" }] })));
-    ok(st().recordLedger(["gerencia"], (l, ctx) => registerCollection(l, p, { date: "2026-09-30", amount: 500_000 }, ctx))); // anticipo
-    ok(st().recordLedger(["gerencia"], (l, ctx) => registerSalesInvoice(l, p, { number: "B-0001-00000777", date: "2026-10-02", amount: 2_000_000 }, ctx)));
+    ok(st().recordLedger(["administracion"], (l) => setPaymentTerms(l, { projectId: p.id, daysAfterDelivery: 30, schedule: [{ id: "", label: "Seña", amount: 1_000_000, date: "2026-11-15" }] })));
+    ok(st().recordLedger(["administracion"], (l, ctx) => registerCollection(l, p, { date: "2026-09-30", amount: 500_000 }, ctx))); // anticipo
+    ok(st().recordLedger(["administracion"], (l, ctx) => registerSalesInvoice(l, p, { number: "B-0001-00000777", date: "2026-10-02", amount: 2_000_000 }, ctx)));
     const b = billingStatus(project(p.id), st().ledger);
     expect(b).toMatchObject({ invoiced: 2_000_000, collected: 500_000, advances: 500_000, planned: 1_000_000 });
     const months = billingMonths(st().projects, st().ledger, "2026-09-01", "2026-11-30").map((m) => [m.key, m.invoiced, m.collected, m.planned]);
@@ -231,11 +239,12 @@ describe("10. Entrega y cierre", () => {
     as("gerencia");
     const blocked = st().closeProject(p.id);
     expect(blocked.ok).toBe(false);
-    // El Jefe rinde todo y Gerencia devuelve al depósito lo que no se usó.
+    // El Jefe rinde todo; Compras devuelve el remanente y Gerencia solo cierra después.
     as("jefe_planta");
     for (const d of openDeliveries(st().deliveries, p.id)) ok(st().closeDay({ projectId: p.id, date: today, units: [], deliveries: [{ id: d.id, consumed: d.quantity - (d.consumed ?? 0), waste: 0, leftover: 0 }] }));
-    as("gerencia");
+    as("compras");
     for (const h of projectHoldings(st().stock, p.id)) ok(st().releaseStock({ projectId: p.id, lotId: h.lot.id, materialId: h.lot.materialId, materialName: h.lot.materialName, unit: h.lot.unit, quantity: h.quantity, date: today }));
+    as("gerencia");
     const r = st().closeProject(p.id);
     if (!r.ok) throw new Error(r.error);
     expect(project(p.id).isClosed).toBe(true);

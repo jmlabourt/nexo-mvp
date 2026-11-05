@@ -6,6 +6,7 @@ import { useState } from "react";
 import { Clock } from "lucide-react";
 import type { SessionKey } from "@/lib/permissions";
 import { hourlyCostAt, registerInternalHours } from "@/lib/ledger";
+import { employeeCost,personnelViews } from "@/lib/personnel";
 import { correctInternalWork } from "@/lib/internal-work";
 import { generalAllocations } from "@/lib/frontend-work";
 import { generalState } from "@/lib/gerencia";
@@ -24,18 +25,20 @@ export function OwnHoursButton({ projectId }: { projectId?: string }) {
   const demoLocal = useAppStore((s) => s.demoLocal);
   const projects = useAppStore((s) => s.projects);
   const ledger = useAppStore((s) => s.ledger);
+  const costHistory = useAppStore((s) => s.priceHistory);
   const employees = useAppStore((s) => s.operators);
   const adminRate = useAppStore((s) => s.hourRates.find((r) => r.category === "admin")?.hourlyRate ?? 0);
   const record = useAppStore((s) => s.recordLedger);
   const userId = useAppStore((s) => s.userId);
   const { session, actor: name } = useIdentity();
-  const sessionName = session === "jefe_planta" ? "Jefe de planta" : session === "compras" ? "Compras" : session === "gerencia" ? "Gerencia" : "Administración";
-  // En la demo todas las sesiones son el mismo usuario: la sesión distingue a la persona.
-  // Empresa real: la persona es la cuenta (el servidor guarda de quién son las horas). Demo: la sesión distingue a la persona.
-  const employee = employees.find((o) => (userId && o.userId === userId) || o.name === name);
-  const actor = employee?.id ?? (demoLocal ? `${name} (${sessionName})` : (userId ?? name));
+  const configured = (ledger.personnel ?? []).filter((p) => p.enabled && personnelViews(p).includes(session));
+  const employee = employees.find((o) => (userId && o.userId === userId) || o.name === name)
+    ?? (demoLocal && configured.length === 1 ? employees.find((o) => o.id === configured[0].employeeId) : undefined);
+  const actor = employee?.id ?? (demoLocal ? "" : (userId ?? name));
+  const allowedCategories = ledger.personnel?.find((p) => p.employeeId === employee?.id)?.categoryIds ?? [];
+  const categories = (ledger.staffCategories ?? []).filter((c) => c.active !== false && c.category !== "labor" && allowedCategories.includes(c.id));
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ project: projectId ?? "", date: todayISO(), hours: "", task: "" });
+  const [form, setForm] = useState({ project: projectId ?? "", date: todayISO(), hours: "", task: "", categoryId: "",itemId:"" });
   const [error, setError] = useState("");
   const [done, setDone] = useState("");
 
@@ -46,15 +49,27 @@ export function OwnHoursButton({ projectId }: { projectId?: string }) {
   const mine = ledger.internalHours.filter((h) => h.employeeId === actor && h.date === todayISO());
 
   const save = () => {
+    if (!actor) return setError("Gerencia debe vincular esta vista a una persona de Personal antes de registrar horas.");
+    if (form.date > todayISO()) return setError("Las horas reales no pueden tener fecha futura.");
+    const productiveHours = projects.flatMap((p) => p.actualEntries).filter((e) => e.operatorId === actor && e.date === form.date).reduce((s,e) => s+(e.labor?.hours ?? 0),0);
+    const personalHours = ledger.internalHours.filter((h) => h.employeeId === actor && h.date === form.date).reduce((s,h) => s+h.hours,0);
+    if (productiveHours + personalHours + Number(form.hours.replace(",",".")) > 24) return setError("La suma de horas reales de la persona supera las 24 h del día.");
     const onProject = form.project && form.project !== INTERNAL ? form.project : undefined;
-    const hourlyCost = hourlyCostAt(ledger, { employeeId: actor, date: form.date }, employee?.hourlyCost ?? adminRate);
+    const category = categories.find((c) => c.id === form.categoryId);
+    if (demoLocal && allowedCategories.length && !category) return setError("Elegí una categoría habilitada por Gerencia.");
+    let hourlyCost: number;
+    try { hourlyCost = demoLocal && employee ? employeeCost(ledger,employee,form.date,form.categoryId || undefined,costHistory).hourlyCost : hourlyCostAt(ledger,{ employeeId:actor,date:form.date },employee?.hourlyCost ?? adminRate); }
+    catch (e) { return setError(e instanceof Error ? e.message : "Sin tarifa laboral."); }
     const sessions: SessionKey[] = ["administracion", "compras", "jefe_planta"];
     const r = record(sessions, (l, ctx) =>
       (() => {
         const next = registerInternalHours(l, { employeeId: actor, projectId: onProject, date: form.date, hours: Number(form.hours.replace(",", ".")), task: form.task, hourlyCost }, ctx);
-        if (!demoLocal || onProject) return next;
+        if (!demoLocal) return next;
+        const row = next.internalHours.at(-1)!;
+        const enriched = { ...next,internalHours:next.internalHours.map((h) => h.id === row.id ? { ...h,categoryId:category?.id,itemId:onProject ? form.itemId || undefined : undefined } : h) };
+        if (onProject) return enriched;
         const last = next.internalHours.at(-1)!;
-        return { ...next, internalHours: next.internalHours.map((h) => h.id === last.id ? { ...h, allocations: generalAllocations(projects, h.date, Math.round(h.hours * hourlyCost * 100) / 100) } : h) };
+        return { ...enriched, internalHours: enriched.internalHours.map((h) => h.id === last.id ? { ...h, allocations: generalAllocations(projects, h.date, Math.round(h.hours * hourlyCost * 100) / 100) } : h) };
       })(),
     );
     if (!r.ok) return setError(r.error);
@@ -92,7 +107,7 @@ export function OwnHoursButton({ projectId }: { projectId?: string }) {
             </DialogHeader>
             <label className="block text-sm font-medium text-slate-700">
               ¿En qué?
-              <Select className="mt-1" value={form.project} onChange={(e) => setForm({ ...form, project: e.target.value })}>
+              <Select className="mt-1" value={form.project} onChange={(e) => setForm({ ...form, project: e.target.value,itemId:"" })}>
                 <option value="">Elegí…</option>
                 {active.map((p) => (
                   <option key={p.id} value={p.id}>{p.code} {p.name}</option>
@@ -110,6 +125,9 @@ export function OwnHoursButton({ projectId }: { projectId?: string }) {
                 <Input className="mt-1" inputMode="decimal" value={form.hours} onChange={(e) => setForm({ ...form, hours: e.target.value })} />
               </label>
             </div>
+            {demoLocal && categories.length > 0 && <label className="block text-sm">Categoría de trabajo<Select value={form.categoryId} onChange={(e) => setForm({ ...form,categoryId:e.target.value })}><option value="">Elegí…</option>{categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</Select></label>}
+            {demoLocal && form.project !== INTERNAL && <label className="block text-sm">Mueble (opcional)<Select value={form.itemId} onChange={(e) => setForm({ ...form,itemId:e.target.value })}><option value="">Sin mueble identificado</option>{projects.find((p) => p.id === form.project)?.items.map((i) => <option key={i.id} value={i.id}>{i.name}</option>)}</Select></label>}
+            {!actor && <p className="text-sm text-amber-800">Gerencia debe vincular esta vista a una persona en Personal. No se crearán registros con una identidad ficticia.</p>}
             <label className="block text-sm font-medium text-slate-700">
               Tarea
               <Input className="mt-1" value={form.task} onChange={(e) => setForm({ ...form, task: e.target.value })} placeholder="Planos, pedidos a proveedores, control de calidad…" />
@@ -118,7 +136,7 @@ export function OwnHoursButton({ projectId }: { projectId?: string }) {
             {demoLocal && <details className="border-t pt-2"><summary className="cursor-pointer text-sm">Mis registros recientes y correcciones</summary>{ledger.internalHours.filter((h) => h.employeeId === actor).slice(-20).reverse().map((h) => <OwnHoursCorrection key={h.id} id={h.id} />)}</details>}
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancelar</Button>
-              <Button type="submit" disabled={!form.project}>Guardar horas</Button>
+              <Button type="submit" disabled={!form.project || !actor}>Guardar horas</Button>
             </DialogFooter>
           </form>
         </DialogContent>

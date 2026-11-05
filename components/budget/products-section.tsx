@@ -2,6 +2,7 @@
 // Muebles de la cotización: cada mueble es una tarjeta con su nombre (editable en el título), su cantidad y sus rubros.
 // Dentro de cada rubro va todo junto (horas de operarios, operarios, materiales, diseño y administración: RubroSection).
 // De acá sale todo el costo de los muebles y, al crear el proyecto, los muebles que el Jefe de planta asigna.
+import { useProductionRubros } from "@/store/selectors";
 import { Plus } from "lucide-react";
 import type { RubroId } from "@/types";
 import { formatCurrency } from "@/lib/formatting";
@@ -12,6 +13,7 @@ import { FULL_RUBROS, RubroSection } from "./rubro-section";
 import { newProductRow, newProductRubroRow, productLabel, productRowError, type CalcState, type CalculatorResult, type ProductRow } from "./calculator-state";
 
 export function ProductsSection({ state, onState, result }: { state: CalcState; onState: (patch: Partial<CalcState>) => void; result: CalculatorResult }) {
+  const configuredRubros = useProductionRubros();
   const setProduct = (key: string, patch: Partial<ProductRow>) => onState({ products: state.products.map((p) => (p.key === key ? { ...p, ...patch } : p)) });
   const total = result.products.reduce((s, p) => s + p.total, 0);
 
@@ -32,7 +34,7 @@ export function ProductsSection({ state, onState, result }: { state: CalcState; 
           const errId = `prod-err-${p.key}`;
           const label = productLabel(p, i);
           const used = p.rubros.map((r) => r.rubro);
-          const available = FULL_RUBROS.filter((r) => !used.includes(r.id));
+          const available = (configuredRubros.length ? configuredRubros : FULL_RUBROS).filter((r) => !used.includes(r.id));
           return (
             <fieldset key={p.key} className="space-y-3 rounded-lg border border-slate-300 bg-slate-50/50 p-4" aria-label={label} aria-describedby={error ? errId : undefined}>
               <div className="flex flex-wrap items-end gap-2">

@@ -1,6 +1,8 @@
 "use client";
 // Avisos entre sesiones: listas simples de pendientes en el Dashboard de cada sesión ("Proyectos nuevos para recibir",
 // "Listos: ¿qué se hace?"…). No es un sistema de notificaciones: se calcula de los datos del proyecto.
+import { financeReminders } from "@/lib/post-meeting";
+import { useToday } from "@/store/selectors";
 import Link from "next/link";
 import { useMemo } from "react";
 import type { Project } from "@/types";
@@ -54,9 +56,11 @@ export function PendingLists({ groups, hrefOf, title = "Pendientes" }: { groups:
 /** Pendientes del circuito para una sesión, con link a donde se resuelve cada uno. */
 export function CircuitPending({ session }: { session: CircuitSession }) {
   const projects = useAppStore((s) => s.projects);
+  const ledger=useAppStore(s=>s.ledger);const today=useToday();const dueSoonDays=useAppStore(s=>s.settings.dueSoonDays);
   const assignments = useAppStore((s) => s.assignments);
   const corrections = useAppStore((s) => s.corrections);
   const groups = useMemo(() => circuitPending(session, projects, { assignments, corrections }), [session, projects, assignments, corrections]);
   const hrefOf = (p: Project) => (session === "jefe_planta" ? "/planta/proyectos" : projectHref(session, p.id));
-  return <PendingLists groups={groups} hrefOf={hrefOf} title="Pendientes del circuito" />;
+  const financial=session==="administracion"?financeReminders(projects,ledger,today,dueSoonDays):[];
+  return <><PendingLists groups={groups} hrefOf={hrefOf} title="Pendientes del circuito" />{financial.length>0&&<Card><CardHeader><CardTitle>Facturación y vencimientos</CardTitle></CardHeader><CardContent>{financial.map(r=><p key={r.id}><Link href={`/administracion/facturacion#clientes`}>{projects.find(p=>p.id===r.projectId)?.code} · {r.message}</Link></p>)}</CardContent></Card>}</>;
 }

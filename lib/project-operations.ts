@@ -45,7 +45,7 @@ import { materialKey } from "./material-reconciliation";
 import { productInputError, type ProductInput } from "./production";
 import { rubroDef } from "./rubros";
 import { unresolvedMaterial } from "./material-flow";
-import { assertExecutable, assertTransition, canQuoteProject, checkHours, isManager, isQuoter, RuleError } from "./project-rules";
+import { assertExecutable, assertTransition, canQuoteProject, checkHours, isBuyer, isManager, isQuoter, RuleError } from "./project-rules";
 import {
   applyChange,
   assignToProject,
@@ -98,6 +98,9 @@ function touch(project: Project, now: string, events: ActivityEvent[]): Project 
 // ── Creación ──────────────────────────────────────────────────
 
 export interface BudgetLineInput {
+  quotationItem?: string;
+  quotationItemKey?: string;
+  quotationItemId?: string;
   category: BudgetLine["category"];
   description: string;
   materialId?: string;
@@ -120,6 +123,7 @@ export function makeBudgetLine(input: BudgetLineInput): BudgetLine {
 }
 
 export interface NewProjectInput {
+  quotationParameters?: Project["quotationParameters"];
   code: string;
   name: string;
   client: string;
@@ -167,9 +171,19 @@ export function createProject(input: NewProjectInput, ctx: Ctx): Project {
     const error = productInputError(item);
     if (error) throw new DomainError(`${item.name || "Producto"}: ${error}`);
   }
+  const items = (input.items ?? []).map((i) => ({
+      id: createId("itm"),
+      quotationKey:i.quotationKey,
+      name: i.name.trim(),
+      description: i.description?.trim() || undefined,
+      quantity: i.quantity,
+      rubros: i.rubros,
+      completedUnits: 0,
+    }));
   return {
     id: createId("p"),
     code: input.code,
+    quotationParameters:input.quotationParameters ? {...input.quotationParameters} : undefined,
     name: input.name,
     client: input.client,
     projectType: input.projectType,
@@ -181,21 +195,14 @@ export function createProject(input: NewProjectInput, ctx: Ctx): Project {
     updatedAt: ctx.now,
     salesPrice: input.salesPrice,
     owner: input.owner,
-    budgetLines: input.budgetLines.map(makeBudgetLine),
+    budgetLines: input.budgetLines.map((l)=>{const id=l.quotationItemKey ? items.find((i)=>i.quotationKey===l.quotationItemKey)?.id : undefined;return {...makeBudgetLine(l),...(id ? {quotationItemId:id} : {})};}),
     actualEntries: [],
     materialUsages: [],
     purchaseEntries: [],
     activity: [activity("created", ctx.actor, "Proyecto creado.", ctx.now)],
     isClosed: false,
     assignedOperatorIds: [],
-    items: (input.items ?? []).map((i) => ({
-      id: createId("itm"),
-      name: i.name.trim(),
-      description: i.description?.trim() || undefined,
-      quantity: i.quantity,
-      rubros: i.rubros,
-      completedUnits: 0,
-    })),
+    items,
     stageLogs: [],
     attachments: [],
   };
@@ -243,12 +250,14 @@ export function removeBudgetLine(project: Project, lineId: string, ctx: Ctx): Pr
 
 export function captureBaseline(project: Project, ctx: Ctx): ProjectBaseline {
   return {
+    quotationParameters:project.quotationParameters ? {...project.quotationParameters} : undefined,
     capturedAt: ctx.now,
     capturedBy: ctx.actor,
     salesPrice: project.salesPrice,
     dueDate: project.dueDate,
     budgetTotal: budgetTotal(project.budgetLines),
     lines: project.budgetLines.map((l) => ({ ...l })),
+    items: project.items.map((i) => ({ ...i, rubros:i.rubros.map((r) => ({ ...r })) })),
   };
 }
 
@@ -263,6 +272,7 @@ export function changeStatus(
   opts: { confirmBack?: boolean } = {},
 ): Project {
   if (status === project.status) return project;
+  if (["quotation","approved"].includes(status) && (project.procurementNotifiedAt || ["purchasing","production","installation","completed"].includes(project.status))) throw new DomainError("La necesidad ya llegó a Compras: no se puede volver a Aprobado o Cotización.");
   const kind = assertTransition(project, status, { role: roleOf(ctx), confirmBack: opts.confirmBack });
   const msg =
     kind === "backward"
@@ -519,6 +529,7 @@ export function addActual(project: Project, input: ActualInput, settings: AlertS
  * Proyecto, producto, rubro, operario y fecha salen de la asignación: no se tipean.
  */
 export interface HoursInput {
+  categoryId?: string;
   requestId?: string;
   assignmentId: string;
   hours: number;
@@ -574,6 +585,7 @@ export function logHours(
     itemId: a.itemId,
     rubro: a.rubro,
     assignmentId: a.id,
+    categoryId: input.categoryId,
     notes: input.comment,
     createdBy: ctx.actor,
     createdAt: ctx.now,
@@ -787,7 +799,7 @@ export function assignStockToProject(
   input: StockMoveBase & { projectId: string; materialName: string; unit: string },
   ctx: Ctx,
 ): ProjectsAndStock {
-  assertManager(ctx, "Asignar material");
+  if (!isBuyer(roleOf(ctx))) throw new DomainError("Asignar material corresponde a Compras o Gerencia.");
   const p = withProject(projects, input.projectId);
   assertReceivesMaterial(p);
   const next = applyChange(stock, assignToProject(stock, { ...input }, ctx));
@@ -801,7 +813,7 @@ export function releaseProjectStock(
   input: StockMoveBase & { projectId: string; materialName: string; unit: string },
   ctx: Ctx,
 ): ProjectsAndStock {
-  assertManager(ctx, "Liberar material");
+  if (!isBuyer(roleOf(ctx)) && roleOf(ctx) !== "jefe_planta") throw new DomainError("Liberar material corresponde a Compras o Planta.");
   const p = withProject(projects, input.projectId);
   assertOpen(p);
   const next = applyChange(stock, releaseToWarehouse(stock, { ...input }, ctx));
@@ -815,7 +827,7 @@ export function transferProjectStock(
   input: StockMoveBase & { fromProjectId: string; toProjectId: string; materialName: string; unit: string },
   ctx: Ctx,
 ): ProjectsAndStock {
-  assertManager(ctx, "Transferir material");
+  if (!isBuyer(roleOf(ctx))) throw new DomainError("Transferir material corresponde a Compras o Gerencia.");
   const from = withProject(projects, input.fromProjectId);
   const to = withProject(projects, input.toProjectId);
   assertOpen(from);

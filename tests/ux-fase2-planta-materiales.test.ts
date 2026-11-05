@@ -6,7 +6,7 @@ import { DEFAULT_SETTINGS as S } from "@/lib/constants";
 import { actualCostToDate } from "@/lib/calculations";
 import { profitOverview } from "@/lib/dashboard";
 import { availableInWarehouse, availableToProject, warehouseHoldings } from "@/lib/stock";
-import { closeDay, closeDayError, deliverMaterial, deliveryError, deliveryOptions, deliveryReviewAlerts, openDeliveries } from "@/lib/plant-materials";
+import { closeDay, closeDayError, deliverMaterial, deliveryError, deliveryOptions, deliveryReviewAlerts, directMaterialUsage, openDeliveries } from "@/lib/plant-materials";
 
 const today = "2026-10-19";
 
@@ -67,6 +67,27 @@ describe("entrega de material (solo cantidades, no es costo)", () => {
 });
 
 describe("cierre del día", () => {
+  it("permite registrar uso directo sin entrega previa", () => {
+    const { seed, star, ctx } = freshProductionState();
+    const result = directMaterialUsage(star, seed.stock, [], {
+      projectId: star.id,
+      itemId: "itm-mesas",
+      materialId: "mel-blanca-18",
+      quantity: 2,
+      source: "warehouse",
+      date: today,
+      consumed: 1.5,
+      waste: 0.25,
+      leftover: 0.25,
+      units: [{ itemId: "itm-mesas", units: 6 }],
+    }, ctx);
+
+    expect(result.delivery).toMatchObject({ quantity: 2, source: "warehouse", materialId: "mel-blanca-18" });
+    expect(result.project.items.find((i) => i.id === "itm-mesas")?.completedUnits).toBe(6);
+    expect(result.usages.reduce((s, u) => s + u.quantityConsumed + u.wasteQuantity, 0)).toBeCloseTo(1.75, 6);
+    expect(result.deliveries.some((d) => d.id === result.delivery.id && d.closedAt)).toBe(true);
+  });
+
   it("consumo y desperdicio entran al costo real con el costo de su lote; el sobrante no", () => {
     const { star, seed, d1, d2, deliveries, input, r } = freshCloseDayScenario();
     const added = actualCostToDate(r.project) - actualCostToDate(star);

@@ -48,7 +48,7 @@ describe("circuito integral: planificación, ejecución y corrección", () => {
 });
 describe("capacidad compartida", () => {
   it("dos habilidades no duplican jornada y una ausencia baja disponibilidad", () => {
-    expect(weeklyCapacity([p()],[op],[assignment],[],date,date,date,8)).toEqual({ available:8,planned:8,needed:4 });
+    expect(weeklyCapacity([p()],[op],[assignment],[],date,date,date,8)).toEqual({ available:8,planned:8,needed:4,pendingConfiguration:false,unconfiguredEmployeeIds:[] });
     const absent = [{ operatorId:"op",date,works:false,createdBy:"J",createdAt:ctx.now }];
     expect(weeklyCapacity([p()],[op],[assignment],absent,date,date,date,8).available).toBe(0);
   });

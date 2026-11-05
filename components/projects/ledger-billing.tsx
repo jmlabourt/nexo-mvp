@@ -1,18 +1,19 @@
 "use client";
-// Gerencia → proyecto → Facturación (modo demostración): facturas de venta, cobros y anticipos, pagos a proveedores y
+// Administración registra; Gerencia consulta → proyecto → Facturación (modo demostración): facturas de venta, cobros y anticipos, pagos a proveedores y
 // costo financiero estimado. Todo se registra de verdad en la demo (lib/ledger.ts) y sobrevive a la recarga.
 // Cotizado ≠ contratado ≠ facturado ≠ cobrado; un pago a proveedor no es ingreso ni un costo nuevo.
+import { SupplierPayments } from "./supplier-payments";
+import { FinancialCorrections } from "./financial-corrections";
+import { useIdentity } from "@/store/selectors";
 import { useState } from "react";
 import type { Project } from "@/types";
 import {
   applyAdvance,
   billingStatus,
   BILLING_STATUS_LABELS,
-  confirmSupplierPayment,
   handoverOf,
   invoiceBalance,
   updatedFinancialInput,
-  paidOf,
   registerCollection,
   registerSalesInvoice,
 
@@ -40,22 +41,21 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-export function LedgerBillingTab({ project }: { project: Project }) {
+export function LedgerBillingTab({ project,includeSupplierPayments=true }: { project: Project;includeSupplierPayments?:boolean }) {
   const today = useToday();
   const ledger = useAppStore((s) => s.ledger);
-  const orders = useAppStore((s) => s.orders);
+  const {session}=useIdentity();
+  const writable=useAppStore(s=>s.demoLocal)&&session==="administracion";
   const record = useAppStore((s) => s.recordLedger);
   const [error, setError] = useState("");
-  const [inv, setInv] = useState({ number: "", date: today, amount: "" });
-  const [col, setCol] = useState({ invoiceId: "", date: today, amount: "" });
-  const [pay, setPay] = useState<Record<string, { date: string; amount: string; reference: string }>>({});
+  const [inv, setInv] = useState({ number: "", date: today, amount: "", dueDate:"",condition:"",milestoneId:"",notes:"" });
+  const [col, setCol] = useState({ invoiceId: "", date: today, amount: "", notes:"" });
 
   if (project.status === "quotation") return <p className="text-sm text-slate-500">Una cotización no tiene facturación: es una venta potencial.</p>;
 
   const b = billingStatus(project, ledger);
   const invoices = ledger.salesInvoices.filter((i) => i.projectId === project.id).sort((a, c) => a.date.localeCompare(c.date));
   const collections = ledger.collections.filter((c) => c.projectId === project.id).sort((a, c) => a.date.localeCompare(c.date));
-  const projectOrders = orders.filter((o) => o.lines.some((l) => l.projectId === project.id));
   const done = (r: { ok: boolean; error?: string }) => {
     setError(r.ok ? "" : (r.error ?? ""));
     return r.ok;
@@ -78,7 +78,7 @@ export function LedgerBillingTab({ project }: { project: Project }) {
         <CardContent className="space-y-4">
           <dl className="grid gap-3 text-sm sm:grid-cols-3 lg:grid-cols-6">
             {[
-              ["Contrato vigente", b.contracted],
+              ["Total acordado con el cliente", b.contracted],
               ["Previsto", b.planned],
               ["Facturado", b.invoiced],
               ["Cobrado", b.collected],
@@ -111,7 +111,7 @@ export function LedgerBillingTab({ project }: { project: Project }) {
               )}
               {invoices.map((i) => (
                 <TR key={i.id}>
-                  <TD>{i.number} {i.notes && <span className="text-xs text-slate-500">· {i.notes}</span>}</TD>
+                  <TD>{i.number}{i.cancelled&&" · Anulada"}{i.dueDate&&` · vence ${i.dueDate}`} {i.notes && <span className="text-xs text-slate-500">· {i.notes}</span>}</TD>
                   <TD className="tabular">{formatDate(i.date)}</TD>
                   <TD className="text-right tabular">{formatCurrency(i.amount)}</TD>
                   <TD className="text-right tabular">{formatCurrency(invoiceBalance(ledger, i.id))}</TD>
@@ -143,15 +143,15 @@ export function LedgerBillingTab({ project }: { project: Project }) {
                   <TD>
                     {c.invoiceId ? (
                       invoices.find((i) => i.id === c.invoiceId)?.number
-                    ) : (
+                    ) : !writable ? "Anticipo sin aplicar" : (
                       <Select
                         aria-label="Aplicar anticipo a una factura"
                         className="w-44"
                         value=""
-                        onChange={(e) => e.target.value && done(record(["gerencia"], (l) => applyAdvance(l, c.id, e.target.value)))}
+                        onChange={(e) => e.target.value && done(record(["administracion"], (l,ctx) => applyAdvance(l, c.id, e.target.value,ctx)))}
                       >
                         <option value="">Aplicar a factura…</option>
-                        {invoices.filter((i) => invoiceBalance(ledger, i.id) >= c.amount).map((i) => (
+                        {invoices.filter((i) => !i.cancelled && invoiceBalance(ledger, i.id) >= c.amount).map((i) => (
                           <option key={i.id} value={i.id}>{i.number}</option>
                         ))}
                       </Select>
@@ -162,13 +162,13 @@ export function LedgerBillingTab({ project }: { project: Project }) {
             </TBody>
           </Table>
 
-          {!project.isClosed && (
+          {writable && (
             <div className="grid gap-4 lg:grid-cols-2">
               <form
                 className="space-y-2 rounded-md border border-slate-200 p-3"
                 onSubmit={(e) => {
                   e.preventDefault();
-                  if (done(record(["gerencia"], (l, ctx) => registerSalesInvoice(l, project, { number: inv.number, date: inv.date, amount: num(inv.amount) }, ctx)))) setInv({ number: "", date: today, amount: "" });
+                  if (done(record(["administracion"], (l, ctx) => registerSalesInvoice(l, project, { number: inv.number, date: inv.date, amount: num(inv.amount),dueDate:inv.dueDate||undefined,condition:inv.condition||undefined,milestoneId:inv.milestoneId||undefined,notes:inv.notes||undefined }, ctx)))) setInv({ number: "", date: today, amount: "",dueDate:"",condition:"",milestoneId:"",notes:"" });
                 }}
               >
                 <h3 className="text-sm font-semibold">Registrar factura de venta</h3>
@@ -177,13 +177,15 @@ export function LedgerBillingTab({ project }: { project: Project }) {
                   <Field label="Emisión"><Input type="date" value={inv.date} onChange={(e) => setInv({ ...inv, date: e.target.value })} /></Field>
                   <Field label="Importe sin IVA"><Input inputMode="decimal" value={inv.amount} onChange={(e) => setInv({ ...inv, amount: e.target.value })} /></Field>
                 </div>
+                <div className="grid gap-2 sm:grid-cols-3"><Field label="Vencimiento"><Input type="date" value={inv.dueDate} onChange={e=>setInv({...inv,dueDate:e.target.value})}/></Field><Field label="Condición acordada"><Input value={inv.condition} onChange={e=>setInv({...inv,condition:e.target.value})}/></Field><Field label="Hito facturado"><Select value={inv.milestoneId} onChange={e=>setInv({...inv,milestoneId:e.target.value})}><option value="">Sin hito identificado</option>{ledger.paymentTerms.find(t=>t.projectId===project.id)?.schedule.map(h=><option key={h.id} value={h.id}>{h.label} · {h.date}</option>)}</Select></Field></div>
+                <Field label="Soporte / referencia de factura (opcional)"><Input value={inv.notes} onChange={e=>setInv({...inv,notes:e.target.value})}/></Field>
                 <Button type="submit" size="sm">Registrar factura</Button>
               </form>
               <form
                 className="space-y-2 rounded-md border border-slate-200 p-3"
                 onSubmit={(e) => {
                   e.preventDefault();
-                  if (done(record(["gerencia"], (l, ctx) => registerCollection(l, project, { invoiceId: col.invoiceId || undefined, date: col.date, amount: num(col.amount) }, ctx)))) setCol({ invoiceId: "", date: today, amount: "" });
+                  if (done(record(["administracion"], (l, ctx) => registerCollection(l, project, { invoiceId: col.invoiceId || undefined, date: col.date, amount: num(col.amount),notes:col.notes||undefined }, ctx)))) setCol({ invoiceId: "", date: today, amount: "",notes:"" });
                 }}
               >
                 <h3 className="text-sm font-semibold">Registrar cobro</h3>
@@ -191,7 +193,7 @@ export function LedgerBillingTab({ project }: { project: Project }) {
                   <Field label="Factura">
                     <Select value={col.invoiceId} onChange={(e) => setCol({ ...col, invoiceId: e.target.value })}>
                       <option value="">Anticipo (sin factura)</option>
-                      {invoices.filter((i) => invoiceBalance(ledger, i.id) > 0).map((i) => (
+                      {invoices.filter((i) => !i.cancelled && invoiceBalance(ledger, i.id) > 0).map((i) => (
                         <option key={i.id} value={i.id}>{i.number} · falta {formatCurrency(invoiceBalance(ledger, i.id))}</option>
                       ))}
                     </Select>
@@ -199,6 +201,7 @@ export function LedgerBillingTab({ project }: { project: Project }) {
                   <Field label="Ingreso"><Input type="date" value={col.date} onChange={(e) => setCol({ ...col, date: e.target.value })} /></Field>
                   <Field label="Monto"><Input inputMode="decimal" value={col.amount} onChange={(e) => setCol({ ...col, amount: e.target.value })} /></Field>
                 </div>
+                <Field label="Referencia / comprobante de cobro (opcional)"><Input value={col.notes} onChange={e=>setCol({...col,notes:e.target.value})}/></Field>
                 <Button type="submit" size="sm">Registrar cobro</Button>
               </form>
             </div>
@@ -207,62 +210,8 @@ export function LedgerBillingTab({ project }: { project: Project }) {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Pagos a proveedores</CardTitle>
-          <p className="text-sm text-slate-500">Compras carga la factura del proveedor; Gerencia confirma el pago. Un pago no es ingreso ni un costo nuevo: el costo ya está en el proyecto.</p>
-        </CardHeader>
-        <CardContent>
-          {projectOrders.length === 0 ? (
-            <p className="text-sm text-slate-500">Sin órdenes de compra para este proyecto.</p>
-          ) : (
-            <Table>
-              <THead>
-                <TR>
-                  <TH>Orden</TH>
-                  <TH>Factura del proveedor</TH>
-                  <TH className="text-right">Pagado</TH>
-                  <TH>Confirmar pago</TH>
-                </TR>
-              </THead>
-              <TBody>
-                {projectOrders.map((o) => {
-                  const paid = paidOf(ledger, o.id);
-                  const left = Math.max(0, (o.invoiceAmount ?? 0) - paid);
-                  const f = pay[o.id] ?? { date: today, amount: String(left || ""), reference: "" };
-                  return (
-                    <TR key={o.id}>
-                      <TD>{o.number} <span className="block text-xs text-slate-500">{o.supplier}</span></TD>
-                      <TD>{o.status === "invoiced" ? `${o.invoiceNumber ?? "—"} · ${formatCurrency(o.invoiceAmount ?? 0)}` : <span className="text-xs text-slate-500">Sin factura todavía</span>}</TD>
-                      <TD className="text-right tabular">{formatCurrency(paid)}</TD>
-                      <TD>
-                        {o.status === "invoiced" && left > 0 ? (
-                          <form
-                            className="flex flex-wrap items-end gap-1"
-                            onSubmit={(e) => {
-                              e.preventDefault();
-                              if (done(record(["gerencia"], (l, ctx) => confirmSupplierPayment(l, o, { date: f.date, amount: num(f.amount), reference: f.reference }, ctx)))) setPay({ ...pay, [o.id]: { date: today, amount: "", reference: "" } });
-                            }}
-                          >
-                            <Input aria-label="Fecha del pago" type="date" className="w-36" value={f.date} onChange={(e) => setPay({ ...pay, [o.id]: { ...f, date: e.target.value } })} />
-                            <Input aria-label="Monto pagado" inputMode="decimal" className="w-28" value={f.amount} onChange={(e) => setPay({ ...pay, [o.id]: { ...f, amount: e.target.value } })} />
-                            <Input aria-label="Referencia del pago" placeholder="Transferencia…" className="w-36" value={f.reference} onChange={(e) => setPay({ ...pay, [o.id]: { ...f, reference: e.target.value } })} />
-                            <Button type="submit" size="sm" variant="outline">Confirmar</Button>
-                          </form>
-                        ) : o.status === "invoiced" ? (
-                          <Badge tone="green">Pagada</Badge>
-                        ) : (
-                          "—"
-                        )}
-                      </TD>
-                    </TR>
-                  );
-                })}
-              </TBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
+      {writable && <FinancialCorrections project={project}/>}
+      {includeSupplierPayments&&<SupplierPayments projectId={project.id}/>}
 
       <Card>
         <CardHeader>
@@ -272,7 +221,7 @@ export function LedgerBillingTab({ project }: { project: Project }) {
         <CardContent>
           <dl className="grid gap-3 text-sm sm:grid-cols-2">
             <div className="rounded-md border border-slate-200 p-3">
-              <dt className="text-xs text-slate-500">En el presupuesto aprobado (foto)</dt>
+              <dt className="text-xs text-slate-500">Costo financiero estimado al aprobar</dt>
               <dd className="mt-1 text-base font-semibold tabular">{formatCurrency(approvedFinancial)}</dd>
             </div>
             <div className="rounded-md border border-slate-200 p-3">

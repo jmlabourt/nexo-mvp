@@ -63,7 +63,7 @@ export function ContractTerms({ project }: { project: Project }) {
               <dd className="mt-1 text-base font-semibold tabular">{formatCurrency(originalContract(project))}</dd>
             </div>
             <div className="rounded-md border border-slate-200 p-3">
-              <dt className="text-xs text-slate-500">Contrato vigente</dt>
+              <dt className="text-xs text-slate-500">Total acordado con el cliente</dt>
               <dd className="mt-1 text-base font-semibold tabular">{formatCurrency(contract)}</dd>
             </div>
           </dl>

@@ -2,6 +2,8 @@
 // Una sola pantalla de cotización: la usan el Cotizador y el paso "Costo presupuestado" de Nuevo proyecto.
 // Solo cambian el contexto (en Nuevo proyecto ya hay datos del proyecto) y el botón final.
 // El panel lateral es la única fuente del resumen: costo, precio, ganancia, rentabilidad, días y plazo.
+import type { Project } from "@/types";
+import { FrozenQuote } from "./frozen-quote";
 import type { ReactNode } from "react";
 import { TriangleAlert } from "lucide-react";
 import { formatCurrency, formatCurrencyOrDash, formatNumber, formatPercent, formatWorkingDays } from "@/lib/formatting";
@@ -29,7 +31,9 @@ export interface QuoteWorkspaceProps {
   requireProducts?: boolean;
 }
 
-export function QuoteWorkspace({ state, onState, result, projectType, salesPrice, onSalesPrice, priceError, actionLabel, onAction, context, requireProducts }: QuoteWorkspaceProps) {
+export function QuoteWorkspace(props: QuoteWorkspaceProps | { readOnly:true;project:Project }) {
+  if ("readOnly" in props) return <FrozenQuote project={props.project} />;
+  const { state, onState, result, projectType, salesPrice, onSalesPrice, priceError, actionLabel, onAction, context, requireProducts } = props;
   const blocker = quoteActionBlocker(result, salesPrice, { requireProducts });
   const { schedule, breakdown: b } = result;
   const sale = (v: number | null) => (v === null ? "—" : formatCurrency(v));

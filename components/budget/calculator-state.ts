@@ -24,12 +24,13 @@ import { delayAnalysis, type DelayResult } from "@/lib/delay";
 import { benchmarksForType, learningInsights, type LearningInsight } from "@/lib/historical-benchmarks";
 import type { BudgetLineInput } from "@/lib/project-operations";
 import { productInputError, type ProductInput } from "@/lib/production";
-import { CATEGORY_LABELS, DEFAULT_FINANCIAL_PCT, HOUR_CATEGORIES, MATERIAL_CATALOG } from "@/lib/constants";
+import { CATEGORY_LABELS, DEFAULT_FINANCIAL_PCT, HOUR_CATEGORIES } from "@/lib/constants";
 import { formatCurrency, formatNumber, formatWorkingDays } from "@/lib/formatting";
 import { rubroDef } from "@/lib/rubros";
 import { parseDecimal } from "@/lib/schemas";
 
 export interface MaterialRow {
+  materialId?: string;
   key: string;
   name: string;
   unit: string;
@@ -140,13 +141,13 @@ export const newProductRubroRow = (rubro: RubroId): ProductRubroRow => ({
 
 export const newProductRow = (name = ""): ProductRow => ({ key: rowKey(), name, quantity: "1", rubros: [newProductRubroRow("carpinteria_madera")] });
 
-export function initialCalcState(financialPct = DEFAULT_FINANCIAL_PCT): CalcState {
+export function initialCalcState(financialPct = DEFAULT_FINANCIAL_PCT, defaults?: {materialsTargetPct:number;laborTargetPct:number}): CalcState {
   return {
     products: [newProductRow()],
     rubros: [],
     deadlineDays: "",
-    materialsTargetPct: "30",
-    laborTargetPct: "30",
+    materialsTargetPct: String(defaults?.materialsTargetPct ?? 30),
+    laborTargetPct: String(defaults?.laborTargetPct ?? 30),
     financialPct: String(financialPct).replace(".", ","),
     safetyMargins: [],
     delayPenalty: "",
@@ -174,10 +175,10 @@ export interface CalculatorContext {
   isDemo: boolean;
 }
 
-/** Una fila de material en edición → material de la cotización (con su id de catálogo si coincide el nombre). */
+/** Una fila de material en edición → material de la cotización (con el ID seleccionado explícitamente en el catálogo). */
 export function materialRowToQuote(m: MaterialRow): QuoteMaterial {
   return {
-    materialId: MATERIAL_CATALOG.find((c) => c.name.toLowerCase() === m.name.trim().toLowerCase())?.id,
+    materialId: m.materialId,
     name: m.name,
     unit: m.unit,
     quantity: n(m.quantity),
@@ -204,6 +205,7 @@ const isBlankProduct = (p: ProductRow) => !p.name.trim() && p.rubros.every((r) =
  * con solo materiales (o diseño / administración) no lleva horas de planta. Cantidad y operarios vacíos quedan en NaN.
  */
 const toProductInput = (p: ProductRow, index: number): ProductInput => ({
+  quotationKey:p.key,
   name: productLabel(p, index),
   quantity: p.quantity.trim() ? Number(p.quantity.trim().replace(",", ".")) : NaN,
   rubros: p.rubros.filter(hasLaborHours).map((r) => ({ rubro: r.rubro, hours: n(r.hours), workers: r.workers.trim() ? Number(r.workers.trim()) : NaN })),
@@ -264,6 +266,7 @@ function productQuoteRubros(s: Pick<CalcState, "products">): Array<{ productKey:
         const quote: QuoteRubro = {
           rubro: r.rubro,
           product,
+          productKey:row.key,
           materials: (r.materials ?? []).map(materialRowToQuote),
           workers: labor?.workers ?? 0,
           hoursPerWorker: labor?.hoursPerWorker ?? 0,
@@ -462,12 +465,15 @@ export function ratesText(rates: RatesByCategory): string {
 }
 
 /** Avisos del paso de revisión, en un solo lugar. */
+function missingQuotedRates(calc:CalculatorResult) {
+ return HOUR_CATEGORIES.filter(c=>calc.input.rubros.some(r=>c==="labor"?(r.totalHours??r.workers*r.hoursPerWorker)>0:c==="design"?r.designHours>0:r.adminHours>0)&&(!calc.rates[c]||!Number.isFinite(calc.rates[c]!.hourlyRate)||calc.rates[c]!.hourlyRate<0));
+}
 export function reviewWarnings(calc: CalculatorResult, salesPrice: number): string[] {
   const out: string[] = [];
-  const { schedule, breakdown, rates } = calc;
+  const { schedule, breakdown } = calc;
   if (!calc.hasContent) out.push("Falta cargar el costo: no hay materiales, horas ni importes.");
   if (!(salesPrice > 0)) out.push("Falta el precio de venta.");
-  const missingRates = HOUR_CATEGORIES.filter((c) => !rates[c]?.hourlyRate);
+  const missingRates = missingQuotedRates(calc);
   if (missingRates.length > 0) out.push("Falta la tarifa de algún tipo de hora: cargala en Configuración para que esas horas sumen al costo.");
   if (schedule.fits === false) {
     out.push(
@@ -488,6 +494,7 @@ export function reviewWarnings(calc: CalculatorResult, salesPrice: number): stri
 export function quoteActionBlocker(calc: CalculatorResult, salesPrice: number, opts: { requireProducts?: boolean } = {}): string | null {
   if (calc.productsError) return calc.productsError;
   if (opts.requireProducts && calc.products.length === 0) return "Cargá al menos un mueble con sus horas por rubro.";
+  if (missingQuotedRates(calc).length) return "Falta la tarifa de presupuesto para horas cargadas: revisá la configuración antes de cotizar.";
   if (!calc.hasContent) return "Cargá al menos un costo.";
   if (!(salesPrice > 0)) return "Definí el precio de venta (podés usar el sugerido).";
   return null;

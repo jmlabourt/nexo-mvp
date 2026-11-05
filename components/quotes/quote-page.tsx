@@ -12,11 +12,12 @@ import { setQuoteDraft } from "@/components/budget/quote-draft";
 /** Cotizador: costo, precio sugerido y rentabilidad ANTES de existir un proyecto. Las fechas reales se cargan al crearlo. */
 export function QuotePage() {
   const router = useRouter();
+  const defaults=useAppStore((s)=>s.ledger.quoteDefaults);
   const projects = useAppStore((s) => s.projects);
   const { overtimeMultiplier, financialPct, hoursPerDay } = useAppStore((s) => s.costSettings);
   const rates = useAppStore((s) => s.hourRates);
   const isDemo = useAppStore((s) => s.isDemo);
-  const [state, setState] = useState<CalcState>(() => initialCalcState(financialPct));
+  const [state, setState] = useState<CalcState>(() => initialCalcState(financialPct,defaults));
   const [projectType, setProjectType] = useState("");
   const [salesPrice, setSalesPrice] = useState(0);
 
@@ -32,7 +33,7 @@ export function QuotePage() {
   };
 
   const reset = () => {
-    setState(initialCalcState(financialPct));
+    setState(initialCalcState(financialPct,defaults));
     setProjectType("");
     setSalesPrice(0);
   };

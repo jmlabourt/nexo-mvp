@@ -1,4 +1,4 @@
-import type { PriceRecord, Project, StockLot } from "@/types";
+import type { CatalogMaterial, Ledger, PriceRecord, Project, StockLot } from "@/types";
 import { MATERIAL_CATALOG } from "./constants";
 import { valueAt } from "./price-history";
 import { materialKey } from "./material-reconciliation";
@@ -49,4 +49,11 @@ export function suggestUnitCost(project: Pick<Project, "budgetLines">, lots: Sto
  */
 export function catalogPriceAt(history: PriceRecord[], materialId: string, date: string): number {
   return valueAt(history, "material_price", materialId, date, MATERIAL_CATALOG.find((m) => m.id === materialId)?.referenceCost ?? 0);
+}
+
+/** Seed catalogue plus explicit company edits; ids remain stable. */
+export function materialCatalog(ledger: Pick<Ledger,"materialCatalog">): Array<CatalogMaterial & { active?: boolean; validFrom?: string }> {
+  const map = new Map(MATERIAL_CATALOG.map((m) => [m.id,m]));
+  for (const m of ledger.materialCatalog ?? []) map.set(m.id,m);
+  return [...map.values()];
 }
