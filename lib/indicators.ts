@@ -1,3 +1,4 @@
+import {DASHBOARD_INDICATORS} from "./dashboard-indicators";
 // Indicadores de Gerencia: qué significan, cómo se calculan y de dónde salen. Una sola fuente para las ayudas ⓘ del
 // Dashboard y para Configuración → Indicadores y cálculos. Las fórmulas viven en lib/gerencia.ts y lib/calculations.ts
 // (probadas); acá solo se explican. Los parámetros se configuran; las fórmulas no se editan.
@@ -18,7 +19,7 @@ const PERIOD = "El período elegido arriba del Dashboard (mes, trimestre, año o
 const ON_RECORD = "Al registrar el dato de origen (sin recalcular a mano).";
 const NO_IVA = "Importes sin IVA.";
 
-export const INDICATORS: Indicator[] = [
+const BASE_INDICATORS: Indicator[] = [
   {
     id: "quote_defaults",
     name: "Objetivos de nuevas cotizaciones",
@@ -170,10 +171,10 @@ export const INDICATORS: Indicator[] = [
     id: "projected_cost",
     name: "Costo final proyectado",
     meaning: "Cuánto va a costar el proyecto al cerrarse si lo que falta sale como se presupuestó.",
-    formula: "Por categoría: el mayor entre lo presupuestado y lo real + lo pendiente identificable.",
-    source: "Costo presupuestado (congelado al aprobar) y costos reales.",
+    formula: "Suma por grupo identificable de categoría/rubro: max(presupuesto, real + horas/cantidades pendientes a valor cotizado). Horas no operarias del ledger sustituyen su partida; no se suman completas al presupuesto ya inclusivo. Financiero proyectado=max(presupuestado,incurrido), sin duplicación.",
+    source: "Presupuesto congelado, actualEntries, materialUsages, internalHours/categorías, asignaciones monetarias y externos: laborCostDetails/projectedAmounts/projectEconomics; economicView completa financiación y corte temporal.",
     params: "Ninguno.",
-    period: "Proyectos en curso (en los cerrados es el real final).",
+    period: "Proyectos en curso: proyección al corte. Cerrados: costos registrados; solo es final con validación compartida de profitView y sin pendientes.",
     limits: "Nunca baja del presupuesto ni del costo real. No es una predicción.",
     updates: ON_RECORD,
   },
@@ -344,5 +345,7 @@ export const INDICATORS: Indicator[] = [
     updates: "Cada día.",
   },
 ];
+
+export const INDICATORS:Indicator[]=[...BASE_INDICATORS.map(i=>DASHBOARD_INDICATORS.find(d=>d.id===i.id)??i),...DASHBOARD_INDICATORS.filter(d=>!BASE_INDICATORS.some(i=>i.id===d.id))];
 
 export const indicator = (id: string): Indicator | undefined => INDICATORS.find((i) => i.id === id);

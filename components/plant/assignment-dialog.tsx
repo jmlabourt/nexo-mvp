@@ -5,6 +5,7 @@ import { useConfirmedAction } from "@/store/confirmed-action";
 // Al crear se pueden elegir varias personas y un rango de días (una asignación por persona y día hábil);
 // al editar se cambia esa sola asignación.
 import { useState } from "react";
+import { createId } from "@/lib/activity";
 import type { RubroId, WorkAssignment } from "@/types";
 import { activeOperators } from "@/lib/operators";
 import { formatDate, formatNumber } from "@/lib/formatting";
@@ -36,6 +37,10 @@ function AssignmentForm({ draft, onClose }: { draft: AssignmentDraft; onClose: (
   const projects = useAppStore((s) => s.projects).filter(isAssignable);
   const operators = activeOperators(useConfiguredOperators()).filter((o) => o.productive !== false && (o.enabledRubros?.length ?? 0)>0);
   const saveAssignment = useConfirmedAction("saveAssignment");
+  const saveBatch = useConfirmedAction("saveAssignmentsBatch");
+  const [batchId]=useState(()=>createId("asg-batch"));
+  const local=useAppStore(s=>s.demoLocal);
+  const [saving,setSaving]=useState(false);
   const removeAssignment = useConfirmedAction("removeAssignment");
   const editing = !!draft.id;
   const { session } = useIdentity();
@@ -43,7 +48,7 @@ function AssignmentForm({ draft, onClose }: { draft: AssignmentDraft; onClose: (
   const materialsOf = useMaterialsStateOf();
   const [projectId, setProjectId] = useState(draft.projectId ?? projects[0]?.id ?? "");
   const project = projects.find((p) => p.id === projectId);
-  const [itemId, setItemId] = useState(draft.itemId ?? "");
+  const [itemId, setItemId] = useState(draft.itemId ?? (project?.items.length===1?project.items[0].id:""));
   const item = project?.items.find((i) => i.id === itemId);
   const rubros = item?.rubros ?? project?.items.flatMap((i) => i.rubros).filter((r, i, all) => all.findIndex((x) => x.rubro === r.rubro) === i) ?? [];
   const [rubro, setRubro] = useState<RubroId | "">(draft.rubro ?? "");
@@ -54,6 +59,7 @@ function AssignmentForm({ draft, onClose }: { draft: AssignmentDraft; onClose: (
   const [to, setTo] = useState(draft.date ?? "");
   const [hours, setHours] = useState(draft.plannedHours ? String(draft.plannedHours).replace(".", ",") : String(useAppStore.getState().costSettings.hoursPerDay));
   const [error, setError] = useState("");
+  const [overloadReason,setOverloadReason]=useState(draft.id?useAppStore.getState().assignments.find(a=>a.id===draft.id)?.overloadReason??"":"");
   const exceptions = useAppStore((s) => s.dayExceptions);
   const assignments = useAppStore((s) => s.assignments);
   const hoursPerDay = useAppStore((s) => s.costSettings.hoursPerDay);
@@ -86,12 +92,14 @@ function AssignmentForm({ draft, onClose }: { draft: AssignmentDraft; onClose: (
     if (!chosenRubro) return setError("Elegí el rubro.");
     if (picked.length === 0) return setError("Elegí al menos un operario.");
     if (total === 0) return setError(editing ? "Elegí el día." : "Elegí desde y hasta qué día: en ese rango no hay días laborales de esas personas.");
-    for (const operatorId of picked) {
-      for (const date of daysFor(operatorId)) {
-        const r = await saveAssignment({ id: draft.id, projectId, itemId: item?.id, rubro: chosenRubro, operatorId, date, plannedHours: parseDecimal(hours), hourKind: session === "gerencia" ? hourKind : "labor" });
-        if (!r.ok) return setError(r.error);
-      }
-    }
+    if(picked.some(id=>!operators.find(o=>o.id===id)?.enabledRubros?.includes(chosenRubro)))return setError("Una persona elegida no está habilitada para este rubro; revisá la selección.");
+    const inputs=picked.flatMap(operatorId=>daysFor(operatorId).map(date=>({projectId,itemId:item?.id,rubro:chosenRubro,operatorId,date,plannedHours:parseDecimal(hours),overloadReason:overloadReason.trim()||undefined,hourKind:session==="gerencia"?hourKind:"labor" as const})));
+    setSaving(true);
+    const r=editing ? await saveAssignment({...inputs[0],id:draft.id})
+      : local ? await saveBatch(batchId,inputs)
+      : inputs.length===1 ? await saveAssignment(inputs[0]) : {ok:false as const,error:"El alta múltiple atómica requiere integración backend; no se guardaron asignaciones."};
+    setSaving(false);
+    if(!r.ok)return setError(r.error);
     onClose();
   };
 
@@ -104,7 +112,7 @@ function AssignmentForm({ draft, onClose }: { draft: AssignmentDraft; onClose: (
       <form onSubmit={save} noValidate className="space-y-4">
         {session === "gerencia" && <Field label="Tipo de trabajo" htmlFor="as-kind"><Select id="as-kind" value={hourKind} onChange={e=>setHourKind(e.target.value as typeof hourKind)}><option value="labor">Producción</option><option value="design">Diseño</option><option value="admin">Administración</option></Select></Field>}
         <Field label="Proyecto" htmlFor="as-project">
-          <Select id="as-project" value={projectId} onChange={(e) => { setProjectId(e.target.value); setItemId(""); }}>
+          <Select id="as-project" value={projectId} onChange={(e) => { setProjectId(e.target.value);const p=projects.find(p=>p.id===e.target.value);setItemId(p?.items.length===1?p.items[0].id:""); }}>
             {projects.map((p) => (
               <option key={p.id} value={p.id}>{p.code} · {p.name}</option>
             ))}
@@ -142,13 +150,13 @@ function AssignmentForm({ draft, onClose }: { draft: AssignmentDraft; onClose: (
           <div className="grid gap-1.5 sm:grid-cols-2">
             {operators.map((o) => (
               <label key={o.id} className="flex cursor-pointer items-center gap-2 rounded-md border border-slate-200 px-2.5 py-1.5 text-sm has-[:checked]:border-blue-400 has-[:checked]:bg-blue-50">
-                <input type={editing ? "radio" : "checkbox"} name="as-operator" checked={picked.includes(o.id)} onChange={() => toggle(o.id)} className="size-4" />
-                <span className="min-w-0 break-words">{o.name} <span className="text-xs text-slate-500">· {o.role}</span></span>
+                <input type={editing ? "radio" : "checkbox"} name="as-operator" checked={picked.includes(o.id)} disabled={(!chosenRubro||!o.enabledRubros?.includes(chosenRubro))} onChange={() => toggle(o.id)} className="size-4" />
+                <span className="min-w-0 break-words">{o.name} <span className="text-xs text-slate-500">· {o.role}{(!chosenRubro||!o.enabledRubros?.includes(chosenRubro))&&" · No habilitado para este rubro"}</span></span>
               </label>
             ))}
           </div>
         </fieldset>
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <Field label={editing ? "Día" : "Desde"} htmlFor="as-from">
             <Input id="as-from" type="date" value={from} onChange={(e) => { setFrom(e.target.value); if (!to || to < e.target.value) setTo(e.target.value); }} />
           </Field>
@@ -173,6 +181,7 @@ function AssignmentForm({ draft, onClose }: { draft: AssignmentDraft; onClose: (
             ))}
           </ul>
         )}
+        <label className="block text-sm">Motivo de sobreasignación (si excede disponibilidad)<Input value={overloadReason} onChange={e=>setOverloadReason(e.target.value)} placeholder="Solo si se acuerda superar la disponibilidad"/></label>
         {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
         <DialogFooter className="gap-2">
           {editing && (
@@ -190,7 +199,7 @@ function AssignmentForm({ draft, onClose }: { draft: AssignmentDraft; onClose: (
             </Button>
           )}
           <Button type="button" variant="outline" onClick={onClose}>Cancelar</Button>
-          <Button type="submit">Guardar</Button>
+          <Button type="submit" disabled={saving}>Guardar</Button>
         </DialogFooter>
       </form>
     </>

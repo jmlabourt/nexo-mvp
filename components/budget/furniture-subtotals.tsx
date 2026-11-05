@@ -43,7 +43,7 @@ export function FurnitureSubtotalsTable({ result, salesPrice }: { result: Calcul
             </TR>
           ))}
           <TR>
-            <TD className="text-slate-600">Costos compartidos</TD>
+            <TD className="text-slate-600">Costos generales del proyecto</TD>
             <TD />
             <TD className="text-right tabular text-slate-600">{formatCurrency(shared)}</TD>
             <TD className="text-xs text-slate-500" colSpan={2}>Incluidos en el precio de cada mueble</TD>

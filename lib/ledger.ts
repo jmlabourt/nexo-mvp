@@ -52,6 +52,7 @@ export function normalizeLedger(raw: Partial<Ledger> | null | undefined): Ledger
 
 
 export interface LedgerCtx {
+  employeeId?: string;
   actor: string;
   now: string;
 }
@@ -376,6 +377,7 @@ export function registerInternalHours(
   input: { employeeId: string; date: string; hours: number; task: string; projectId?: string; hourlyCost?: number },
   ctx: LedgerCtx,
 ): Ledger {
+  if (ctx.employeeId && input.employeeId !== ctx.employeeId) throw new DomainError("Solo podés registrar tus propias horas.");
   if (!input.employeeId) throw new DomainError("Elegí la persona.");
   if (!isDate(input.date)) throw new DomainError("Indicá la fecha.");
   if (!(input.hours > 0) || input.hours > 24) throw new DomainError("Las horas van de más de 0 a 24.");
@@ -426,7 +428,7 @@ export function setRubroActive(ledger: Ledger, id: string, active: boolean): Led
 // ── Tarifas por rubro con excepción por persona (la excepción prevalece; vigencia: no revaloriza el pasado) ──
 
 export function addRate(ledger: Ledger, input: Omit<RateRecord, "id" | "createdAt" | "createdBy">, ctx: LedgerCtx): Ledger {
-  if (!(input.hourlyRate > 0)) throw new DomainError("La tarifa tiene que ser mayor a cero.");
+  if (!Number.isFinite(input.hourlyRate) || !(input.hourlyRate > 0)) throw new DomainError("La tarifa tiene que ser mayor a cero.");
   if (!isDate(input.validFrom)) throw new DomainError("Indicá desde cuándo vale.");
   const rec: RateRecord = { ...input, hourlyRate: round2(input.hourlyRate), id: createId("tar"), createdBy: ctx.actor, createdAt: ctx.now };
   return { ...ledger, rates: [...ledger.rates, rec] };

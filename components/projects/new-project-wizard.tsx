@@ -47,6 +47,7 @@ export function NewProjectWizard() {
   const clients = useAppStore((s)=>s.ledger.clients);
   const { overtimeMultiplier, financialPct, hoursPerDay } = useAppStore((s) => s.costSettings);
   const rates = useAppStore((s) => s.hourRates);
+  const staffCategories=useAppStore(s=>s.ledger.staffCategories);
   const isDemo = useAppStore((s) => s.isDemo);
   const monthlyRate = useMonthlyRate();
   const createProject = useConfirmedAction("createProject");
@@ -89,8 +90,8 @@ export function NewProjectWizard() {
     [projects, nomenclature, projectName, clientName],
   );
   const calc = useMemo(
-    () => computeCalculator(calcState, projectType, { projects, rates, overtimeMultiplier, hoursPerDay, salesPrice, isDemo }),
-    [calcState, projectType, projects, rates, overtimeMultiplier, hoursPerDay, salesPrice, isDemo],
+    () => computeCalculator(calcState, projectType, { projects, rates, overtimeMultiplier, hoursPerDay, salesPrice, isDemo,staffCategories:staffCategories??[] }),
+    [calcState, projectType, projects, rates, overtimeMultiplier, hoursPerDay, salesPrice, isDemo,staffCategories],
   );
   const plazo = plazoOf(calcState);
   const suggestedDue = plazo > 0 && startDate ? addWorkingDays(startDate, plazo) : null;
@@ -216,6 +217,7 @@ export function NewProjectWizard() {
           actionLabel="Continuar"
           onAction={toReview}
           requireProducts
+          commercial={{title:projectName,client:clientName,description:getValues("description"),deadline:dueDate?`Entrega prevista: ${dueDate}`:undefined}}
           context={
             <>
               {code} · {getValues("client") || "Sin cliente"} · entrega {formatDate(dueDate)}

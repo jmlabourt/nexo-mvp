@@ -16,14 +16,15 @@ export function QuotePage() {
   const projects = useAppStore((s) => s.projects);
   const { overtimeMultiplier, financialPct, hoursPerDay } = useAppStore((s) => s.costSettings);
   const rates = useAppStore((s) => s.hourRates);
+  const staffCategories=useAppStore(s=>s.ledger.staffCategories);
   const isDemo = useAppStore((s) => s.isDemo);
   const [state, setState] = useState<CalcState>(() => initialCalcState(financialPct,defaults));
   const [projectType, setProjectType] = useState("");
   const [salesPrice, setSalesPrice] = useState(0);
 
   const calc = useMemo(
-    () => computeCalculator(state, projectType, { projects, rates, overtimeMultiplier, hoursPerDay, salesPrice, isDemo }),
-    [state, projectType, projects, rates, overtimeMultiplier, hoursPerDay, salesPrice, isDemo],
+    () => computeCalculator(state, projectType, { projects, rates, overtimeMultiplier, hoursPerDay, salesPrice, isDemo,staffCategories:staffCategories??[] }),
+    [state, projectType, projects, rates, overtimeMultiplier, hoursPerDay, salesPrice, isDemo,staffCategories],
   );
 
   const toProject = () => {
@@ -43,6 +44,7 @@ export function QuotePage() {
       <PageHeader
         back
         title="Cotizador"
+        subtitle="Armá el presupuesto por mueble y agregá los costos generales del proyecto."
         actions={
           <Button variant="outline" onClick={reset}>
             <RotateCcw /> Empezar de nuevo

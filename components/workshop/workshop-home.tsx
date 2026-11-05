@@ -40,7 +40,7 @@ export function WorkshopHome() {
   const day = useMemo(() => (operator ? myDay(projects, assignments, operator.id, today) : null), [projects, assignments, operator, today]);
 
   return (
-    <div className="mx-auto min-h-screen max-w-md bg-white px-4 pb-12">
+    <div className="blerp-workshop mx-auto min-h-screen max-w-md bg-white px-4 pb-12">
       <header className="flex items-center justify-between gap-3 py-4">
         <div className="min-w-0">
           <div className="text-lg font-semibold tracking-tight">{APP_NAME}</div>
@@ -87,7 +87,7 @@ export function WorkshopHome() {
               day.items.map((item) => <AssignmentCard key={item.assignment.id} item={item} onSaved={setSaved} />)
             )}
           </section>
-          <details className="mt-4"><summary className="cursor-pointer font-medium">Agregar otro trabajo / Trabajo interno general</summary><FlexibleWork operator={operator} onSaved={setSaved} /></details>
+          <details open className="mt-4"><summary className="cursor-pointer font-medium">Agregar otro trabajo / Trabajo interno general</summary><FlexibleWork operator={operator} onSaved={setSaved} /></details>
 
         </>
       )}
@@ -153,13 +153,13 @@ function AssignmentCard({ item, onSaved }: { item: MyDayItem; onSaved: (msg: str
       {local && categories.length > 1 && <label className="mt-2 block text-sm">Categoría laboral<Select value={selectedCategory ?? ""} onChange={(e) => setCategoryId(e.target.value)}><option value="">Elegí la categoría…</option>{categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</Select></label>}
         <form
           noValidate
-          className="mt-3 flex items-end gap-2"
+          className="mt-3 flex flex-wrap items-end gap-2"
           onSubmit={(e) => {
             e.preventDefault();
             submit(false);
           }}
         >
-          <div className="w-32">
+          <div className="w-24 min-w-0">
             <label htmlFor={id} className="mb-1 block text-xs font-medium text-slate-600">{item.logged > 0 ? "Agregar horas" : "Horas trabajadas"}</label>
             <Input id={id} inputMode="decimal" value={hours} onChange={(e) => setHours(e.target.value)} aria-invalid={!!error} />
           </div>

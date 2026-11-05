@@ -32,6 +32,7 @@ export interface QuoteMaterial {
 /** Un rubro de la cotización. Es un dato plano: un conjunto de rubros se puede guardar como plantilla. */
 export interface QuotedStaffHours { rateId: string; name: string; category: "design" | "admin"; hours: number; hourlyCost: number }
 export interface QuoteRubro {
+  staffCategoryId?: string;
   productKey?: string;
   staffHours?: QuotedStaffHours[];
   rubro: RubroId;
@@ -527,7 +528,7 @@ export function quoteBreakdown(lines: BudgetLineInput[], t: QuoteTargets, chosen
   const price = chosenPrice > 0 ? chosenPrice : (suggested?.price ?? 0);
   const usesSuggested = suggested !== null && price === suggested.price;
   const analysis = analyzePrice(price, costs, t.financialPct);
-  const margin = (cats: BudgetCategory[]) => sum((l) => !l.rubro && cats.includes(l.category));
+  const margin = (cats: BudgetCategory[]) => sum((l) => !l.rubro && l.quantity===null && cats.includes(l.category));
   return {
     materials: {
       cost: costs.materials,
@@ -537,9 +538,9 @@ export function quoteBreakdown(lines: BudgetLineInput[], t: QuoteTargets, chosen
     },
     labor: {
       cost: costs.labor,
-      operators: sum((l) => !!l.rubro && l.category === "labor"),
-      design: sum((l) => !!l.rubro && l.category === "design"),
-      admin: sum((l) => !!l.rubro && l.category === "admin"),
+      operators: sum((l) => (!!l.rubro||!!l.staffCategoryId) && l.category === "labor"),
+      design: sum((l) => (!!l.rubro||!!l.staffCategoryId) && l.category === "design"),
+      admin: sum((l) => (!!l.rubro||!!l.staffCategoryId) && l.category === "admin"),
       safetyMargin: margin(["labor", "design", "admin"]),
       targetPct: t.laborTargetPct,
       sale: usesSuggested && suggested ? suggested.laborPrice : null,

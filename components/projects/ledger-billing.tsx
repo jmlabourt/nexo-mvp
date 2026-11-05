@@ -76,7 +76,7 @@ export function LedgerBillingTab({ project,includeSupplierPayments=true }: { pro
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <dl className="grid gap-3 text-sm sm:grid-cols-3 lg:grid-cols-6">
+          <dl className="grid gap-3 text-sm sm:grid-cols-2 xl:grid-cols-3">
             {[
               ["Total acordado con el cliente", b.contracted],
               ["Previsto", b.planned],
@@ -172,7 +172,7 @@ export function LedgerBillingTab({ project,includeSupplierPayments=true }: { pro
                 }}
               >
                 <h3 className="text-sm font-semibold">Registrar factura de venta</h3>
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                   <Field label="Número"><Input value={inv.number} onChange={(e) => setInv({ ...inv, number: e.target.value })} placeholder="A-0001-…" /></Field>
                   <Field label="Emisión"><Input type="date" value={inv.date} onChange={(e) => setInv({ ...inv, date: e.target.value })} /></Field>
                   <Field label="Importe sin IVA"><Input inputMode="decimal" value={inv.amount} onChange={(e) => setInv({ ...inv, amount: e.target.value })} /></Field>
@@ -189,7 +189,7 @@ export function LedgerBillingTab({ project,includeSupplierPayments=true }: { pro
                 }}
               >
                 <h3 className="text-sm font-semibold">Registrar cobro</h3>
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                   <Field label="Factura">
                     <Select value={col.invoiceId} onChange={(e) => setCol({ ...col, invoiceId: e.target.value })}>
                       <option value="">Anticipo (sin factura)</option>

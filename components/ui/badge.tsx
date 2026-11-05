@@ -6,7 +6,7 @@ export function Badge({ tone = "gray", className, ...props }: React.HTMLAttribut
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium ring-1 ring-inset whitespace-nowrap",
+        "inline-flex max-w-full items-center gap-1 whitespace-normal rounded-md px-2 py-0.5 text-xs font-medium leading-relaxed ring-1 ring-inset",
         TONE_CLASSES[tone].badge,
         className,
       )}

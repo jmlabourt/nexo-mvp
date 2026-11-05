@@ -1,3 +1,4 @@
+import { generalAllocations } from "@/lib/frontend-work";
 import { invoiceEntries } from "@/lib/purchasing";
 // @vitest-environment jsdom
 // Pruebas de aceptación (pedido §11) sobre UN SOLO estado: el modo demostración. Cada escenario recorre la misma OT
@@ -151,8 +152,8 @@ describe("6. Horas de todos los roles", () => {
     as("gerencia");
     ok(st().recordLedger(["gerencia"],(l)=>({...l,personnel:[...(l.personnel ?? []).filter((p)=>p.employeeId!==op.id),{employeeId:op.id,enabled:true,view:"operario",productive:true,enabledRubros:[...new Set([A.items[0].rubros[0].rubro,B.items[0].rubros[0].rubro])]}]})));
     as("jefe_planta");
-    const asgA = ok(st().saveAssignment({ projectId: A.id, itemId: A.items[0].id, rubro: A.items[0].rubros[0].rubro, operatorId: op.id, date: today, plannedHours: 4 }));
-    const asgB = ok(st().saveAssignment({ projectId: B.id, itemId: B.items[0].id, rubro: B.items[0].rubros[0].rubro, operatorId: op.id, date: today, plannedHours: 4 }));
+    const asgA = ok(st().saveAssignment({ projectId: A.id, itemId: A.items[0].id, rubro: A.items[0].rubros[0].rubro, operatorId: op.id, date: today, plannedHours: 4,overloadReason:"Prueba de reparto con jornada extendida acordada" }));
+    const asgB = ok(st().saveAssignment({ projectId: B.id, itemId: B.items[0].id, rubro: B.items[0].rubros[0].rubro, operatorId: op.id, date: today, plannedHours: 4,overloadReason:"Prueba de reparto con jornada extendida acordada" }));
     // El operario solo ve sus tareas y carga 8 h en la primera.
     as("operario", op.id);
     const hoursOf = (pid: string) => project(pid).actualEntries.filter((e) => e.operatorId === op.id && e.date === today && e.labor).reduce((s, e) => s + (e.labor?.hours ?? 0), 0);
@@ -174,20 +175,20 @@ describe("6. Horas de todos los roles", () => {
     expect(costOf(A.id) - baseCostA + costOf(B.id) - baseCostB).toBeCloseTo(cost8, 1);
     expect(project(B.id).activity.at(-1)?.message).toMatch(/Trabajó la tarde en la OT B/);
 
-    as("administracion");
-    const person = "Diseño (prueba)";
-    ok(st().recordLedger(["administracion"], (l, ctx) => registerInternalHours(l, { employeeId: person, projectId: A.id, date: today, hours: 3, task: "Planos", hourlyCost: 10_000 }, ctx)));
-    ok(st().recordLedger(["administracion"], (l, ctx) => registerInternalHours(l, { employeeId: person, date: today, hours: 2, task: "Orden del estudio" }, ctx)));
-    expect(staffHoursCost(st().ledger, A.id)).toBe(30_000);
-    const internal = st().ledger.internalHours.filter((h) => h.employeeId === person && !h.projectId);
-    expect(internal.map((h) => h.hours)).toEqual([2]);
-    // Las 2 h internas no van a ninguna OT: la suma imputada a proyectos sigue siendo solo las 3 h.
-    expect(st().projects.reduce((s, p) => s + staffHoursCost(st().ledger, p.id), 0)).toBe(30_000);
-    // Compras y Jefe registran las suyas; Gerencia no puede.
-    as("compras");
-    ok(st().recordLedger(["administracion", "compras", "jefe_planta"], (l, ctx) => registerInternalHours(l, { employeeId: "Compras", date: today, hours: 1, task: "Pedidos" }, ctx)));
-    as("jefe_planta");
-    ok(st().recordLedger(["administracion", "compras", "jefe_planta"], (l, ctx) => registerInternalHours(l, { employeeId: "Jefe", projectId: B.id, date: today, hours: 1, task: "Control", hourlyCost: 1 }, ctx)));
+    // Personal y tarifa son explícitos; ninguna sesión crea identidades o salarios desde el payload de horas.
+    const profiles=[{id:"dis-test",name:"Diseño prueba",view:"administracion" as const,cost:10000},{id:"buy-test",name:"Compras prueba",view:"compras" as const,cost:100},{id:"plant-test",name:"Planta prueba",view:"jefe_planta" as const,cost:1}];
+    useAppStore.setState({operators:[...st().operators,...profiles.map(p=>({id:p.id,name:p.name,role:"Personal",active:true,hourlyCost:p.cost,createdAt:today}))],ledger:{...st().ledger,personnel:[...(st().ledger.personnel??[]),...profiles.map(p=>({employeeId:p.id,enabled:true,view:p.view}))]}});
+    as("administracion","dis-test");
+    const person="dis-test";
+    ok(st().recordLedger(["administracion"],(l,ctx)=>registerInternalHours(l,{employeeId:person,projectId:A.id,date:today,hours:3,task:"Planos",hourlyCost:10000},ctx)));
+    const beforeGeneral=st().projects.reduce((sum,p)=>sum+staffHoursCost(st().ledger,p.id),0);
+    ok(st().recordLedger(["administracion"],(l,ctx)=>{const next=registerInternalHours(l,{employeeId:person,date:today,hours:2,task:"Orden del estudio",hourlyCost:10000},ctx);return {...next,internalHours:next.internalHours.map(h=>h.id===next.internalHours.at(-1)!.id?{...h,allocations:generalAllocations(st().projects,today,20000)}:h)};}));
+    expect(st().ledger.internalHours.filter(h=>h.employeeId===person&&!h.projectId).map(h=>h.hours)).toEqual([2]);
+    expect(st().projects.reduce((sum,p)=>sum+staffHoursCost(st().ledger,p.id),0)-beforeGeneral).toBe(20000);
+    as("compras","buy-test");
+    ok(st().recordLedger(["compras"],(l,ctx)=>{const next=registerInternalHours(l,{employeeId:"buy-test",date:today,hours:1,task:"Pedidos",hourlyCost:100},ctx);return {...next,internalHours:next.internalHours.map(h=>h.id===next.internalHours.at(-1)!.id?{...h,allocations:generalAllocations(st().projects,today,100)}:h)};}));
+    as("jefe_planta","plant-test");
+    ok(st().recordLedger(["jefe_planta"],(l,ctx)=>registerInternalHours(l,{employeeId:"plant-test",projectId:B.id,date:today,hours:1,task:"Control",hourlyCost:1},ctx)));
     as("gerencia");
     expect(st().recordLedger(["administracion", "compras", "jefe_planta"], (l, ctx) => registerInternalHours(l, { employeeId: "Gerencia", date: today, hours: 1, task: "x" }, ctx)).ok).toBe(false);
   });

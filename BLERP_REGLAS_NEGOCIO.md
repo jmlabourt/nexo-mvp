@@ -197,7 +197,7 @@ Sumar tramos según anticipos y cuotas: el cobro reduce el saldo desde la fecha 
 
 ### 6.4. Capacidad y demanda semanal
 
-Gerencia configura dotación, días/jornadas, habilitaciones por rubro y **ajustes manuales trazables de capacidad**. Planta registra excepciones (ausencias, fracciones de jornada, disponibilidad extraordinaria) para fechas específicas. No usar números fijos de una fábrica entrevistada.
+Gerencia configura la dotación de personal, las jornadas y días laborales habituales, las categorías, los rubros habilitados y los costos horarios. Jefe de Planta configura y ajusta la capacidad semanal por rubro, planifica los refuerzos y registra las excepciones de disponibilidad (ausencias, fracciones de jornada y disponibilidad extraordinaria) para fechas específicas. Los ajustes de capacidad y refuerzos deben ser trazables, con fecha, responsable y motivo cuando corresponda. Gerencia consulta la capacidad y controla las decisiones económicas de los refuerzos, incluidas las tarifas y la confirmación de costos, sin duplicar la planificación operativa. Un refuerzo planificado no aumenta la capacidad disponible hasta que esté confirmado para el período correspondiente. No utilizar números fijos de una fábrica entrevistada.
 
 Distinguir:
 

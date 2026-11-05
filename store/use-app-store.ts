@@ -1,8 +1,10 @@
 "use client";
 import { validateBomPublication } from "@/lib/bom-commitments";
+import { adjustOtherCost, type OtherCostChange } from "@/lib/other-costs";
+import { validateInternalHoursChange } from "@/lib/internal-work";
 import { correctSentOrder, reverseLocalReceipt } from "@/lib/purchasing";
 import { reverseAssignment } from "@/lib/stock";
-import { employeeCost, personnelViews, savePersonnel, demoOperatorEligible, type EmployeeEdit } from "@/lib/personnel";
+import { employeeCost, employeeForSession, personnelViews, savePersonnel, demoOperatorEligible, type EmployeeEdit } from "@/lib/personnel";
 import { materialCatalog } from "@/lib/material-options";
 
 // ─────────────────────────────────────────────────────────────
@@ -52,9 +54,9 @@ import { recordClosure } from "@/lib/supabase/closures";
 import { commitLedger, ledgerDelta, loadLedger } from "@/lib/supabase/ledger";
 import { buildClosureSnapshot } from "@/lib/closure-snapshot";
 import { DEFAULT_COST_SETTINGS, type ScheduleChange, type Workspace, type WorkspaceData } from "@/lib/supabase/workspace";
-import { exceptionError, workDaysError } from "@/lib/schedule";
+import { dayCapacity, exceptionError, workDaysError } from "@/lib/schedule";
 import { tallerCalls } from "@/lib/supabase/taller";
-import { invoiceActivity, invoiceEntries, invoiceError, nextOrderNumber, orderDraftError, receiveOrder as receiveOrderLines, type InvoiceInput, type OrderDraft, type ReceiptInput } from "@/lib/purchasing";
+import { invoiceActivity, invoiceEntries, invoiceError, nextOrderNumber, orderDraftError, isWarehouseLine, receiveOrder as receiveOrderLines, type InvoiceInput, type OrderDraft, type ReceiptInput } from "@/lib/purchasing";
 import { todayISO } from "@/lib/formatting";
 import { hourRatesAt, OVERTIME_SUBJECT, priceChange, priceChangeError, valueAt } from "@/lib/price-history";
 import { applyCorrection, correctionError, type CorrectionInput, type CorrectionReceipt } from "@/lib/corrections";
@@ -179,6 +181,7 @@ interface AppState {
    */
   logHoursManual: (id: string, input: ManualHoursInput) => Result;
   addActualEntry: (id: string, input: ops.ActualInput) => Result;
+  adjustOtherCostLocal:(id:string,entryId:string,input:OtherCostChange)=>Result;
 
   assignOperators: (id: string, operatorIds: string[]) => Result;
   addItem: (id: string, input: ProductInput) => Result;
@@ -254,6 +257,7 @@ interface AppState {
   saveCatalogMaterialLocal: (input:{ id?:string;name:string;unit:string;rubro?:string;price:number;validFrom:string }) => Result;
   setMaterialPrices: (prices: Array<{ materialId: string; value: number; previousValue: number }>, validFrom: string) => Result;
   /** Crea (sin id) o modifica una asignación. La hacen el Jefe de planta y Administrativo. */
+  saveAssignmentsBatch: (requestId: string, inputs: AssignmentInput[]) => Result<string[]>;
   saveAssignment: (input: AssignmentInput & { id?: string }) => Result<string>;
   /** Quita una asignación. */
   removeAssignment: (id: string) => Result;
@@ -488,7 +492,10 @@ export const useAppStore = create<AppState>()(
       };
 
       const requirePhysicalWriter = () => {
-        if (get().demoLocal && effectiveIdentity(get()).session === "gerencia") throw new ops.DomainError("Gerencia solo consulta materiales. Compras o Planta deben conciliar los movimientos antes del cierre.");
+        if (get().demoLocal && ["gerencia","administracion"].includes(effectiveIdentity(get()).session)) throw new ops.DomainError("Gerencia y Administración solo consultan materiales. Compras o Planta deben conciliar los movimientos antes del cierre.");
+      };
+      const requireBuyer = () => {
+        if (get().demoLocal && effectiveIdentity(get()).session !== "compras") throw new ops.DomainError("Las órdenes, recepciones y asignaciones corresponden a Compras.");
       };
 
       /** Guarda en memoria lo que cambió y encola su escritura. Todas las vistas leen de acá. */
@@ -730,8 +737,9 @@ export const useAppStore = create<AppState>()(
           const st=get();if(!st.demoLocal || effectiveIdentity(st).session!=="jefe_planta") throw new ops.DomainError("Solo Planta administra el paso operativo entre Compras y Producción en demo local.");
           if(p.isClosed || !["purchasing","production"].includes(p.status) || !st.ledger.boms.some(b=>b.projectId===id && b.status==="published"))throw new ops.DomainError("Se requiere un proyecto abierto con BOM publicado.");
           if(status===p.status && (status!=="production" || p.productionDecision))return p;
-          if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||date>todayISO()||reason.trim().length<3)throw new ops.DomainError("Indicá fecha efectiva no futura y motivo.");
-          const who=ctx();return {...p,status,procurementNotifiedAt:p.procurementNotifiedAt??who.now,productionDecision:status==="production" ? p.productionDecision??{date,reason:reason.trim(),by:who.actor,at:who.now}:p.productionDecision,updatedAt:who.now,activity:[...p.activity,{id:createId("stage"),kind:"status",at:who.now,actor:who.actor,message:`Planta: ${status==="production"?"inicio decidido de Producción":"materiales adicionales: vuelve a Compras"} (${date}). ${reason.trim()}`}]};
+          const normalStart=status==="production"&&!p.productionDecision;
+          if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||Number.isNaN(Date.parse(date+"T12:00:00Z"))||date>todayISO()||(!normalStart&&reason.trim().length<3))throw new ops.DomainError("Indicá fecha efectiva no futura; los cambios excepcionales requieren motivo.");
+          const who=ctx();return {...p,status,procurementNotifiedAt:p.procurementNotifiedAt??who.now,productionDecision:status==="production" ? p.productionDecision??{date,reason:reason.trim(),by:who.actor,at:who.now}:p.productionDecision,updatedAt:who.now,activity:[...p.activity,{id:createId("stage"),kind:"status",at:who.now,actor:who.actor,message:`Planta: ${status==="production"?"inicio decidido de Producción":"materiales adicionales: vuelve a Compras"} (${date})${reason.trim()?`. ${reason.trim()}`:""}`}]};
         }),
         renameItemLocal:(id,itemId,name)=>mutate(id,(p)=>{
           if(!get().demoLocal || effectiveIdentity(get()).session!=="administracion" || p.isClosed)throw new ops.DomainError("Administración renombra muebles de proyectos abiertos en demo local.");
@@ -824,8 +832,9 @@ export const useAppStore = create<AppState>()(
 
         addPurchaseEntry: (id, input) =>
           run(() => {
+            requireBuyer();
             const project = find(id);
-            const res = ops.addPurchase(project, get().stock, input, ctx());
+            const res = ops.addPurchase(project, get().stock, input, get().demoLocal?{...ctx(),role:"owner"}:ctx());
             commit({ projects: get().projects.map((p) => (p.id === id ? res.project : p)), stock: res.stock });
             return undefined;
           }),
@@ -834,6 +843,7 @@ export const useAppStore = create<AppState>()(
           run(() => {
             if (effectiveIdentity(get()).session === "administracion") throw new ops.DomainError("El consumo lo registra Planta.");
             if (get().demoLocal && effectiveIdentity(get()).session !== "jefe_planta") throw new ops.DomainError("El consumo lo registra exclusivamente Planta.");
+            if(get().demoLocal&&input.leftover?.destination&&input.leftover.destination!=="warehouse")throw new ops.DomainError("Planta devuelve el sobrante al depósito; Compras lo asigna al destino.");
             const project = find(id);
             // El dominio legado exige el rol de escritura general. En demo la sesión se valida arriba;
             // este adaptador reutiliza su valoración y movimientos sin ampliar permisos de otras rutas.
@@ -902,7 +912,15 @@ export const useAppStore = create<AppState>()(
           });
         },
 
-        addActualEntry: (id, input) => mutate(id, (p) => ops.addActual(p, input, get().settings, ctx())),
+        addActualEntry: (id, input) => mutate(id, (p) => {
+          const st=get(),who=effectiveIdentity(st);
+          if(st.demoLocal&&!['gerencia','administracion'].includes(who.session))throw new ops.DomainError("Otros costos se registran desde Administración o Gerencia.");
+          return ops.addActual(p,input,st.settings,st.demoLocal?{...ctx(),role:"owner"}:ctx());
+        }),
+        adjustOtherCostLocal:(id,entryId,input)=>mutate(id,p=>{
+          if(!get().demoLocal)throw new ops.DomainError("Rectificación disponible en demo local; requiere persistencia habilitada para la empresa.");
+          const who=effectiveIdentity(get());return adjustOtherCost(p,entryId,input,{session:who.session,actor:who.actor,now:ctx().now});
+        }),
 
         assignOperators: (id, operatorIds) => mutate(id, (p) => ops.assignOperators(p, operatorIds, get().operators, ctx())),
         addItem: (id, input) => mutate(id, (p) => { if (get().demoLocal && (p.baseline || p.status !== "quotation")) throw new ops.DomainError("La cotización aprobada es inmutable; editá el BOM de producción."); return ops.addItem(p, input, ctx()); }),
@@ -931,6 +949,7 @@ export const useAppStore = create<AppState>()(
           }),
         deliverMaterial: (input) =>
           run(() => {
+            if(input.source==="warehouse")throw new ops.DomainError("Compras debe asignar el stock libre al proyecto antes del registro de Planta.");
             requirePhysicalWriter();
             if (effectiveIdentity(get()).session === "administracion") throw new ops.DomainError("Esta operación corresponde a Planta.");
             const who = effectiveIdentity(get()).roleKey;
@@ -947,6 +966,7 @@ export const useAppStore = create<AppState>()(
           }),
         directMaterialUsage: (input) =>
           run(() => {
+            if(input.source==="warehouse")throw new ops.DomainError("Compras debe asignar el stock libre al proyecto antes del consumo de Planta.");
             requirePhysicalWriter();
             if (effectiveIdentity(get()).session === "administracion") throw new ops.DomainError("Esta operación corresponde a Planta.");
             const who = effectiveIdentity(get()).roleKey;
@@ -1013,12 +1033,13 @@ export const useAppStore = create<AppState>()(
           if (session === "compras" && !s.demoLocal) throw new ops.DomainError("La transferencia desde Compras está preparada en frontend local; requiere integración backend.");
           return ops.transferProjectStock(s.projects,s.stock,input,ctx());
         }),
-        returnStockToSupplier: (input) => mutateStock((s) => ops.returnProjectStockToSupplier(s.projects, s.stock, input, ctx())),
-        markLeftover: (input) => mutateStock((s) => ops.leftoverFromProject(s.projects, s.stock, input, ctx())),
+        returnStockToSupplier: (input) => mutateStock((s) => {requireBuyer();return ops.returnProjectStockToSupplier(s.projects,s.stock,input,s.demoLocal?{...ctx(),role:"owner"}:ctx());}),
+        markLeftover: (input) => mutateStock((s) => {if(s.demoLocal&&(effectiveIdentity(s).session!=="jefe_planta"||input.destination&&input.destination!=="warehouse"))throw new ops.DomainError("Planta registra sobrantes hacia depósito; Compras los asigna después.");return ops.leftoverFromProject(s.projects,s.stock,input,s.demoLocal?{...ctx(),role:"owner"}:ctx());}),
 
         addStockLot: (input) =>
           run(() => {
-            requireManager("Registrar compras de stock");
+            requireBuyer();
+            if(!get().demoLocal)requireManager("Registrar compras de stock");
             const c = ctx();
             const received = receiveStock(
               {
@@ -1193,6 +1214,7 @@ export const useAppStore = create<AppState>()(
         }),
 
         updateSettings: (patch) => guardResult(() => {
+          if(effectiveIdentity(get()).session!=="gerencia")return {ok:false,error:"Los parámetros se administran exclusivamente en Gerencia."};
           const settings = { ...get().settings, ...patch };
           set({ settings });
           void persistRemote((db, org) => remote.saveSettings(db, org, settings));
@@ -1200,7 +1222,7 @@ export const useAppStore = create<AppState>()(
         }),
 
         updateCostSettings: (patch, validFrom = todayISO()) => guardResult(() => {
-          if (!isManager(effectiveIdentity(get()).role)) return { ok: false, error: "Configuración la cambia un usuario Administrativo." };
+          if (effectiveIdentity(get()).session!=="gerencia") return { ok: false, error: "Configuración la cambia Gerencia." };
           const prev = get().costSettings;
           const next = { ...prev, ...patch };
           const error = costSettingsError(next) ?? (patch.overtimeMultiplier !== undefined ? priceChangeError({ value: next.overtimeMultiplier, validFrom }) : null);
@@ -1215,7 +1237,7 @@ export const useAppStore = create<AppState>()(
           return { ok: true, value: undefined };
         }),
         saveHourRates: (rates, validFrom = todayISO()) => guardResult(() => {
-          if (!isManager(effectiveIdentity(get()).role)) return { ok: false, error: "Las tarifas las cambia un usuario Administrativo." };
+          if (effectiveIdentity(get()).session!=="gerencia") return { ok: false, error: "Las tarifas las cambia Gerencia." };
           const error = hourRatesError(rates) ?? priceChangeError({ value: 1, validFrom });
           if (error) return { ok: false, error };
           const prev = get().hourRates;
@@ -1247,6 +1269,7 @@ export const useAppStore = create<AppState>()(
         }),
         saveAssignment: (input) =>
           run(() => {
+            if (get().demoLocal && effectiveIdentity(get()).session !== "jefe_planta") throw new ops.DomainError("La planificación de operarios corresponde a Planta.");
             if (effectiveIdentity(get()).session === "administracion") throw new ops.DomainError("Administración no asigna trabajo de operarios.");
             const who = effectiveIdentity(get()).roleKey;
             if (who !== "admin" && who !== "jefe_planta") throw new ops.DomainError("Las asignaciones las hace el Jefe de planta.");
@@ -1256,9 +1279,15 @@ export const useAppStore = create<AppState>()(
             if (get().demoLocal && !configuredOperators(operators,get().ledger).find((o)=>o.id===input.operatorId)?.enabledRubros?.includes(input.rubro)) throw new ops.DomainError("Rubro pendiente de habilitar en Personal para esta persona.");
             const error = assignmentError(input, { projects, operators: configuredOperators(operators,get().ledger) });
             if (error) throw new ops.DomainError(error);
+            const employee=configuredOperators(operators,get().ledger).find(o=>o.id===input.operatorId)!;
+            const capacity=dayCapacity(employee,input.date,get().dayExceptions,get().costSettings.hoursPerDay).hours;
+            const planned=assignments.filter(a=>a.id!==input.id&&a.operatorId===input.operatorId&&a.date===input.date).reduce((sum,a)=>sum+a.plannedHours,0)+input.plannedHours;
+            if(planned>capacity+1e-6&&(input.overloadReason?.trim().length??0)<3)throw new ops.DomainError(`La persona quedaría con ${planned} h sobre ${capacity} h disponibles. Indicá el motivo de la sobreasignación.`);
             const previous = input.id ? assignments.find((a) => a.id === input.id) : undefined;
             const a: WorkAssignment = {
               id: input.id ?? createId("asg"),
+              batchId: previous?.batchId,
+              overloadReason:input.overloadReason?.trim()||undefined,
               projectId: input.projectId,
               hourKind: input.hourKind ?? "labor",
               itemId: input.itemId,
@@ -1279,8 +1308,34 @@ export const useAppStore = create<AppState>()(
             void persistRemote((db) => remote.saveAssignment(db, a));
             return a.id;
           }),
+        saveAssignmentsBatch: (requestId,inputs) => run(() => {
+          const state=get();
+          if(!state.demoLocal)throw new ops.DomainError("El alta múltiple atómica está disponible en frontend local; falta integración backend. No se guardaron asignaciones.");
+          if(effectiveIdentity(state).session!=="jefe_planta")throw new ops.DomainError("La planificación corresponde a Planta.");
+          if(!requestId.trim()||!inputs.length)throw new ops.DomainError("El lote requiere identidad y al menos una asignación.");
+          const signature=(a:AssignmentInput)=>JSON.stringify([a.projectId,a.itemId??null,a.operatorId,a.rubro,a.date,a.plannedHours,a.hourKind??"labor"]);
+          const previous=state.assignments.filter(a=>a.batchId===requestId);
+          if(previous.length){
+            if(previous.length!==inputs.length||inputs.some((a,i)=>signature(a)!==signature(previous.find(p=>p.id===`${requestId}-${i}`)??{} as AssignmentInput)))throw new ops.DomainError("El identificador del lote ya fue utilizado con otros datos; revisá las asignaciones existentes.");
+            return inputs.map((_,i)=>`${requestId}-${i}`);
+          }
+          if(new Set(inputs.map(signature)).size!==inputs.length)throw new ops.DomainError("El lote contiene asignaciones repetidas.");
+          const operators=configuredOperators(state.operators,state.ledger);
+          for(const a of inputs){
+            const error=assignmentError(a,{projects:state.projects,operators});if(error)throw new ops.DomainError(error);
+            if(!state.ledger.rubroCatalog.some(r=>r.id===a.rubro&&r.active)||!operators.find(o=>o.id===a.operatorId)?.enabledRubros?.includes(a.rubro))throw new ops.DomainError("Rubro no habilitado para una de las personas del lote.");
+          }
+          const ids=inputs.map((_,i)=>`${requestId}-${i}`);
+          if(ids.some(id=>state.assignments.some(a=>a.id===id)))throw new ops.DomainError("Hay una identidad de asignación ya utilizada.");
+          for(const [i,input] of inputs.entries()){
+            const result=get().saveAssignment({...input,id:ids[i]});if(!result.ok)throw new ops.DomainError(result.error);
+          }
+          set({assignments:get().assignments.map(a=>ids.includes(a.id)?{...a,batchId:requestId}:a)});
+          return ids;
+        }),
         removeAssignment: (id) =>
           run(() => {
+            if (get().demoLocal && effectiveIdentity(get()).session !== "jefe_planta") throw new ops.DomainError("La planificación de operarios corresponde a Planta.");
             const who = effectiveIdentity(get()).roleKey;
             if (who !== "admin" && who !== "jefe_planta") throw new ops.DomainError("Las asignaciones las hace el Jefe de planta.");
             set({ assignments: get().assignments.filter((a) => a.id !== id) });
@@ -1314,9 +1369,17 @@ export const useAppStore = create<AppState>()(
           }),
         saveOrder: (draft) =>
           run(() => {
+            requireBuyer();
             if (!isBuyer(effectiveIdentity(get()).role)) throw new ops.DomainError("Las órdenes de compra las maneja Compras o un usuario Administrativo.");
             const error = orderDraftError(draft);
             if (error) throw new ops.DomainError(error);
+            if(draft.lines.some(isWarehouseLine)){
+              if(!get().demoLocal)throw new ops.DomainError("Las OC de depósito requieren habilitación de persistencia; disponibles en demo local.");
+              for(const line of draft.lines.filter(isWarehouseLine)){
+                const m=materialCatalog(get().ledger).find(m=>m.id===line.materialId&&m.active!==false);
+                if(!m||m.unit!==line.unit||m.name!==line.materialName)throw new ops.DomainError("Seleccioná material activo del catálogo y conservá su unidad.");
+              }
+            }
             const previous = draft.id ? findOrder(draft.id) : undefined;
             if (previous && previous.status !== "draft") throw new ops.DomainError("Solo se modifica una orden en Borrador.");
             const order: PurchaseOrder = {
@@ -1330,7 +1393,7 @@ export const useAppStore = create<AppState>()(
               notes: draft.notes?.trim() || undefined,
               lines: draft.lines.map((l) => ({
                 ...l,
-                id: previous?.lines.find((x) => x.projectId === l.projectId && x.budgetLineId === l.budgetLineId)?.id ?? createId("ocl"),
+                id: previous?.lines.find((x) => x.projectId === l.projectId && x.budgetLineId === l.budgetLineId && x.destination===l.destination && x.materialId===l.materialId && x.unit===l.unit)?.id ?? createId("ocl"),
                 receivedQuantity: 0,
               })),
               createdBy: previous?.createdBy ?? effectiveIdentity(get()).actor,
@@ -1342,18 +1405,21 @@ export const useAppStore = create<AppState>()(
           }),
         sendOrder: (id) =>
           run(() => {
+            requireBuyer();
             const o = findOrder(id);
             if (o.status !== "draft") throw new ops.DomainError("Solo se envía una orden en Borrador.");
-            replaceOrder({ ...o, status: "sent" });
+            replaceOrder({ ...o, status: "sent",...(get().demoLocal?{statusHistory:[...(o.statusHistory??[]),{previous:"draft" as const,next:"sent" as const,at:ctx().now,by:ctx().actor,reason:"Envío al proveedor registrado por Compras."}]}:{}) });
             void persistRemote((db) => remote.orderStatus(db, { id, action: "send" }));
             return undefined;
           }),
         correctSentOrderLocal: (id, reason) => run(() => {
+          requireBuyer();
           if (!get().demoLocal) throw new ops.DomainError("Corrección disponible en demo local; requiere integración backend para empresas reales.");
           replaceOrder(correctSentOrder(findOrder(id),reason,ctx()));
           return undefined;
         }),
         reverseReceiptLocal: (id, movementId, reason) => run(() => {
+          requireBuyer();
           if (!get().demoLocal) throw new ops.DomainError("Reversión disponible en demo local; requiere integración backend para empresas reales.");
           const result = reverseLocalReceipt(findOrder(id),get().stock,get().deliveries,movementId,reason,ctx());
           set({ stock:result.stock,orders:get().orders.map((o) => o.id === id ? result.order : o) });
@@ -1361,6 +1427,7 @@ export const useAppStore = create<AppState>()(
         }),
         invoiceOrder: (id, invoice) =>
           run(() => {
+            if (get().demoLocal && effectiveIdentity(get()).session !== "administracion") throw new ops.DomainError("La carga de facturas corresponde a Administración.");
             if (effectiveIdentity(get()).session === "compras") throw new ops.DomainError("La carga de facturas no está habilitada en Compras.");
             const o = findOrder(id);
             const error = invoiceError(o, invoice);
@@ -1385,6 +1452,7 @@ export const useAppStore = create<AppState>()(
           }),
         setOrderPaid: (id, paid) =>
           run(() => {
+            if(get().demoLocal)throw new ops.DomainError("Registrá el débito efectivo desde Administración → Facturación y pagos, sobre una solicitud de Compras.");
             if (effectiveIdentity(get()).session !== "gerencia") throw new ops.DomainError("Solo Gerencia registra pagos efectivos.");
             const o = findOrder(id);
             if (o.status !== "invoiced") throw new ops.DomainError("Solo se marca como pagada una orden Facturada.");
@@ -1394,6 +1462,7 @@ export const useAppStore = create<AppState>()(
           }),
         receiveOrder: (id, receipts) =>
           run(() => {
+            requireBuyer();
             requirePhysicalWriter();
             if (effectiveIdentity(get()).session === "administracion") throw new ops.DomainError("Las recepciones corresponden a Compras.");
             const o = findOrder(id);
@@ -1497,6 +1566,9 @@ export const useAppStore = create<AppState>()(
           run(() => {
             if (!get().demoLocal) throw new ops.DomainError("Solo en el modo demostración.");
             if (!["jefe_planta", "gerencia"].includes(effectiveIdentity(get()).session)) throw new ops.DomainError("La corrección de horas la hace el Jefe de planta.");
+            const source=get().projects.find(p=>p.actualEntries.some(e=>e.id===input.entryId));
+            if(source?.isClosed||source?.status==="completed")throw new ops.DomainError("No se redistribuyen horas de un proyecto cerrado.");
+            for(const allocation of input.allocations.filter(a=>a.hours>0)){const asg=get().assignments.find(a=>a.id===allocation.assignmentId);const target=get().projects.find(p=>p.id===asg?.projectId);if(target?.isClosed||target?.status==="completed")throw new ops.DomainError("No se envían horas a un proyecto cerrado.");}
             const { actor } = effectiveIdentity(get());
             set({ projects: correctHours(get().projects, get().assignments, input, { actor, now: new Date().toISOString(), id: () => createId("hc") }) });
             return undefined;
@@ -1508,8 +1580,17 @@ export const useAppStore = create<AppState>()(
             const who = effectiveIdentity(state);
             if (!sessions.includes(who.session)) throw new ops.DomainError("Esta acción no corresponde a tu sesión.");
             // Las reglas son las de lib/ledger.ts (puras): si algo no corresponde, lanza acá y no se guarda nada.
-            const ledger = fn(state.ledger, { actor: who.actor, now: new Date().toISOString() }, state);
+            const employee=employeeForSession(state.operators,state.ledger,who,state.userId,state.demoLocal);
+            const context=Object.freeze({actor:who.actor,now:new Date().toISOString(),employeeId:employee?.id});
+            // Una función rechazada tampoco puede mutar por referencia los registros compartidos.
+            const candidate=structuredClone(state.ledger);
+            const isolatedData=structuredClone(pickDemoData(state as unknown as Record<string,unknown>));
+            const returned=fn(candidate,context,{...state,...isolatedData,ledger:candidate});
+            const ledger=Object.fromEntries(Object.entries(returned).map(([key,value])=>[key,JSON.stringify(value)===JSON.stringify(state.ledger[key as keyof Ledger])?state.ledger[key as keyof Ledger]:value])) as unknown as Ledger;
+            validateInternalHoursChange(state.ledger,ledger,state.projects,employee,who.session,context,state.priceHistory);
+            if(ledger.internalHours!==state.ledger.internalHours)ledger.internalHours=ledger.internalHours.map(h=>{if(state.ledger.internalHours.some(old=>old.id===h.id))return h;const valued=employee?employeeCost(ledger,employee,h.date,h.categoryId,state.priceHistory):undefined;const category=ledger.staffCategories?.find(c=>c.id===valued?.categoryId);return category?{...h,categoryId:category.id,categoryName:category.name,costCategory:category.category}:h;});
             if (state.demoLocal) {
+              if(ledger.personnel!==state.ledger.personnel)for(const person of ledger.personnel??[])if(JSON.stringify(state.ledger.personnel?.find(p=>p.employeeId===person.employeeId))!==JSON.stringify(person))savePersonnel({...ledger,personnel:state.ledger.personnel},state.operators,person);
               if(ledger.staffCategories!==state.ledger.staffCategories && (state.ledger.staffCategories??[]).some(c=>{const next=ledger.staffCategories?.find(x=>x.id===c.id);return !next || next.category!==c.category || next.kind!==c.kind;}))throw new ops.DomainError("Conservá la identidad y clasificación histórica de las categorías; desactivá en lugar de borrar.");
               const financeChanged=ledger.salesInvoices!==state.ledger.salesInvoices || ledger.collections!==state.ledger.collections || ledger.supplierPayments!==state.ledger.supplierPayments || ledger.financialCorrections!==state.ledger.financialCorrections;
               if(financeChanged && who.session!=="administracion")throw new ops.DomainError("Facturas, cobros y pagos efectivos se registran exclusivamente en Administración; Gerencia solo consulta.");

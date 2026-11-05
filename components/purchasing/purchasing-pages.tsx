@@ -1,5 +1,7 @@
 "use client";
+import { receiptDiscrepancies } from "@/lib/purchasing";
 import { SupplierPayments } from "@/components/projects/supplier-payments";
+import { StockOrderForm } from "./stock-order-form";
 import { useConfirmedAction } from "@/store/confirmed-action";
 // Compras: Dashboard, Órdenes de compra (con precios por proveedor) y Alertas. Solo materiales: costo estimado,
 // costo real (factura), proveedor y fechas. Nunca precio de venta, rentabilidad ni valor de la mano de obra.
@@ -13,6 +15,7 @@ import {
   ORDER_RECEIVED_LABELS,
   ORDER_STATUS_LABELS,
   orderTotal,
+  isWarehouseLine,
   toBuyWithin,
 } from "@/lib/purchasing";
 import { parseDecimal } from "@/lib/schemas";
@@ -150,6 +153,8 @@ export function OrdersPage() {
   // Las órdenes sin líneas (sus proyectos se borraron al restaurar la demo) no se muestran; siguen contando para el número.
   const allOrders = useAppStore((s) => s.orders);
   const orders = allOrders.filter((o) => o.lines.length > 0);
+  const stock=useAppStore(s=>s.stock);
+  const discrepancies=receiptDiscrepancies(allOrders,stock);
   const projects = useAppStore((s) => s.projects);
   const sendOrder = useConfirmedAction("sendOrder");
   const correctSent = useConfirmedAction("correctSentOrderLocal");
@@ -161,6 +166,7 @@ export function OrdersPage() {
   const [action, setAction] = useState<Action>(null);
   const [error, setError] = useState("");
   const code = (id: string) => projects.find((p) => p.id === id)?.code ?? id;
+  const [stockOpen,setStockOpen]=useState(false);
   const run = (r: { ok: boolean; error?: string }) => setError(r.ok ? "" : (r.error ?? ""));
 
   return (
@@ -170,6 +176,9 @@ export function OrdersPage() {
         subtitle="Borrador → Enviada al proveedor (compromiso de compra). Registrar el envío no envía correos ni solicita un pago. Recepciones parciales e historial de órdenes. La compra se convierte en costo productivo al consumir o desperdiciar."
       />
       {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
+      {discrepancies.length>0&&<div role="alert" className="text-sm text-amber-800">{discrepancies.map(d=><p key={`${d.orderId}-${d.lineId}`}>{d.message}</p>)}</div>}
+      {local&&<Button onClick={()=>setStockOpen(true)}>Nueva OC para depósito</Button>}
+      <Dialog open={stockOpen} onOpenChange={setStockOpen}><DialogContent className="max-w-2xl overflow-hidden"><DialogHeader><DialogTitle>Nueva OC para depósito</DialogTitle><DialogDescription>Compras para stock general; recepción libre, sin proyecto.</DialogDescription></DialogHeader><StockOrderForm onDone={()=>setStockOpen(false)} onCancel={()=>setStockOpen(false)}/></DialogContent></Dialog>
       <Tabs defaultValue="ordenes">
         <TabsList>
           <TabsTrigger value="ordenes">Órdenes</TabsTrigger>
@@ -193,15 +202,14 @@ export function OrdersPage() {
                     </p>
                   </CardHeader>
                   <CardContent className="space-y-3">
-                    <SupplierPayments orderId={o.id}/>
                     <ul className="divide-y divide-slate-100 text-sm">
                       {o.lines.map((l) => (
                         <li key={l.id} className="flex flex-wrap justify-between gap-2 py-1.5">
                           <span className="min-w-0 break-words">
-                            <strong>{code(l.projectId)}</strong> · {l.materialName}
+                            <strong>{isWarehouseLine(l)?"Depósito general":code(l.projectId)}</strong> · {l.materialName}
                           </span>
                           <span className="tabular text-slate-600">
-                            {formatQty(l.quantity, l.unit)} × {formatCurrency(l.unitCost)} · recibido {formatNumber(l.receivedQuantity)}
+                            {formatQty(l.quantity, l.unit)} × {formatCurrency(l.unitCost)} · recibido {formatNumber(l.receivedQuantity,3)}
                           </span>
                         </li>
                       ))}
@@ -219,9 +227,10 @@ export function OrdersPage() {
                         </Button>
                       )}
                     </div>
+                    <SupplierPayments orderId={o.id} embedded/>
                     {(o.statusHistory?.length || o.localReceipts?.length) ? <details className="text-xs"><summary>Historial de orden y recepciones</summary>
                       {o.statusHistory?.map((h,i) => <p key={i}>{formatDate(h.at)} · {h.by} · {ORDER_STATUS_LABELS[h.previous]} → {ORDER_STATUS_LABELS[h.next]} · {h.reason}</p>)}
-                      {o.localReceipts?.map((r) => <div key={r.movementId} className="mt-2">{formatDate(r.date)} · {r.by} · {o.lines.find((l) => l.id === r.lineId)?.materialName} · {formatNumber(r.quantity)}
+                      {o.localReceipts?.map((r) => <div key={r.movementId} className="mt-2">{formatDate(r.date)} · {r.by} · {o.lines.find((l) => l.id === r.lineId)?.materialName} · {formatNumber(r.quantity,3)}
                         {r.reversedAt ? <span> · Revertida por {r.reversedBy}: {r.reason}</span> : local && <Button size="sm" variant="ghost" onClick={() => { setReason(""); setCorrection({ orderId:o.id,movementId:r.movementId }); }}>Revertir recepción</Button>}
                       </div>)}
                     </details> : null}
@@ -270,13 +279,13 @@ function ReceiveForm({ order, onClose }: { order: PurchaseOrder; onClose: () => 
     >
       <DialogHeader>
         <DialogTitle>Recibir {order.number}</DialogTitle>
-        <DialogDescription>Lo que llegó entra al stock de cada proyecto con el costo real de la orden. Se puede recibir en partes.</DialogDescription>
+        <DialogDescription>Lo recibido entra al destino indicado en cada línea: proyecto o depósito libre, con el costo real de la orden. Se puede recibir en partes, con hasta tres decimales por cantidad.</DialogDescription>
       </DialogHeader>
       {order.lines.map((l) => (
         <div key={l.id} className="grid grid-cols-[1fr_7rem] items-end gap-2 text-sm">
           <span className="min-w-0 break-words">
-            <strong>{projects.find((p) => p.id === l.projectId)?.code}</strong> · {l.materialName}
-            <span className="block text-xs text-slate-500">pedido {formatQty(l.quantity, l.unit)} · ya recibido {formatNumber(l.receivedQuantity)}</span>
+            <strong>{isWarehouseLine(l)?"Depósito general":projects.find((p) => p.id === l.projectId)?.code}</strong> · {l.materialName}
+            <span className="block text-xs text-slate-500">pedido {formatQty(l.quantity, l.unit)} · ya recibido {formatNumber(l.receivedQuantity,3)}</span>
           </span>
           <Field label={`Llegó (${l.unit})`} htmlFor={`rcv-${l.id}`}>
             <Input id={`rcv-${l.id}`} inputMode="decimal" value={qty[l.id] ?? ""} onChange={(e) => setQty({ ...qty, [l.id]: e.target.value })} />

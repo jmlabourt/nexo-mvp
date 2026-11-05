@@ -32,7 +32,7 @@ export function AssignmentsPage({ embedded = false }: { embedded?: boolean } = {
   const pending = useMemo(() => pendingAssignments(projects, assignments, today), [projects, assignments, today]);
   const materialsOf = useMaterialsStateOf();
   const projectOf = (id: string) => projects.find((p) => p.id === id);
-  const subtitle = `Quién trabaja en qué proyecto cada día. Capacidad: la jornada de ${formatNumber(hoursPerDay)} h (Configuración) en los días laborales de cada operario, o lo que diga su excepción.`;
+  const subtitle = `Organizá personas, proyectos y rubros por día. Jornada general: ${formatNumber(hoursPerDay)} h; se respetan jornadas personales y excepciones.`;
   const newButton = (
     <Button onClick={() => setDraft({ date: today })}>
       <Plus /> Nueva asignación
@@ -47,13 +47,13 @@ export function AssignmentsPage({ embedded = false }: { embedded?: boolean } = {
           {newButton}
         </div>
       ) : (
-        <PageHeader title="Asignaciones" subtitle={subtitle} actions={newButton} />
+        <PageHeader title="Planificación" subtitle={subtitle} actions={newButton} />
       )}
 
-      {!embedded&&<><CapacityOverview/><details><summary>Configurar capacidad y refuerzos</summary><div className="space-y-3"><BaseCapacitySettings/><FrontendProductionSettings kind="capacity"/></div></details></>}
-      <PlantCalendar operators={operators} today={today} onAssign={setDraft} />
+      {!embedded&&<><nav aria-label="Secciones de Planificación" className="flex flex-wrap gap-2 text-sm">{[["resumen-capacidad","Capacidad y demanda"],["calendario-asignaciones","Calendario"],["pendientes-asignar","Pendientes de asignar"],["configurar-capacidad","Capacidad y refuerzos"]].map(([id,label])=><a key={id} href={`#${id}`} className="min-h-11 rounded-md border border-slate-300 bg-white px-3 py-2 text-blue-700 hover:bg-blue-50">{label}</a>)}</nav><div id="resumen-capacidad" className="scroll-mt-20"><CapacityOverview/></div></>}
+      <div id="calendario-asignaciones" className="scroll-mt-20"><PlantCalendar operators={operators} today={today} onAssign={setDraft} /></div>
 
-      <Card>
+      <Card id="pendientes-asignar" className="scroll-mt-20">
         <CardHeader>
           <CardTitle>Pendientes de asignar</CardTitle>
           <p className="text-sm text-slate-500">Producto + rubro donde se pidieron más operarios de los que hay asignados. Primero lo que se entrega antes. Cuando todo está asignado, la lista queda vacía.</p>
@@ -83,6 +83,7 @@ export function AssignmentsPage({ embedded = false }: { embedded?: boolean } = {
         </CardContent>
       </Card>
 
+      {!embedded&&<details id="configurar-capacidad" open className="scroll-mt-20 rounded-lg border border-slate-200 bg-white p-4"><summary className="font-semibold">Configurar capacidad y refuerzos</summary><div className="space-y-4"><BaseCapacitySettings/><FrontendProductionSettings kind="capacity"/></div></details>}
       <AssignmentDialog draft={draft} onClose={() => setDraft(null)} />
     </div>
   );

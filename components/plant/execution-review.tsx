@@ -21,6 +21,7 @@ export function ExecutionReviews() {
       return <details key={e.id} className="rounded border p-3 text-sm"><summary className="cursor-pointer">{operators.find((o) => o.id === e.operatorId)?.name} · {e.date} · {p.code} · {p.items.find((i) => i.id === e.itemId)?.name ?? "Sin mueble"} · {e.rubro ? rubroLabel(e.rubro) : "Sin rubro"} · {e.labor!.hours} h reales</summary>
         <p className="mt-2 text-xs text-slate-600">Plan original: {a ? `${a.date} · ${projects.find((p) => p.id === a.projectId)?.code} · ${rubroLabel(a.rubro)} · ${a.plannedHours} h` : "Sin asignación"}.</p>
         {(e.corrections ?? []).map((c,i) => <p key={i} className="text-xs mt-1">{c.at} · {c.by}: {c.reason} · Antes: {c.previous.date}, {c.previous.projectId}, {c.previous.itemId ?? "sin mueble"}, {c.previous.rubro}, {c.previous.hours} h → Después: {c.next.date}, {c.next.projectId}, {c.next.itemId ?? "sin mueble"}, {c.next.rubro}, {c.next.hours} h</p>)}
+        {e.corrections?.filter(c=>c.allocations).map(c=><p key={c.id} className="text-xs">Reparto auditado: {c.allocations!.map(a=>`${projects.find(p=>p.id===a.projectId)?.code??a.projectId} · ${a.hours} h`).join("; ")}</p>)}
         {local && !p.isClosed ? <CorrectForm entry={e} /> : <p className="text-xs text-slate-500">La edición completa está preparada en el frontend local. Las empresas reales conservan el circuito de revisión existente.</p>}
       </details>;
     })}

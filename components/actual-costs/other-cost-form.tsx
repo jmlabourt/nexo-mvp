@@ -1,6 +1,8 @@
 "use client";
 import { useConfirmedAction } from "@/store/confirmed-action";
 import { useForm } from "react-hook-form";
+import { useState } from "react";
+import { createId } from "@/lib/activity";
 import { zodResolver } from "@hookform/resolvers/zod";
 import type { Project } from "@/types";
 import { CATEGORY_LABELS } from "@/lib/constants";
@@ -15,6 +17,7 @@ import { DialogFooter } from "@/components/ui/dialog";
 /** Costo real que no es material ni horas. `cost` dice el tipo y, para Diseño / Administración / Costo financiero, la categoría. */
 export function OtherCostForm({ project, cost, onDone }: { project: Project; cost: Pick<ActualInput, "type" | "category">; onDone: () => void }) {
   const addActualEntry = useConfirmedAction("addActualEntry");
+  const [requestId]=useState(()=>createId("cost"));
   const { register, handleSubmit, setError, formState } = useForm<OtherCostValues>({
     resolver: zodResolver(otherCostSchema),
     defaultValues: { supplier: "", description: "", date: todayISO(), notes: "" },
@@ -24,6 +27,7 @@ export function OtherCostForm({ project, cost, onDone }: { project: Project; cos
   const submit = async (v: OtherCostValues) => {
     const res = await addActualEntry(project.id, {
       ...cost,
+      requestId,
       description: v.description,
       amount: v.amount,
       supplier: v.supplier || undefined,

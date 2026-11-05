@@ -19,7 +19,7 @@ export function FlexibleWork({ operator, assignment, onSaved }: { operator: Oper
   const ledger = useAppStore((s) => s.ledger);
   const costHistory = useAppStore((s) => s.priceHistory);
   const categories = laborCategories(ledger,operator.id);
-  const [form,setForm] = useState({ projectId: assignment?.projectId ?? "", itemId: assignment?.itemId ?? "", rubro: assignment?.rubro ?? "", hours: "",categoryId:"" });
+  const [form,setForm] = useState({ projectId: assignment?.projectId ?? "", itemId: assignment?.itemId ?? (assignment&&all.find(p=>p.id===assignment.projectId)?.items.filter(i=>i.rubros.some(r=>r.rubro===assignment.rubro)).length===1?all.find(p=>p.id===assignment.projectId)!.items.find(i=>i.rubros.some(r=>r.rubro===assignment.rubro))!.id:""), generalItem:false,rubro: assignment?.rubro ?? "", hours: "",categoryId:"" });
   const [error,setError] = useState("");
   const [busy,setBusy] = useState(false);
   const request = useRef<string | null>(null);
@@ -40,14 +40,14 @@ export function FlexibleWork({ operator, assignment, onSaved }: { operator: Oper
       const rate = valued.hourlyCost;
       const next = registerInternalHours(l,{ employeeId: operator.id, date: today, hours, hourlyCost: rate, task: "Trabajo interno general" },ctx);
       const row = next.internalHours.at(-1)!;
-      return { ...next, internalHours: next.internalHours.map((h) => h.id === row.id ? { ...h, categoryId: valued.categoryId, allocations: generalAllocations(all,today,Math.round(hours*rate*100)/100) } : h) };
+      return { ...next, internalHours: next.internalHours.map((h) => h.id === row.id ? { ...h, categoryId: valued.categoryId,categoryName:l.staffCategories?.find(c=>c.id===valued.categoryId)?.name,costCategory:valued.category, allocations: generalAllocations(all,today,Math.round(hours*rate*100)/100) } : h) };
     }) : st.executeWorkLocal({ requestId: request.current, categoryId:form.categoryId || undefined, operatorId: operator.id, projectId: form.projectId, itemId: form.itemId || undefined, rubro: form.rubro as RubroId, date: assignment?.date ?? today, hours, assignmentId: assignment?.id });
     setBusy(false); setError(result.ok ? "" : result.error);
     if (result.ok) { request.current = null; setForm({ ...form,hours:"" }); onSaved("Horas reales registradas una sola vez. La planificación original se conserva."); }
   }}>
     <p className="text-xs text-slate-600">{assignment ? `Planificado: ${assignment.plannedHours} h. Registrá lo que realmente trabajaste.` : "Agregá otro trabajo válido o trabajo interno general."}</p>
-    <label className="block text-sm">Proyecto<Select required value={form.projectId} onChange={(e) => setForm({ ...form,projectId:e.target.value,itemId:"",rubro:"" })}><option value="">Elegí…</option>{projects.map((p) => <option key={p.id} value={p.id}>{p.code} · {p.name}</option>)}<option value="internal">Trabajo interno general</option></Select></label>
-    {p && <><label className="block text-sm">Mueble (opcional)<Select value={form.itemId} onChange={(e) => setForm({ ...form,itemId:e.target.value,rubro:"" })}><option value="">Sin atribuir a mueble</option>{p.items.map((i) => <option key={i.id} value={i.id}>{i.name}</option>)}</Select></label><label className="block text-sm">Rubro<Select required value={form.rubro} onChange={(e) => setForm({ ...form,rubro:e.target.value })}><option value="">Elegí…</option>{rubros.map((r) => <option key={r.rubro} value={r.rubro}>{rubroLabel(r.rubro)}</option>)}</Select></label></>}
+    <label className="block text-sm">Proyecto<Select required value={form.projectId} onChange={(e) => {const selected=projects.find(p=>p.id===e.target.value);setForm({ ...form,projectId:e.target.value,itemId:selected?.items.length===1?selected.items[0].id:"",generalItem:false,rubro:"" });}}><option value="">Elegí…</option>{projects.map((p) => <option key={p.id} value={p.id}>{p.code} · {p.name}</option>)}<option value="internal">Trabajo interno general</option></Select></label>
+    {p && <><label className="block text-sm">Mueble (opcional)<Select value={form.itemId} onChange={(e) => setForm({ ...form,itemId:e.target.value,generalItem:e.target.value==="",rubro:"" })}><option value="">Trabajo general / sin mueble identificado</option>{p.items.map((i) => <option key={i.id} value={i.id}>{i.name}</option>)}</Select></label><label className="block text-sm">Rubro<Select required value={form.rubro} onChange={(e) => {const candidates=p.items.filter(i=>i.rubros.some(r=>r.rubro===e.target.value));setForm({ ...form,rubro:e.target.value,itemId:form.generalItem?"":form.itemId||(candidates.length===1?candidates[0].id:"") });}}><option value="">Elegí…</option>{rubros.map((r) => <option key={r.rubro} value={r.rubro}>{rubroLabel(r.rubro)}</option>)}</Select></label></>}
     {categories.length > 1 && <label className="block text-sm">Categoría laboral<Select value={form.categoryId} onChange={(e) => setForm({ ...form,categoryId:e.target.value })}><option value="">Elegí…</option>{categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</Select></label>}
     <label className="block text-sm">Horas reales<Input required inputMode="decimal" value={form.hours} onChange={(e) => setForm({ ...form,hours:e.target.value })} /></label>
     <Button type="submit" disabled={busy || !form.projectId}>Registrar ejecución real</Button>

@@ -9,6 +9,7 @@ import { buildSeed, STAR_PROJECT_ID } from "@/lib/seed-data";
 import { DEFAULT_SETTINGS } from "@/lib/constants";
 import { todayISO } from "@/lib/formatting";
 import { addDays } from "@/lib/plant";
+import { applyChange,assignToProject } from "@/lib/stock";
 import { deliverMaterial } from "@/lib/plant-materials";
 import { useAppStore } from "@/store/use-app-store";
 
@@ -49,7 +50,9 @@ afterEach(cleanup);
 
 describe("Jefe de planta", () => {
   it("registra materiales sin entregar ni generar una entrega artificial", async () => {
-    useAppStore.setState({ demoLocal:true });
+    const target=seed.projects.find(p=>p.code==="P-1058")!;
+    const stock=applyChange(seed.stock,assignToProject(seed.stock,{projectId:target.id,materialId:"mel-blanca-18",quantity:2,date:todayISO()},{actor:"Compras",now:new Date().toISOString()}));
+    useAppStore.setState({ demoLocal:true,stock });
     const user = userEvent.setup();render(<PlantProjectsPage />);
     const section = screen.getByRole("region",{ name:"Material en planta de P-1058" });
     expect(within(section).queryByRole("button",{ name:/Entregar material/ })).not.toBeInTheDocument();

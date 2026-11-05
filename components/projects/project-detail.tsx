@@ -1,4 +1,6 @@
 "use client";
+import { economicView } from "@/lib/tablero";
+import { PROJECT_TABS } from "@/lib/permissions";
 import Link from "next/link";
 import { useState } from "react";
 import { ArrowRightLeft, ClipboardPen, FolderX, Lock, Pencil } from "lucide-react";
@@ -8,7 +10,7 @@ import { useIdentity, useProjectAlerts, useProjectView } from "@/store/selectors
 import { can } from "@/lib/permissions";
 import { canQuoteProject } from "@/lib/project-rules";
 import { generalState } from "@/lib/gerencia";
-import { closureOf } from "@/lib/tablero";
+import { closureOf,profitView } from "@/lib/tablero";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -49,8 +51,6 @@ type DialogName = "record" | "hours" | "status" | "close" | "edit" | null;
  * Pestañas por sesión. Gerencia: la economía completa y su explicación. Administración / Comercial / Diseño: los
  * muebles (Diseño, etapas, BOM, archivos) y las etapas, sin importes gerenciales.
  */
-const GERENCIA_TABS = ["summary", "items", "budget", "materials", "hours", "costs", "billing", "activity"] as const;
-const ADMIN_TABS = ["items", "contract", "billing", "stages"] as const;
 
 export function ProjectDetail({ id, tab: initialTab, purchase }: { id: string; tab?: string; purchase?: string }) {
   const view = useProjectView(id);
@@ -59,7 +59,7 @@ export function ProjectDetail({ id, tab: initialTab, purchase }: { id: string; t
   const alerts = useProjectAlerts(view?.project);
   const { session, isManager, isQuoter, role } = useIdentity();
   const gerencia = session === "gerencia";
-  const tabs: readonly string[] = gerencia ? GERENCIA_TABS : ADMIN_TABS;
+  const tabs: readonly string[] = PROJECT_TABS[session];
   const [dialog, setDialog] = useState<DialogName>(null);
   const [tab, setTab] = useState<string>(tabs.includes(initialTab ?? "") ? (initialTab as string) : purchase && gerencia ? "materials" : tabs[0]);
 
@@ -109,15 +109,12 @@ export function ProjectDetail({ id, tab: initialTab, purchase }: { id: string; t
           </div>
           {!closed ? (
             <div className="flex flex-wrap gap-2 xl:justify-end">
-              {gerencia ? (
+              {gerencia || session === "administracion" ? (
                 <Button onClick={openDialog("record")} size="lg">
                   <ClipboardPen /> Registrar otro costo
                 </Button>
-              ) : (
-                <>
-                  <OwnHoursButton projectId={p.id} />
-                </>
-              )}
+              ) : null}
+              {!gerencia&&<OwnHoursButton projectId={p.id} />}
               {isQuoter && canQuoteProject(role, p) && (
                 <Button variant="outline" onClick={openDialog("edit")} size="lg">
                   <Pencil /> Editar información
@@ -135,7 +132,7 @@ export function ProjectDetail({ id, tab: initialTab, purchase }: { id: string; t
               )}
             </div>
           ) : (
-            <div className="rounded-md bg-slate-100 px-3 py-2 text-sm text-slate-600">Proyecto cerrado · solo lectura</div>
+            <div className="rounded-md bg-slate-100 px-3 py-2 text-sm text-slate-600">Proyecto cerrado · rectificaciones auditadas de otros costos disponibles solo en Gerencia</div>
           )}
         </div>
         {!closed && <CircuitActions project={p} canClose={can(session, "closeProjects")} />}
@@ -158,7 +155,7 @@ export function ProjectDetail({ id, tab: initialTab, purchase }: { id: string; t
           ) : (
             <>
               <TabsTrigger value="items">Muebles</TabsTrigger>
-              <TabsTrigger value="contract">Contrato y condiciones</TabsTrigger><TabsTrigger value="billing">Facturación y cobros</TabsTrigger>
+              <TabsTrigger value="contract">Contrato y condiciones</TabsTrigger><TabsTrigger value="billing">Facturación y cobros</TabsTrigger><TabsTrigger value="costs">Otros costos</TabsTrigger>
               <TabsTrigger value="stages">Etapas y notas</TabsTrigger>
             </>
           )}
@@ -172,7 +169,7 @@ export function ProjectDetail({ id, tab: initialTab, purchase }: { id: string; t
             <ScheduleCard project={p} />
             <TeamCard project={p} />
           </div>
-          <DeviationSection econ={econ} settings={settings} completed={p.status === "completed"} />
+          <DeviationSection econ={economicView(p,ledger,todayISO(),econ).econ} settings={settings} completed={profitView(p,ledger,todayISO()).final!==null} project={p} />
           <Card>
             <CardHeader>
               <CardTitle>Alertas del proyecto</CardTitle>

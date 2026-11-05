@@ -7,7 +7,7 @@ export function paymentTasks(ledger:Ledger,orders:PurchaseOrder[],projects:Proje
   const order=orders.find(o=>o.id===request.orderId);
   const paid=ledger.supplierPayments.filter(p=>p.paymentRequestId===request.id).reduce((s,p)=>s+p.amount,0);
   const balance=requestBalance(ledger,request);
-  const projectIds=[...new Set(order?.lines.map(l=>l.projectId)??[])];
+  const projectIds=[...new Set(order?.lines.map(l=>l.projectId).filter(Boolean)??[])];
   return {request,order,paid,balance,projects:projectIds.map(id=>projects.find(p=>p.id===id)).filter((p):p is Project=>!!p),status:request.cancelled?"cancelled" as const:balance===0?"paid" as const:paid>0?"partial" as const:request.banking?"banking" as const:"pending" as const};
  });
 }

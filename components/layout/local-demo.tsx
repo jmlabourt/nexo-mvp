@@ -99,7 +99,7 @@ export function LocalDemoBar() {
         <span className="flex items-center gap-1.5">
           <FlaskConical className="size-3.5" aria-hidden /> Modo demostración — guardado en este navegador · Datos de ejemplo
         </span>
-        <span className="flex gap-1 flex-wrap">
+        <details className="ml-auto"><summary>Herramientas de demo</summary><div className="mt-2 flex flex-wrap gap-2">
           <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={exportScenario}>
             <Download /> Exportar JSON
           </Button>
@@ -120,7 +120,7 @@ export function LocalDemoBar() {
           >
             <LogOut /> Salir de la demostración
           </Button>
-        </span>
+        </div></details>
       </div>
       <input ref={inputRef} type="file" accept="application/json,.json" className="hidden" onChange={importScenario} />
       {importError && <div role="alert" className="mb-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">{importError}</div>}

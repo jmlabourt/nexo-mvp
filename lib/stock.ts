@@ -23,6 +23,11 @@ const r2 = (n: number) => Math.round(n * 100) / 100;
 export const r3 = (n: number) => Math.round(n * 1000) / 1000;
 
 export class StockError extends Error {}
+/** El libro físico admite milésimas para todas las unidades de su catálogo; dinero conserva dos decimales. */
+export function quantityError(quantity:number,allowZero=false):string|null {
+  return !Number.isFinite(quantity)||quantity<0||(!allowZero&&quantity===0)||Math.abs(quantity-r3(quantity))>1e-9
+    ? "La cantidad debe ser positiva y admitir como máximo tres decimales (milésimas)." : null;
+}
 
 export interface StockState {
   lots: StockLot[];
@@ -262,7 +267,7 @@ export function receiveStock(
   ctx: StockCtx,
   opts: { allowZeroCost?: boolean } = {},
 ): StockChange & { lot: StockLot } {
-  if (!(input.quantity > EPS)) throw new StockError("La cantidad debe ser mayor a cero.");
+  const error=quantityError(input.quantity);if(error)throw new StockError(error);
   if (!opts.allowZeroCost && !(input.unitCost > 0)) throw new StockError("Indicá el costo unitario: el material tiene que tener valor.");
   const kind = input.kind ?? "purchase";
   const dest = input.destination;

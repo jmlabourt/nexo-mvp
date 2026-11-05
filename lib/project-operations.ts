@@ -98,6 +98,10 @@ function touch(project: Project, now: string, events: ActivityEvent[]): Project 
 // ── Creación ──────────────────────────────────────────────────
 
 export interface BudgetLineInput {
+  staffCategoryId?: string;
+  staffCategoryName?: string;
+  rateValidFrom?: string;
+  rateQuotedOn?: string;
   quotationItem?: string;
   quotationItemKey?: string;
   quotationItemId?: string;
@@ -485,6 +489,7 @@ export function registerUsage(
 // ── Costos ────────────────────────────────────────────────────
 
 export interface ActualInput {
+  requestId?:string;
   type: Exclude<ActualEntryType, "labor">;
   /** Solo para "other": Diseño, Administración o Gasto financiero. */
   category?: OtherCostCategory;
@@ -505,9 +510,12 @@ export function actualInputCategory(input: Pick<ActualInput, "type" | "category"
 export function addActual(project: Project, input: ActualInput, settings: AlertSettings, ctx: Ctx): Project {
   assertManager(ctx, "Cargar costos extra");
   assertExecutable(project, "costos de ejecución");
-  if (!(input.amount > 0)) throw new DomainError("Indicá un monto mayor a cero.");
+  if(input.requestId&&project.actualEntries.some(e=>e.id===input.requestId))return project;
+  if(!["outsourcing","finishing","logistics","installation","unexpected","other"].includes(input.type)||input.type==="other"&&input.category!==undefined&&!["design","admin","financial"].includes(input.category))throw new DomainError("Tipo o categoría de otro costo inválidos.");
+  if (!Number.isFinite(input.amount)||!(input.amount > 0)) throw new DomainError("Indicá un monto mayor a cero.");
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(input.date)||input.date>ctx.now.slice(0,10)||input.description.trim().length<2)throw new DomainError("Indicá descripción y fecha efectiva no futura.");
   const entry: ActualEntry = {
-    id: createId("act"),
+    id: input.requestId??createId("act"),
     projectId: project.id,
     date: input.date,
     type: input.type,

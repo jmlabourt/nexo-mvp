@@ -138,16 +138,16 @@ describe("modo demostración en la app", () => {
   });
 
   it("los registros nuevos (ledger) se guardan solo en la demo y respetan la sesión", () => {
-    const add = (l: Ledger) => ({ ...l, internalHours: [...l.internalHours, { id: "h1", employeeId: "e", date: "2026-10-21", hours: 2, task: "Orden", createdAt: "" }] });
-    expect(useAppStore.getState().recordLedger(["gerencia"], add)).toMatchObject({ ok: false, error: expect.stringMatching(/Pendiente de backend/) });
+    const add=(l:Ledger)=>({...l,financialMonthlyRatePct:4});
+    expect(useAppStore.getState().recordLedger(["gerencia"],add)).toMatchObject({ok:false,error:expect.stringMatching(/Pendiente de backend/)});
     useAppStore.getState().enterLocalDemo();
-    useAppStore.setState({ currentMode: "operario" });
-    expect(useAppStore.getState().recordLedger(["gerencia"], add).ok).toBe(false);
-    useAppStore.setState({ currentMode: "gerencia" });
-    expect(useAppStore.getState().recordLedger(["gerencia"], add).ok).toBe(true);
-    useAppStore.setState({ demoLocal: false, ledger: { ...useAppStore.getState().ledger, internalHours: [] } });
+    useAppStore.setState({currentMode:"operario"});
+    expect(useAppStore.getState().recordLedger(["gerencia"],add).ok).toBe(false);
+    useAppStore.setState({currentMode:"gerencia"});
+    expect(useAppStore.getState().recordLedger(["gerencia"],add).ok).toBe(true);
+    useAppStore.setState({demoLocal:false,ledger:{...useAppStore.getState().ledger,financialMonthlyRatePct:0}});
     useAppStore.getState().enterLocalDemo();
-    expect(useAppStore.getState().ledger.internalHours.map((h) => h.id)).toContain("h1");
+    expect(useAppStore.getState().ledger.financialMonthlyRatePct).toBe(4);
   });
 
   it("una empresa real que carga nunca usa los datos de la demo", () => {

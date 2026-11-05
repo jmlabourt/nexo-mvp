@@ -59,7 +59,7 @@ export function FinanceFields({ state, onState }: { state: CalcState; onState: (
   return (
     <fieldset className="mt-4 space-y-2 rounded-md border border-slate-200 p-3">
       <legend className="px-1 text-sm font-semibold text-slate-800">Condiciones de cobro y costo financiero</legend>
-      <div className="grid gap-2 sm:grid-cols-5">
+      <div className="grid gap-4 sm:grid-cols-2 2xl:grid-cols-3">
         <label className="text-xs font-medium text-slate-600">
           Inicio
           <Input className="mt-1" type="date" value={f.startDate} onChange={(e) => update({ startDate: e.target.value })} />

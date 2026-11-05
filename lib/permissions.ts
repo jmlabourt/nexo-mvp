@@ -218,3 +218,10 @@ const ACTIONS: Record<SessionKey, Action[]> = {
 export function can(who: SessionKey | RoleKey, action: Action): boolean {
   return ACTIONS[sessionOfWho(who)].includes(action);
 }
+
+/** Un solo alcance de pestañas para la ficha y los enlaces del buscador. */
+export const PROJECT_TABS:Record<SessionKey,readonly string[]>={
+ gerencia:["summary","items","budget","materials","hours","costs","billing","activity"],
+ administracion:["items","contract","billing","costs","stages"],
+ compras:[],jefe_planta:[],operario:[],
+};

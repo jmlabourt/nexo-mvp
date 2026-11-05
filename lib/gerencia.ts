@@ -10,8 +10,8 @@
 //   · Carga confirmada (aprobados), potencial (cotizaciones) y ponderada (con probabilidad informada) por separado.
 //   · Inflación y atrasos son ESTIMACIONES, nunca gasto real.
 // ─────────────────────────────────────────────────────────────
-import type { ClientInvoice, Opportunity, Operator, Project, RubroCapacity } from "@/types";
-import { budgetByCategory, materialActualCost, materialWasteCost, projectEconomics } from "./calculations";
+import type { Ledger, ClientInvoice, Opportunity, Operator, Project, RubroCapacity } from "@/types";
+import { staffCostRecords, budgetByCategory, materialActualCost, materialWasteCost, projectEconomics } from "./calculations";
 import { rubroLabel } from "./rubros";
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -274,7 +274,7 @@ export interface CostRow {
  * Costo presupuestado vs real por tipo, sumando los proyectos dados. Mano de obra separada en producción (por rubro),
  * Diseño y Administración; materiales = consumo; desperdicio aparte (los dos son costo); lo comprado sin consumir no.
  */
-export function costRows(projects: Project[]): CostRow[] {
+export function costRows(projects: Project[],ledger?:Ledger): CostRow[] {
   const budget = projects.reduce(
     (acc, p) => {
       const b = budgetByCategory(p.budgetLines);
@@ -290,7 +290,8 @@ export function costRows(projects: Project[]): CostRow[] {
     const key = e.rubro ? rubroLabel(e.rubro) : "Sin rubro";
     byRubro.set(key, round2((byRubro.get(key) ?? 0) + e.amount));
   }
-  const of = (category: string) => sum(entries.filter((e) => e.category === category).map((e) => e.amount));
+  const staff=ledger?projects.flatMap(p=>staffCostRecords(p.id,ledger)):[];
+  const of = (category: string) => sum([...entries.filter(e=>e.category===category).map(e=>e.amount),...staff.filter(h=>h.category===category).map(h=>h.amount??0)]);
   const productionActual = sum([...byRubro.values()]);
   const laborOther = round2(of("labor") - productionActual); // horas sin detalle de operario (montajes por importe)
   const rows: CostRow[] = [
@@ -303,6 +304,11 @@ export function costRows(projects: Project[]): CostRow[] {
     { key: "other", label: "Otros gastos (fletes, imprevistos)", budget: round2((budget.transport ?? 0) + (budget.contingency ?? 0)), actual: round2(of("transport") + of("contingency")) },
     { key: "financial", label: "Costo financiero", budget: budget.financial ?? 0, actual: of("financial") },
   ];
+  if(ledger){
+   const names=[...new Set(staff.filter(h=>!h.allocated).map(h=>h.name))];
+   for(const name of names)rows.push({key:`staff:${name}`,label:`· ${name} (incluido en su categoría)`,budget:0,actual:sum(staff.filter(h=>h.name===name&&!h.allocated).map(h=>h.amount??0))});
+   const indirect=staff.filter(h=>h.allocated);if(indirect.length)rows.push({key:"staff:general",label:"· Trabajo interno general distribuido (incluido en Administración)",budget:0,actual:sum(indirect.map(h=>h.amount??0))});
+  }
   return rows;
 }
 

@@ -3,7 +3,7 @@
 // Las únicas entradas son: proyecto, umbrales configurables y fecha de hoy.
 // ─────────────────────────────────────────────────────────────
 import type { Alert, AlertLevel, AlertSettings, EconomicHealth, Project } from "@/types";
-import { projectEconomics, lastRecordDate } from "./calculations";
+import { type ProjectEconomics, projectEconomics, lastRecordDate } from "./calculations";
 import { projectSchedule } from "./project-rules";
 import { CATEGORY_LABELS, STATUS_LABELS } from "./constants";
 import { daysBetween, formatCurrency, formatDays, formatMarginPoints, formatPercent, formatSignedCurrency } from "./formatting";
@@ -50,9 +50,9 @@ const CATEGORY_ACTION: Record<string, string> = {
   unexpected: "Proyecto → Costos reales, filtrado por Imprevistos.",
 };
 
-export function projectAlerts(project: Project, settings: AlertSettings, today: string): Alert[] {
+export function projectAlerts(project: Project, settings: AlertSettings, today: string,economics:ProjectEconomics=projectEconomics(project)): Alert[] {
   if (project.status === "completed" || project.status === "quotation") return [];
-  const econ = projectEconomics(project);
+  const econ = economics;
   const alerts: Omit<Alert, "resolutionKey">[] = [];
 
   // 1. Pérdida de margen: UNA alerta por proyecto (qué pasó, cuánto cuesta, qué revisar). Las categorías por encima
@@ -151,8 +151,8 @@ export function sortAlerts(alerts: Alert[]): Alert[] {
   return [...alerts].sort((a, b) => LEVEL_RANK[b.level] - LEVEL_RANK[a.level] || (b.impactAmount ?? 0) - (a.impactAmount ?? 0));
 }
 
-export function allAlerts(projects: Project[], settings: AlertSettings, today: string): Alert[] {
-  return sortAlerts(projects.flatMap((p) => projectAlerts(p, settings, today)));
+export function allAlerts(projects: Project[], settings: AlertSettings, today: string,economics?:(p:Project)=>ProjectEconomics): Alert[] {
+  return sortAlerts(projects.flatMap((p) => projectAlerts(p, settings, today,economics?.(p))));
 }
 
 /** Separa abiertas y resueltas. Es la ÚNICA cuenta: el globo, la pestaña "Todas" y la salud salen de acá. */

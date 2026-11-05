@@ -39,7 +39,7 @@ export function MaterialRows({ materials, onChange, owner }: { materials: Materi
 
   return (
     <div>
-      <div className="mb-1 flex items-center justify-between">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <h4 className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
           Materiales
           <HelpTip label="Materiales">
@@ -53,8 +53,8 @@ export function MaterialRows({ materials, onChange, owner }: { materials: Materi
       </div>
       <div className="space-y-2">
         {materials.map((m, i) => (
-          <div key={m.key} className="grid grid-cols-2 gap-2 sm:grid-cols-[2fr_0.8fr_0.8fr_1fr_0.8fr_auto]">
-            <div className="col-span-2 sm:col-span-1">
+          <div key={m.key} className="grid grid-cols-2 gap-2 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,0.8fr)_minmax(0,1fr)_minmax(0,1fr)_auto]">
+            <div className="col-span-2 lg:col-span-1">
               <label htmlFor={`m-name-${m.key}`} className="text-xs font-medium text-slate-600">Descripción</label>
               <Select id={`m-name-${m.key}`} value={m.materialId ?? ""} onChange={(e)=>{const cat=catalog.find((c)=>c.id===e.target.value);if(cat) setMaterial(m.key,{materialId:cat.id,name:cat.name,unit:cat.unit,unitCost:String(catalogPrice(cat.id))});}}><option value="">Seleccioná material…</option>{m.materialId && !catalog.some((c)=>c.id===m.materialId) && <option value={m.materialId} disabled>{m.name} · Histórico</option>}{catalog.map((c)=><option key={c.id} value={c.id}>{c.name}</option>)}</Select>
             </div>
@@ -64,7 +64,7 @@ export function MaterialRows({ materials, onChange, owner }: { materials: Materi
             <NumField id={`m-waste-${m.key}`} label="Desperdicio" suffix="%" value={m.wastePct} onChange={(v) => setMaterial(m.key, { wastePct: v })} />
             <RemoveButton label={`Quitar material ${i + 1} de ${owner}`} onClick={() => onChange(materials.filter((x) => x.key !== m.key))} />
             {num(m.quantity) > 0 && num(m.unitCost) > 0 && (
-              <p className="col-span-2 text-right text-xs text-slate-500 tabular sm:col-span-6">
+              <p className="col-span-2 text-right text-xs text-slate-500 tabular lg:col-span-6">
                 {formatNumber(materialBudgetQuantity({ quantity: num(m.quantity), wastePct: num(m.wastePct) }), 2)} {m.unit || "u"} × {formatCurrency(num(m.unitCost))} ={" "}
                 {formatCurrency(materialBudgetQuantity({ quantity: num(m.quantity), wastePct: num(m.wastePct) }) * num(m.unitCost))}
               </p>

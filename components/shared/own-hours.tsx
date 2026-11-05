@@ -6,7 +6,7 @@ import { useState } from "react";
 import { Clock } from "lucide-react";
 import type { SessionKey } from "@/lib/permissions";
 import { hourlyCostAt, registerInternalHours } from "@/lib/ledger";
-import { employeeCost,personnelViews } from "@/lib/personnel";
+import { employeeCost,employeeForSession } from "@/lib/personnel";
 import { correctInternalWork } from "@/lib/internal-work";
 import { generalAllocations } from "@/lib/frontend-work";
 import { generalState } from "@/lib/gerencia";
@@ -20,7 +20,7 @@ import { PendingAction } from "@/components/shared/data-origin";
 
 const INTERNAL = "__interno__";
 
-export function OwnHoursButton({ projectId }: { projectId?: string }) {
+export function OwnHoursButton({ projectId,primary=false }: { projectId?: string;primary?:boolean }) {
   const ledgerBacked = useLedgerBacked();
   const demoLocal = useAppStore((s) => s.demoLocal);
   const projects = useAppStore((s) => s.projects);
@@ -30,10 +30,9 @@ export function OwnHoursButton({ projectId }: { projectId?: string }) {
   const adminRate = useAppStore((s) => s.hourRates.find((r) => r.category === "admin")?.hourlyRate ?? 0);
   const record = useAppStore((s) => s.recordLedger);
   const userId = useAppStore((s) => s.userId);
-  const { session, actor: name } = useIdentity();
-  const configured = (ledger.personnel ?? []).filter((p) => p.enabled && personnelViews(p).includes(session));
-  const employee = employees.find((o) => (userId && o.userId === userId) || o.name === name)
-    ?? (demoLocal && configured.length === 1 ? employees.find((o) => o.id === configured[0].employeeId) : undefined);
+  const who = useIdentity();
+  const { session, actor: name } = who;
+  const employee = employeeForSession(employees,ledger,who,userId,demoLocal);
   const actor = employee?.id ?? (demoLocal ? "" : (userId ?? name));
   const allowedCategories = ledger.personnel?.find((p) => p.employeeId === employee?.id)?.categoryIds ?? [];
   const categories = (ledger.staffCategories ?? []).filter((c) => c.active !== false && c.category !== "labor" && allowedCategories.includes(c.id));
@@ -66,7 +65,7 @@ export function OwnHoursButton({ projectId }: { projectId?: string }) {
         const next = registerInternalHours(l, { employeeId: actor, projectId: onProject, date: form.date, hours: Number(form.hours.replace(",", ".")), task: form.task, hourlyCost }, ctx);
         if (!demoLocal) return next;
         const row = next.internalHours.at(-1)!;
-        const enriched = { ...next,internalHours:next.internalHours.map((h) => h.id === row.id ? { ...h,categoryId:category?.id,itemId:onProject ? form.itemId || undefined : undefined } : h) };
+        const enriched = { ...next,internalHours:next.internalHours.map((h) => h.id === row.id ? { ...h,categoryId:category?.id,categoryName:category?.name,costCategory:category?.category,itemId:undefined } : h) };
         if (onProject) return enriched;
         const last = next.internalHours.at(-1)!;
         return { ...enriched, internalHours: enriched.internalHours.map((h) => h.id === last.id ? { ...h, allocations: generalAllocations(projects, h.date, Math.round(h.hours * hourlyCost * 100) / 100) } : h) };
@@ -81,8 +80,8 @@ export function OwnHoursButton({ projectId }: { projectId?: string }) {
 
   return (
     <>
-      <span className="inline-flex items-center gap-2">
-        <Button variant="outline" size="sm" onClick={() => setOpen(true)}>
+      <span className="inline-flex flex-wrap items-center gap-2">
+        <Button variant={primary?"default":"outline"} size={primary?"lg":"sm"} onClick={() => setOpen(true)}>
           <Clock /> Registrar mis horas
         </Button>
         {done && <span role="status" className="text-xs text-emerald-700">{done}</span>}
@@ -101,7 +100,7 @@ export function OwnHoursButton({ projectId }: { projectId?: string }) {
             <DialogHeader>
               <DialogTitle>Registrar mis horas</DialogTitle>
               <DialogDescription>
-                {actor}. Las horas de un proyecto suman a su costo; el trabajo
+                {employee?.name ?? name}. Las horas de un proyecto suman a su costo; el trabajo
                 interno general reparte su costo entre los proyectos activos de la fecha trabajada (disponible en frontend local).
               </DialogDescription>
             </DialogHeader>
@@ -126,7 +125,7 @@ export function OwnHoursButton({ projectId }: { projectId?: string }) {
               </label>
             </div>
             {demoLocal && categories.length > 0 && <label className="block text-sm">Categoría de trabajo<Select value={form.categoryId} onChange={(e) => setForm({ ...form,categoryId:e.target.value })}><option value="">Elegí…</option>{categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</Select></label>}
-            {demoLocal && form.project !== INTERNAL && <label className="block text-sm">Mueble (opcional)<Select value={form.itemId} onChange={(e) => setForm({ ...form,itemId:e.target.value })}><option value="">Sin mueble identificado</option>{projects.find((p) => p.id === form.project)?.items.map((i) => <option key={i.id} value={i.id}>{i.name}</option>)}</Select></label>}
+
             {!actor && <p className="text-sm text-amber-800">Gerencia debe vincular esta vista a una persona en Personal. No se crearán registros con una identidad ficticia.</p>}
             <label className="block text-sm font-medium text-slate-700">
               Tarea

@@ -190,7 +190,7 @@ function OrderForm({ needs, onClose, onDone }: { needs: MaterialNeed[]; onClose:
         <DialogTitle>Nueva orden de compra</DialogTitle>
         <DialogDescription>
           Queda en Borrador con el próximo número. El costo unitario es el REAL que conseguiste (la negociación queda afuera del sistema): el costo real
-          del proyecto cambia recién al registrar la factura.
+          del proyecto cambia al consumir o desperdiciar, no al comprar ni al facturar.
         </DialogDescription>
       </DialogHeader>
       <form onSubmit={save} noValidate className="space-y-4">
@@ -243,7 +243,7 @@ function OrderForm({ needs, onClose, onDone }: { needs: MaterialNeed[]; onClose:
         </DialogFooter>
       </form>
       <p className="text-xs text-slate-500">
-        Después, en <Link href="/compras/ordenes" className="text-blue-700 underline">Órdenes de compra</Link>: enviarla, registrar la factura, marcar pagada y recibir.
+        Después, en <Link href="/compras/ordenes" className="text-blue-700 underline">Órdenes de compra</Link>: prepararla, enviarla al proveedor y registrar lo recibido. Compras solicita el pago; Administración registra la gestión bancaria y el pago efectivo.
       </p>
     </>
   );

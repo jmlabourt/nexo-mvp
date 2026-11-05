@@ -87,7 +87,7 @@ function DirectUsageForm({ project, onDone }: { project: Project; onDone: () => 
   const options = deliveryOptions(stock, deliveries, project.id);
   const [materialId, setMaterialId] = useState(options[0]?.materialId ?? "");
   const option = options.find((o) => o.materialId === materialId);
-  const [source, setSource] = useState<"warehouse" | "project">(option && option.project > 0 ? "project" : "warehouse");
+  const [source, setSource] = useState<"warehouse" | "project">("project");
   const [consumed, setConsumed] = useState("");
   const [waste, setWaste] = useState("");
   const [leftover, setLeftover] = useState("");
@@ -132,7 +132,7 @@ function DirectUsageForm({ project, onDone }: { project: Project; onDone: () => 
       ) : (
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label="Material" htmlFor="du-material" className="sm:col-span-2">
-            <Select id="du-material" value={materialId} onChange={(e) => { setMaterialId(e.target.value); const o = options.find((x) => x.materialId === e.target.value); setSource(o && o.project > 0 ? "project" : "warehouse"); }}>
+            <Select id="du-material" value={materialId} onChange={(e) => { setMaterialId(e.target.value); setSource("project"); }}>
               {options.map((o) => (
                 <option key={o.materialId} value={o.materialId}>{o.materialName}</option>
               ))}
@@ -143,7 +143,7 @@ function DirectUsageForm({ project, onDone }: { project: Project; onDone: () => 
               <legend className="mb-1 text-sm font-medium text-slate-700">Origen</legend>
               <div className="flex flex-col gap-1.5 text-sm sm:flex-row sm:gap-4">
                 <label className="flex items-center gap-2"><input type="radio" name="du-source" checked={source === "project"} disabled={option.project <= 0} onChange={() => setSource("project")} />Asignado al proyecto ({formatQty(option.project, option.unit)})</label>
-                <label className="flex items-center gap-2"><input type="radio" name="du-source" checked={source === "warehouse"} disabled={option.warehouse <= 0} onChange={() => setSource("warehouse")} />Depósito libre ({formatQty(option.warehouse, option.unit)})</label>
+                <label className="flex items-center gap-2"><input type="radio" name="du-source" checked={source === "warehouse"} disabled />Depósito libre ({formatQty(option.warehouse, option.unit)}) · requiere asignación de Compras</label>
               </div>
             </fieldset>
           )}
@@ -172,7 +172,7 @@ function DirectUsageForm({ project, onDone }: { project: Project; onDone: () => 
       {error && <p role="alert" className="mt-3 text-sm text-red-600">{error}</p>}
       <DialogFooter>
         <Button type="button" variant="outline" onClick={onDone}>Cancelar</Button>
-        <Button type="submit" disabled={options.length === 0 || !(qty(consumed || "0") + qty(waste || "0") + qty(leftover || "0") > 0)}>Guardar uso</Button>
+        <Button type="submit" disabled={options.length === 0 || !option || option.project <= 0 || !(qty(consumed || "0") + qty(waste || "0") + qty(leftover || "0") > 0)}>Guardar uso</Button>
       </DialogFooter>
     </form>
   );

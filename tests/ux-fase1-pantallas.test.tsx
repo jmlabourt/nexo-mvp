@@ -5,6 +5,7 @@ import "@testing-library/jest-dom/vitest";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, within } from "@testing-library/react";
 import { buildSeed, STAR_PROJECT_ID } from "@/lib/seed-data";
+import { EMPTY_LEDGER } from "@/lib/ledger";
 import { DEFAULT_SETTINGS } from "@/lib/constants";
 import { useAppStore } from "@/store/use-app-store";
 
@@ -65,7 +66,8 @@ describe("Administrativo", () => {
     render(<DetectedDeviationsCard project={seed.projects.find((p) => p.id === "p-1051")!} />);
     expect(screen.queryByLabelText("Desvíos detectados aún no proyectados")).toBeNull();
   });
-  it("cada alerta económica dice qué pasó, cuánto cuesta y qué revisar", () => {
+  it("cada alerta productiva con tasa financiera cero explícita dice qué pasó, cuánto cuesta y qué revisar", () => {
+    useAppStore.setState({ledger:{...EMPTY_LEDGER,financialMonthlyRatePct:0}});
     render(<AlertsPage />);
     const text = document.body.textContent ?? "";
     expect(text).toMatch(/Pierde 8,8 puntos de margen: \$ 1\.050\.000/);

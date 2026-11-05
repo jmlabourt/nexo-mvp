@@ -51,20 +51,20 @@ describe("Personal: una ficha y un registro por empleado",()=>{
  it("categoría nueva persistente, alta no operativa y edición completa en la misma ficha",async()=>{
   const user=userEvent.setup();render(<StaffCategoriesSettings/>);
   await user.type(screen.getByLabelText("Categoría"),"Comercial");await user.type(screen.getByLabelText("Costo por hora"),"250");await user.click(screen.getByRole("button",{name:"Agregar categoría"}));
-  expect(screen.getByText(/Comercial/)).toBeInTheDocument();cleanup();render(<OperatorsPage/>);
-  expect(screen.queryByText("Carpintería")).not.toBeInTheDocument();expect(screen.getAllByText("Pendiente de configurar").length).toBeGreaterThan(0);
+  expect(screen.getByRole("button",{name:"Editar categoría Comercial"})).toBeInTheDocument();cleanup();render(<OperatorsPage/>);
+  expect(screen.queryByText("Carpintería")).not.toBeInTheDocument();expect(screen.getAllByText("Sin categoría").length).toBeGreaterThan(0);
   await user.click(screen.getByRole("button",{name:"Agregar empleado"}));const modal=screen.getByRole("dialog");expect(within(modal).getByText("Nuevo empleado")).toBeInTheDocument();
   await user.type(within(modal).getByLabelText("Nombre y apellido"),"Ana Comercial");
   const cat=st().ledger.staffCategories!.find((c)=>c.name==="Comercial")!;
-  await user.selectOptions(within(modal).getByLabelText("Categorías laborales"),cat.id);await user.selectOptions(within(modal).getByLabelText("Vistas de Blerp"),"administracion");
+  await user.selectOptions(within(modal).getByLabelText("Categorías laborales"),cat.id);await user.selectOptions(within(modal).getByLabelText("Vista de Blerp"),"administracion");
   await user.type(within(modal).getByLabelText("Email"),"ana@example.test");await user.type(within(modal).getByLabelText("Teléfono"),"1234");await user.click(within(modal).getByRole("button",{name:"Guardar configuración de la persona"}));
   const employee=st().operators.find((o)=>o.name==="Ana Comercial")!;expect(employee).toBeDefined();expect(st().ledger.personnel!.find((p)=>p.employeeId===employee.id)).toMatchObject({productive:false,phone:"1234",categoryIds:[cat.id]});
   const row=screen.getByText("Ana Comercial").closest("tr")!;await user.click(within(row).getByRole("button",{name:"Editar"}));
   const edit=screen.getByRole("dialog");await user.clear(within(edit).getByLabelText("Nombre y apellido"));await user.type(within(edit).getByLabelText("Nombre y apellido"),"Ana Editada");
-  await user.selectOptions(within(edit).getByLabelText("Categorías laborales"),[cat.id,"craft"]);await user.selectOptions(within(edit).getByLabelText("Vistas de Blerp"),["administracion","operario"]);await user.selectOptions(within(edit).getByLabelText("Rubros habilitados"),["carpinteria_madera","pintura"]);
+  await user.selectOptions(within(edit).getByLabelText("Categorías laborales"),[cat.id,"craft"]);await user.selectOptions(within(edit).getByLabelText("Vista de Blerp"),"administracion");await user.selectOptions(within(edit).getByLabelText("Rubros habilitados"),["carpinteria_madera","pintura"]);
   await user.type(within(edit).getByLabelText("Nueva tarifa individual (opcional)"),"300");await user.click(within(edit).getByRole("button",{name:"Guardar configuración de la persona"}));
   expect(st().operators.find((o)=>o.id===employee.id)!.name).toBe("Ana Editada");expect(employeeCost(st().ledger,st().operators.find((o)=>o.id===employee.id)!,day,"craft").hourlyCost).toBe(300);
-  roundtrip();expect(st().ledger.personnel!.find((p)=>p.employeeId===employee.id)).toMatchObject({views:["administracion","operario"],enabledRubros:["carpinteria_madera","pintura"]});
+  roundtrip();expect(st().ledger.personnel!.find((p)=>p.employeeId===employee.id)).toMatchObject({views:["administracion"],enabledRubros:["carpinteria_madera","pintura"]});
  });
  it("heredado pendiente → configurar → Planta → horas reales → Gerencia, sin tocar historia",()=>{
   expect(weeklyCapacity([p()],[op],[],[],day,day,day,8,"carpinteria_madera",st().ledger).pendingConfiguration).toBe(true);
@@ -193,7 +193,7 @@ it("Stock conserva unidades separadas para un mismo material y la asignación no
 });
 
 it("las vistas explícitas y categorías inactivas se propagan sin revalorizar horas históricas",()=>{
- const l=ledger();l.personnel=[{...profile(false),employeeId:op.id,views:["administracion"],view:"administracion",categoryIds:["office"]}];expect(demoOperatorEligible(l,op)).toBe(false);l.personnel[0].views=["administracion","operario"];expect(demoOperatorEligible(l,op)).toBe(true);
+ const l=ledger();l.personnel=[{...profile(false),employeeId:op.id,views:["administracion"],view:"administracion",categoryIds:["office"]}];expect(demoOperatorEligible(l,op)).toBe(false);l.personnel[0].view="operario";l.personnel[0].views=["operario"];expect(demoOperatorEligible(l,op)).toBe(true);
  l.staffCategories=l.staffCategories!.map((c)=>c.id==="office" ? {...c,active:false} : c);l.rates=[{id:"override",scope:"employee",subjectId:op.id,hourlyRate:999,validFrom:day,createdAt:ctx.now,createdBy:"G"}];expect(()=>employeeCost(l,op,day)).toThrow(/categoría laboral activa/);
 });
 

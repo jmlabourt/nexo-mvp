@@ -1,7 +1,10 @@
 "use client";
 import { useMemo, useState } from "react";
 import { Receipt } from "lucide-react";
-import type { BudgetCategory, Project } from "@/types";
+import type { ActualEntry, BudgetCategory, Project } from "@/types";
+import {isOtherCost,otherCostGroup} from "@/lib/other-costs";
+import {useIdentity} from "@/store/selectors";
+import {CostAdjustment} from "./cost-adjustment";
 import { actualEntryLabel, CATEGORY_LABELS, CATEGORY_ORDER, SOURCE_LABELS } from "@/lib/constants";
 import { usageProjectCost } from "@/lib/calculations";
 import { formatCurrency, formatDate, formatNumber, formatQty } from "@/lib/formatting";
@@ -11,6 +14,7 @@ import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { EmptyState } from "@/components/shared/empty-state";
 
 interface Row {
+  entry?:ActualEntry;
   id: string;
   date: string;
   createdAt: string;
@@ -24,10 +28,11 @@ interface Row {
 
 /** Tabla cronológica de todo lo que impacta en el costo imputable (consumos + costos). Las compras no aparecen: no son costo. */
 export function ActualCostsTab({ project }: { project: Project }) {
+  const {session}=useIdentity();const administrative=session==="administracion";
   const [cat, setCat] = useState<BudgetCategory | "all">("all");
   const [user, setUser] = useState("all");
   const rows = useMemo<Row[]>(() => {
-    const usage: Row[] = project.materialUsages.map((u) => ({
+    const usage: Row[] = (administrative?[]:project.materialUsages).map((u) => ({
       id: u.id,
       date: u.date,
       createdAt: u.createdAt,
@@ -38,19 +43,20 @@ export function ActualCostsTab({ project }: { project: Project }) {
       amount: usageProjectCost(u),
       user: u.createdBy,
     }));
-    const costs: Row[] = project.actualEntries.map((e) => ({
+    const costs: Row[] = project.actualEntries.filter(e=>!e.costAdjustment&&(!administrative||isOtherCost(e))).map((original) => {const e=isOtherCost(original)?{...original,...otherCostGroup(project,original.id).value}:original;return ({
+      entry:isOtherCost(original)?original:undefined,
       id: e.id,
       date: e.date,
       createdAt: e.createdAt,
-      type: actualEntryLabel(e),
+      type: (isOtherCost(original)?"Otros costos · ":"")+actualEntryLabel(e),
       description: e.description + (e.supplier ? ` · ${e.supplier}` : ""),
       category: e.category,
       qty: e.labor ? `${formatNumber(e.labor.hours, 1)} h × ${formatCurrency(e.labor.hourlyCost)}` : "—",
       amount: e.amount,
       user: e.createdBy,
-    }));
+    });});
     return [...usage, ...costs].sort((a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt));
-  }, [project]);
+  }, [project,administrative]);
   const users = [...new Set(rows.map((r) => r.user))];
   const filtered = rows.filter((r) => (cat === "all" || r.category === cat) && (user === "all" || r.user === user));
   const total = filtered.reduce((s, r) => s + r.amount, 0);
@@ -96,7 +102,7 @@ export function ActualCostsTab({ project }: { project: Project }) {
               <TR key={r.id}>
                 <TD className="whitespace-nowrap tabular">{formatDate(r.date)}</TD>
                 <TD className="whitespace-nowrap">{r.type}</TD>
-                <TD className="min-w-56 text-slate-900">{r.description}</TD>
+                <TD className="min-w-56 text-slate-900">{r.description}{r.entry&&<CostAdjustment key={`${r.id}:${otherCostGroup(project,r.id).history.length}`} project={project} entry={r.entry}/>}</TD>
                 <TD className="whitespace-nowrap text-slate-500">{CATEGORY_LABELS[r.category]}</TD>
                 <TD className="whitespace-nowrap text-xs tabular">{r.qty}</TD>
                 <TD className="text-right font-medium tabular">{formatCurrency(r.amount)}</TD>

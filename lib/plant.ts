@@ -62,6 +62,7 @@ export function productNeeds(project: Pick<Project, "id" | "items">): RubroNeed[
 // ── Asignaciones y carga por día ──────────────────────────────
 
 export interface AssignmentInput {
+  overloadReason?: string;
   hourKind?: "labor" | "design" | "admin";
   projectId: string;
   /** Producto del proyecto. */
@@ -87,7 +88,7 @@ export function assignmentError(input: AssignmentInput, ctx: { projects: Project
   if (operator.productive === false) return "La persona no está habilitada como operario productivo.";
   if (operator.enabledRubros && !operator.enabledRubros.includes(input.rubro)) return "Ese rubro no está habilitado para la persona.";
   if (!/^\d{4}-\d{2}-\d{2}$/.test(input.date)) return "Elegí el día.";
-  if (!(input.plannedHours > 0)) return "Las horas previstas tienen que ser mayores a cero.";
+  if (!Number.isFinite(input.plannedHours) || !(input.plannedHours > 0)) return "Las horas previstas tienen que ser mayores a cero.";
   if (input.plannedHours > 24) return "Un día tiene 24 h.";
   return null;
 }

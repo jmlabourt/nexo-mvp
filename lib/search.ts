@@ -2,6 +2,7 @@
 // Búsqueda global. Cada resultado indica su tipo y lleva al elemento exacto
 // (no sólo al proyecto): un sobrante abre el sobrante, una compra abre esa compra.
 // ─────────────────────────────────────────────────────────────
+import { canAccess, PROJECT_TABS, type SessionKey } from "./permissions";
 import type { Operator, Project } from "@/types";
 import { MATERIAL_CATALOG } from "./constants";
 import { materialKey } from "./material-reconciliation";
@@ -31,6 +32,7 @@ export interface SearchSources {
   projects: Project[];
   stock: StockState;
   operators: Operator[];
+  session?: SessionKey;
 }
 
 const norm = (s: string) =>
@@ -41,7 +43,7 @@ const norm = (s: string) =>
 
 const KIND_ORDER: SearchKind[] = ["project", "material", "stock", "leftover", "purchase", "operator"];
 
-export function buildSearchIndex({ projects, stock, operators }: SearchSources): SearchResult[] {
+export function buildSearchIndex({ projects, stock, operators, session="gerencia" }: SearchSources): SearchResult[] {
   const out: SearchResult[] = [];
   const projectLabel = (id: string | null | undefined) => {
     const p = projects.find((x) => x.id === id);
@@ -119,7 +121,12 @@ export function buildSearchIndex({ projects, stock, operators }: SearchSources):
       href: `/operators?op=${o.id}`,
     });
   }
-  return out;
+  return out.filter(r=>{
+    const [pathname,query]=r.href.split("?");
+    if(!canAccess(session,pathname))return false;
+    const tab=new URLSearchParams(query).get("tab");
+    return !tab||!pathname.startsWith("/projects/")||PROJECT_TABS[session].includes(tab);
+  });
 }
 
 export function searchAll(index: SearchResult[], query: string, limit = 24): SearchResult[] {

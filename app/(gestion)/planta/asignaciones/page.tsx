@@ -1,6 +1,3 @@
-import { redirect } from "next/navigation";
+import { AssignmentsPage } from "@/components/plant/assignments-page";
 
-// Las asignaciones ya no son una pestaña aparte: están dentro de Operarios.
-export default function Page() {
-  redirect("/planta/operarios");
-}
+export default function Page() { return <AssignmentsPage />; }

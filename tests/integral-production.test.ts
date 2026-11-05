@@ -158,7 +158,7 @@ describe("categorías configurables y correcciones generales", () => {
     let ledger = registerInternalHours(EMPTY_LEDGER,{ employeeId:"op",date:"2026-10-17",hours:8,task:"General",hourlyCost:100 },ctx);
     const projects = [p(),{ ...p(),id:"closed",isClosed:true,closedAt:"2026-10-18" }];
     const row = ledger.internalHours[0]; ledger = { ...ledger,internalHours:[{ ...row,allocations:generalAllocations(projects,row.date,800) }] };
-    const next = correctInternalWork(ledger,projects,row.id,{ date,hours:4,reason:"Fecha real corregida" },ctx);
+    const next = correctInternalWork(ledger,projects,row.id,{ date,hours:4,reason:"Fecha real corregida" },{...ctx,employeeId:"op"});
     expect(next.internalHours).toHaveLength(1); expect(staffHoursCost(next,"p")).toBe(400); expect(staffHoursCost(next,"closed")).toBe(0);
     expect(next.internalHours[0].corrections?.[0].previous.allocations).toHaveLength(2);
   });

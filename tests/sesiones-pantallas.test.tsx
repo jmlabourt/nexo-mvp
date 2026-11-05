@@ -48,8 +48,8 @@ afterEach(cleanup);
 describe("Proyectos por sesión", () => {
   it("Gerencia ve precio, costos, ganancia y rentabilidad proyectadas", () => {
     render(<ProjectsPage />);
-    expect(screen.getAllByRole("columnheader", { name: "Margen acumulado" }).length).toBeGreaterThan(0);
-    expect(screen.getAllByRole("columnheader", { name: "Costo proyectado" }).length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Margen acumulado").length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("columnheader", { name: "Costos" }).length).toBeGreaterThan(0);expect(screen.getAllByText("Proyectado").length).toBeGreaterThan(0);
   });
 
   it("Administración no ve ganancia, rentabilidad ni costos proyectados", () => {
@@ -135,14 +135,14 @@ describe("Configuración por sesión", () => {
 });
 
 describe("Jefe de planta y Compras", () => {
-  it("Jefe: Dashboard y Operarios con las asignaciones integradas, sin importes", () => {
+  it("Jefe: Dashboard y Operarios con disponibilidad y correcciones, sin importes", () => {
     useAppStore.setState({ currentMode: "jefe_planta" });
     render(<PlantSummaryPage />);
     expect(screen.getByRole("heading", { name: "Hoy" })).toBeInTheDocument();
     cleanup();
     render(<PlantOperatorsPage />);
-    expect(screen.getAllByRole("tab").map((t) => t.textContent)).toEqual(["Asignaciones", "Disponibilidad", "Correcciones de horas"]);
-    expect(screen.getByRole("button", { name: /Nueva asignación/ })).toBeInTheDocument();
+    expect(screen.getAllByRole("tab").map((t) => t.textContent)).toEqual(["Disponibilidad", "Correcciones de horas"]);
+    expect(screen.queryByRole("button", { name: /Nueva asignación/ })).not.toBeInTheDocument();
     expect(document.body.textContent).not.toMatch(/\$|proveedor/i);
   });
 

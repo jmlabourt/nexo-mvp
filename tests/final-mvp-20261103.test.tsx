@@ -32,12 +32,12 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 function employee() {
- const st = useAppStore.getState();return ok(st.createEmployeeLocal({ name:"Persona prueba",role:"Oficial",hourlyCost:100 },{ enabled:true,view:"operario",views:["operario","administracion"],categoryIds:["craft","lead"],productive:true,enabledRubros:["carpinteria_madera"],hoursPerDay:6,workDays:[0,1,2,3,4,5,6] }));
+ const st = useAppStore.getState();return ok(st.createEmployeeLocal({ name:"Persona prueba",role:"Oficial",hourlyCost:100 },{ enabled:true,view:"operario",views:["operario"],categoryIds:["craft","lead"],productive:true,enabledRubros:["carpinteria_madera"],hoursPerDay:6,workDays:[0,1,2,3,4,5,6] }));
 }
 describe("circuitos finales del MVP",() => {
- it("dos puestos y dos vistas; tarifa de categoría y excepción individual sin revalorizar horas guardadas",() => {
+ it("dos puestos y una vista; tarifa de categoría y excepción individual sin revalorizar horas guardadas",() => {
    const id = employee();const st = useAppStore.getState();const op = st.operators[0];
-   expect(personnelViews(st.ledger.personnel![0])).toEqual(["operario","administracion"]);
+   expect(personnelViews(st.ledger.personnel![0])).toEqual(["operario"]);
    expect(() => employeeCost(st.ledger,op,today)).toThrow(/categoría/);
    expect(employeeCost(st.ledger,op,today,"craft").hourlyCost).toBe(100);
    useAppStore.setState({ currentMode:"operario",actingOperatorId:id });
@@ -49,14 +49,14 @@ describe("circuitos finales del MVP",() => {
    expect(employeeCost(ledger,op,today,"craft").hourlyCost).toBe(100);
    expect(employeeCost(ledger,op,tomorrow,"craft").hourlyCost).toBe(150);
    expect(useAppStore.getState().projects[0].actualEntries[0]).toEqual(previous);
-   useAppStore.setState({ currentMode:"administracion" });
+   useAppStore.setState({ currentMode:"administracion",ledger:{...useAppStore.getState().ledger,personnel:useAppStore.getState().ledger.personnel!.map(p=>({...p,view:"administracion",views:["administracion"]}))} });
    expect(effectiveIdentity(useAppStore.getState()).actor).toBe("Persona prueba");
    expect(useAppStore.getState().logHoursManual("p",{} as never).ok).toBe(false);
  });
- it("Personal guarda varias vistas, categorías, jornada, días y tarifa individual desde la ficha",async () => {
+ it("Personal guarda una vista, categorías, jornada, días y tarifa individual desde la ficha",async () => {
    const id = employee(),st = useAppStore.getState(),user = userEvent.setup();
    render(<PersonnelView employee={st.operators[0]} />);
-   await user.click(screen.getByText(/Operario · Administración/));
+   await user.click(screen.getByText(/^Operario$/,{selector:"summary"}));
    await user.clear(screen.getByLabelText(/Jornada personal/));await user.type(screen.getByLabelText(/Jornada personal/),"4");
    await user.type(screen.getByLabelText(/Nueva tarifa individual/),"175");
    await user.click(screen.getByRole("button",{ name:"Guardar configuración de la persona" }));

@@ -8,7 +8,7 @@ import { rubroLabel } from "@/lib/rubros";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { HelpTip } from "@/components/ui/help-tip";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
-import { ratesText, reviewWarnings, type CalculatorResult } from "@/components/budget/calculator-state";
+import { reviewWarnings, type CalculatorResult } from "@/components/budget/calculator-state";
 
 export interface ReviewInfo {
   name: string;
@@ -53,14 +53,14 @@ export function QuoteReview({ info, calc, salesPrice }: { info: ReviewInfo; calc
       <CardContent className="space-y-6">
         {calc.products.length > 0 && (
           <section aria-label="Muebles">
-            <h3 className="mb-2 text-sm font-semibold text-slate-900">Muebles <span className="font-normal text-slate-500">(con sus rubros: mano de obra, materiales, diseño y administración)</span></h3>
+            <h3 className="mb-2 text-sm font-semibold text-slate-900">Muebles <span className="font-normal text-slate-500">(con sus rubros productivos y materiales)</span></h3>
             <ul className="divide-y divide-slate-100 text-sm">
               {calc.products.map((p) => (
                 <li key={p.key} className="flex flex-wrap justify-between gap-2 py-1.5">
                   <span>
                     <strong className="text-slate-900">{p.name}</strong> × {p.quantity}
                     <span className="block text-xs text-slate-500">
-                      {p.rubros.filter((r) => r.labor.workers > 0).map((r) => `${rubroLabel(r.rubro)} ${formatNumber(r.labor.normalHours + r.labor.overtimeHours)} h · ${r.labor.workers} op.`).join(" · ")}
+                      {p.rubros.filter((r) => r.labor&&r.labor.workers > 0).map((r) => `${rubroLabel(r.rubro)} ${formatNumber((r.labor?.normalHours??0) + (r.labor?.overtimeHours??0))} h · ${r.labor?.workers} op.`).join(" · ")}
                     </span>
                   </span>
                   <span className="tabular">{formatCurrency(p.total)}</span>
@@ -69,6 +69,7 @@ export function QuoteReview({ info, calc, salesPrice }: { info: ReviewInfo; calc
             </ul>
           </section>
         )}
+        {calc.lines.some(l=>l.staffCategoryId&&l.category!=="labor")&&<section aria-label="Personal no operario del proyecto"><h3>Personal no operario del proyecto</h3>{calc.lines.filter(l=>l.staffCategoryId&&l.category!=="labor").map((l,i)=><p key={i}>{l.staffCategoryName}: {l.quantity} h × {formatCurrency(l.unitCost)} = {formatCurrency((l.quantity??0)*l.unitCost)}</p>)}</section>}
         <section aria-label="Costo por rubro">
           <h3 className="mb-2 text-sm font-semibold text-slate-900">Costo presupuestado por rubro <span className="font-normal text-slate-500">(sin IVA)</span></h3>
           <div className="overflow-x-auto">
@@ -86,7 +87,7 @@ export function QuoteReview({ info, calc, salesPrice }: { info: ReviewInfo; calc
                 {table.rows.map((r) => (
                   <TR key={r.rubro ?? "ajustes"}>
                     <TD className="font-medium text-slate-900">
-                      {r.rubro ? rubroLabel(r.rubro) : "Margen de seguridad"}
+                      {r.rubro ? rubroLabel(r.rubro) : "Personal de proyecto y ajustes generales"}
                       {r.amount > 0 && r.amount !== r.total && <span className="block text-xs font-normal text-slate-500">incluye {formatCurrency(r.amount)} de importes</span>}
                     </TD>
                     {r.amount === r.total ? (
@@ -132,7 +133,7 @@ export function QuoteReview({ info, calc, salesPrice }: { info: ReviewInfo; calc
             </HelpTip>
           </div>
           <ul className="list-disc space-y-1 pl-5">
-            <li>Tarifas: {ratesText(calc.rates)}.</li>
+            <li>Tarifas: {calc.lines.filter(l=>l.staffCategoryName).map(l=>`${l.staffCategoryName}: ${formatCurrency(l.unitCost)}/h`).join(" · ")}.</li>
             <li>Jornada del operario: {formatNumber(calc.input.hoursPerDay, 1)} h por día.</li>
             <li>Costo financiero: {formatNumber(calc.input.financialPct, 2)} % del precio de venta.</li>
             <li>Días de trabajo estimados: {schedule.workDays > 0 ? formatWorkingDays(schedule.workDays) : "—"}.</li>

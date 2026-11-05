@@ -87,15 +87,15 @@ describe("Responsabilidades y separación económica/caja",()=>{
 });
 
 describe("Personal y capacidad compartida",()=>{
- it("Operario especial por ID, categorías nuevas no operativas y renombre sin cambio de tipo",async()=>{
-  useAppStore.setState({ledger:{...ledger(),staffCategories:[]}});mode("gerencia");const user=userEvent.setup();render(<StaffCategoriesSettings/>);expect(screen.queryByLabelText("¿Corresponde a trabajo de operarios?")).not.toBeInTheDocument();
-  await user.click(screen.getByRole("button",{name:"Configurar categoría Operario"}));await user.type(screen.getByLabelText("Costo por hora"),"100");await user.click(screen.getByRole("button",{name:"Guardar categoría"}));expect(st().ledger.staffCategories![0]).toMatchObject({id:"staff-operator",kind:"operator",category:"labor"});
-  await user.type(screen.getByLabelText("Categoría"),"Diseñador");await user.type(screen.getByLabelText("Costo por hora"),"80");await user.click(screen.getByRole("button",{name:"Agregar categoría"}));expect(st().ledger.staffCategories!.at(-1)!.category).toBe("admin");
+ it("Categorías productivas y no operarias configurables sin cambiar naturaleza histórica",async()=>{
+  useAppStore.setState({ledger:{...ledger(),staffCategories:[]}});mode("gerencia");const user=userEvent.setup();render(<StaffCategoriesSettings/>);expect(screen.getByLabelText("¿Corresponde a trabajo de operarios?")).toBeInTheDocument();
+  await user.type(screen.getByLabelText("Categoría"),"Operario");await user.selectOptions(screen.getByLabelText("¿Corresponde a trabajo de operarios?"),"yes");await user.type(screen.getByLabelText("Costo por hora"),"100");await user.click(screen.getByRole("button",{name:"Agregar categoría"}));expect(st().ledger.staffCategories![0]).toMatchObject({name:"Operario",kind:"operator",category:"labor"});
+  await user.selectOptions(screen.getByLabelText("¿Corresponde a trabajo de operarios?"),"no");await user.type(screen.getByLabelText("Categoría"),"Diseñador");await user.type(screen.getByLabelText("Costo por hora"),"80");await user.click(screen.getByRole("button",{name:"Agregar categoría"}));expect(st().ledger.staffCategories!.at(-1)!.category).toBe("admin");
   expect(st().recordLedger(["gerencia"],l=>({...l,staffCategories:l.staffCategories!.map(c=>({...c,category:"admin"}))})).ok).toBe(false);
  });
  it("categorías determinan rubros, no vistas; dos categorías/vistas no duplican persona ni costo",()=>{
-  mode("gerencia");const id=ok(st().saveEmployeeLocal({name:"Persona de prueba",active:true,profile:{enabled:true,view:"operario",views:["operario","administracion"],categoryIds:["staff-operator","sales"],productive:false,enabledRubros:["carpinteria_madera","pintura"],hoursPerDay:6,workDays:[0,1,2,3,4,5,6]}}));
-  expect(st().operators).toHaveLength(1);expect(st().operators[0].productive).toBe(true);expect(st().ledger.personnel![0]).toMatchObject({employeeId:id,productive:true,views:["operario","administracion"]});
+  mode("gerencia");const id=ok(st().saveEmployeeLocal({name:"Persona de prueba",active:true,profile:{enabled:true,view:"operario",views:["operario"],categoryIds:["staff-operator","sales"],productive:false,enabledRubros:["carpinteria_madera","pintura"],hoursPerDay:6,workDays:[0,1,2,3,4,5,6]}}));
+  expect(st().operators).toHaveLength(1);expect(st().operators[0].productive).toBe(true);expect(st().ledger.personnel![0]).toMatchObject({employeeId:id,productive:true,views:["operario"]});
   ok(st().saveEmployeeLocal({id,name:"Persona de prueba",active:true,profile:{...st().ledger.personnel![0],categoryIds:["sales"],productive:true}}));expect(st().ledger.personnel![0]).toMatchObject({productive:false,enabledRubros:[]});
  });
  it("Planta 2×50=100 +20 una vez; otro rubro usa Personal; termina vigencia y Gerencia solo consulta",()=>{
@@ -169,7 +169,7 @@ it("Administración no elimina ni reescribe movimientos financieros sin historia
 
 it("listado usa contrato revisado igual que ganancia/ficha, sin reescribir precio original",()=>{
  const p=st().projects[0];useAppStore.setState({ledger:{...st().ledger,contractRevisions:[{id:"rev",projectId:p.id,previous:1000,next:1500,reason:"Adicional acordado",by:ctx.actor,at:ctx.now}]}});
- render(<ProjectsTable economic views={[{project:p,econ:projectEconomics(p),health:null}]}/>);const cells=within(screen.getAllByRole("row")[1]).getAllByRole("cell");expect(cells[5]).toHaveTextContent(formatCurrency(1500));expect(cells[8]).toHaveTextContent(formatCurrency(1500));expect(p.salesPrice).toBe(1000);
+ render(<ProjectsTable economic views={[{project:p,econ:projectEconomics(p),health:null}]}/>);const cells=within(screen.getAllByRole("row")[1]).getAllByRole("cell");expect(cells.find(c=>c.getAttribute("data-label")==="Precio de venta")).toHaveTextContent(formatCurrency(1500));expect(cells.find(c=>c.getAttribute("data-label")?.startsWith("Resultado al"))).toHaveTextContent(formatCurrency(1500));expect(p.salesPrice).toBe(1000);
 });
 
 it("rutas alternativas no permiten a Operario crear externos ni a Gerencia encargarlos",()=>{

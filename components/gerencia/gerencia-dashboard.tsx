@@ -1,13 +1,14 @@
 "use client";
 import { CapacityOverview } from "@/components/plant/capacity-overview";
 import { rubroLabel } from "@/lib/rubros";
+import { DASHBOARD_CALCULATIONS } from "@/lib/dashboard-indicators";
 import { cashInPeriod } from "@/lib/post-meeting";
 // Gerencia → Dashboard. Más vacío que lleno: cuatro números, una lista corta de pendientes y el detalle plegado
 // (facturación, rentabilidad, costos y horas, capacidad, alertas, cómo se calcula). Todo sale de funciones puras
 // (lib/tablero.ts, lib/gerencia.ts) sobre los proyectos y los registros de la demo (lib/ledger.ts).
 import { ProductionDeviations } from "./production-deviations";
 import { ExternalWorkSection } from "@/components/plant/external-work";
-import { approvalDate, pendingDemandEstimates, weeklyCapacity, withExternalHours } from "@/lib/frontend-work";
+import { approvalDate, pendingDemandEstimates, weeklyCapacity, withExternalHours,externalCost } from "@/lib/frontend-work";
 import { currentContract } from "@/lib/ledger";
 import { inPeriod } from "@/lib/gerencia";
 import { addDays } from "@/lib/plant";
@@ -25,8 +26,8 @@ import {
   periodOf,
   type HoursGroup,
 } from "@/lib/gerencia";
-import { ledgerAtDate, financialCostInPeriod, aggregateMargin, billingByOt, billingMonths, billingTotals, overdueSchedule, profitView } from "@/lib/tablero";
-import { profitOverview } from "@/lib/dashboard";
+import { economicView, collectionsReport, ledgerAtDate, financialCostInPeriod, aggregateMargin, billingByOt, billingMonths, billingTotals, overdueSchedule, profitView } from "@/lib/tablero";
+import { prioritizeDashboardNotices, profitOverview } from "@/lib/dashboard";
 import { formatCurrency, formatNumber, formatPercent } from "@/lib/formatting";
 import { useConfiguredOperators } from "@/store/selectors";
 import { useAppStore } from "@/store/use-app-store";
@@ -54,7 +55,7 @@ function openDashboardAnchor(href:string){
 
 function Kpi({ label, value, hint, ind, href, tone }: { label: string; value: React.ReactNode; hint?: React.ReactNode; ind: string; href: string; tone?: "red" }) {
   return (
-    <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+    <div data-indicator={ind} className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
       <div className="flex items-center gap-1.5 text-xs font-medium text-slate-500">
         <a href={href} onClick={()=>openDashboardAnchor(href)} className="hover:text-blue-700 hover:underline">{label}</a>
         <IndicatorTip id={ind} />
@@ -68,11 +69,11 @@ function Kpi({ label, value, hint, ind, href, tone }: { label: string; value: Re
 }
 
 /** Sección plegable: el detalle está, pero no ocupa la pantalla. */
-function Section({ id, title, ind, children, open = false, tag }: { id: string; title: string; ind?: string; children: React.ReactNode; open?: boolean; tag?: React.ReactNode }) {
+function Section({ id, title, ind, children, open = true, tag }: { id: string; title: string; ind?: string; children: React.ReactNode; open?: boolean; tag?: React.ReactNode }) {
   const ref=useRef<HTMLDetailsElement>(null);const [expanded,setExpanded]=useState(open);
   useEffect(()=>{const sync=()=>{if(window.location.hash===`#${id}`){setExpanded(true);const scroll=()=>ref.current?.scrollIntoView?.({block:"start"});if(typeof window.requestAnimationFrame==="function")window.requestAnimationFrame(scroll);else window.setTimeout(scroll,0);}};sync();window.addEventListener("hashchange",sync);return ()=>window.removeEventListener("hashchange",sync);},[id]);
   return (
-    <details ref={ref} id={id} open={expanded} onToggle={e=>setExpanded(e.currentTarget.open)} className="group scroll-mt-20 rounded-lg border border-slate-200 bg-white shadow-sm">
+    <details data-indicators={(DASHBOARD_CALCULATIONS[id]??(ind?[ind]:[])).join(" ")} ref={ref} id={id} open={expanded} onToggle={e=>setExpanded(e.currentTarget.open)} className="group scroll-mt-20 rounded-lg border border-slate-200 bg-white shadow-sm">
       <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-3 text-sm font-semibold text-slate-800">
         <ArrowRight className="size-4 text-slate-400 transition-transform group-open:rotate-90" aria-hidden />
         {title}
@@ -103,15 +104,17 @@ export function GerenciaDashboard() {
   const [profitTable,setProfitTable] = useState(true);
   const [hoursGroup, setHoursGroup] = useState<HoursGroup>("project");
 
-  const approved = projects.filter((p) => p.status !== "quotation" && inPeriod(approvalDate(p),month));
-  const collections = ledger.collections.filter((c) => inPeriod(c.date,month) && c.date <= today && projects.some((p) => p.id === c.projectId && p.status !== "quotation"));
+  const approved = projects.filter((p) => p.status !== "quotation" && inPeriod(approvalDate(p),month) && approvalDate(p)!<=cutoff);
+  const collectionReport=collectionsReport(projects,ledger,month.from,cutoff);
+  const collections=collectionReport.collections;
   const exceptions = useAppStore((s) => s.dayExceptions);
   const sales = projects.filter((p) => generalState(p) !== "quotation" && (!approvalDate(p) || approvalDate(p)! <= cutoff));
-  const otRows = useMemo(() => billingByOt(sales, cutoffLedger), [sales, cutoffLedger]);
+  const salesAtCut=sales.map(p=>({...p,actualEntries:p.actualEntries.filter(e=>e.date<=cutoff),materialUsages:p.materialUsages.filter(u=>u.date<=cutoff)}));
+  const otRows = billingByOt(sales, cutoffLedger);
   const totals = billingTotals(otRows);
   const months = billingMonths(projects,{ ...ledger,collections:ledger.collections.filter((r) => inPeriod(r.date,month) && r.date<=cutoff),salesInvoices:ledger.salesInvoices.filter((r) => inPeriod(r.date,month) && r.date<=cutoff),paymentTerms:ledger.paymentTerms.map((t) => ({ ...t,schedule:t.schedule.filter((r) => inPeriod(r.date,month)) })) },month.from,month.to);
 
-  const profits = useMemo(() => sales.map((p) => ({ project: p, view: profitView(p, ledger,cutoff) })), [sales, ledger,cutoff]);
+  const profits = sales.map((p) => ({ project: p, view: profitView(p, ledger,cutoff) }));
   const aggregate = aggregateMargin(profits.filter((x) => x.view.toDate.contract > 0).map((x) => ({ profit: x.view.toDate.profit, contract: x.view.toDate.contract })));
   const cash=cashInPeriod(ledger,month.from,cutoff);
   const anyPartial = profits.some((x) => x.view.toDate.partial);
@@ -120,7 +123,7 @@ export function GerenciaDashboard() {
   const assignments = useAppStore((s) => s.assignments);
   const dueSoonDays = useAppStore((s) => s.settings.dueSoonDays);
   const severePoints = useAppStore((s) => s.settings.marginWarningPp);
-  const overview = useMemo(() => profitOverview(projects, assignments, today, dueSoonDays, severePoints), [projects, assignments, today, dueSoonDays, severePoints]);
+  const overview = useMemo(() => profitOverview(projects, assignments, today, dueSoonDays, severePoints,p=>economicView(p,ledger,today).econ), [projects, assignments, today, dueSoonDays, severePoints,ledger]);
 
   // Capacidad de los próximos 3 meses: confirmado (aprobados y en proceso) y potencial (cotizaciones). Sin probabilidades.
   const opps = useMemo(() => opportunities(projects, []), [projects]);
@@ -137,18 +140,18 @@ export function GerenciaDashboard() {
   const pendingDemand = pendingDemandEstimates(withExternalHours(projects,ledger),today);
 
   const overdue = overdueSchedule(projects, ledger, today);
-  const alerts = [
+  const alerts = prioritizeDashboardNotices([
     ...open
       .filter((a) => a.kind === "margin" || a.kind === "category" || a.kind === "due" || a.kind === "hours")
-      .map((a) => ({ key: a.id, title: `${a.projectCode} · ${a.title}`, detail: a.action ?? a.message, href: `/projects/${a.projectId}`, red: a.level === "critical" })),
-    ...overdue.map(({ project, amount }) => ({ key: `cob-${project.id}`, title: `${project.code} · cobro previsto vencido`, detail: `Faltan ${formatCurrency(amount)} de lo previsto a hoy.`, href: `/projects/${project.id}?tab=billing`, red: false })),
-    ...capRows.filter((r) => !r.pendingConfiguration && r.status === "over").map((r) => ({ key: `cap-${r.rubro}`, title: `${r.rubro}: lo confirmado no entra`, detail: `${hours(r.confirmed)} confirmadas contra ${hours(r.capacity)} disponibles.`, href: "#capacidad", red: true })),
-  ].slice(0, 5);
+      .map((a) => ({ key: a.id, title: `${a.projectCode} · ${a.title}`, detail: a.action ?? a.message, href: `/projects/${a.projectId}`, level:a.level,impactAmount:a.impactAmount,red: a.level === "critical" })),
+    ...overdue.map(({ project, amount }) => ({ key: `cob-${project.id}`, title: `${project.code} · cobro previsto vencido`, detail: `Faltan ${formatCurrency(amount)} de lo previsto a hoy.`, href: `/projects/${project.id}?tab=billing`,level:"warning" as const,impactAmount:amount, red: false })),
+    ...capRows.filter((r) => !r.pendingConfiguration && r.status === "over").map((r) => ({ key: `cap-${r.rubro}`, title: `${r.rubro}: lo confirmado no entra`, detail: `${hours(r.confirmed)} confirmadas contra ${hours(r.capacity)} disponibles.`, href: "#capacidad",level:"critical" as const, red: true })),
+  ]);
 
   return (
     <div className="space-y-6">
       <PageHeader title="Dashboard" subtitle="Cuánto vendimos, facturamos y cobramos, cuánto ganamos y qué carga se viene." />
-      <CircuitPending session="gerencia" />
+      <div data-indicators="circuit_pending"><CircuitPending session="gerencia" /></div>
 
       <div className="flex flex-wrap items-end gap-3">
         <label className="text-xs font-medium text-slate-600">Desde<Input type="date" className="mt-1 w-40" value={range.from} max={range.to} onChange={(e) => e.target.value && setRange(periodOf("custom",today,{ from:e.target.value,to:range.to }))} /></label>
@@ -163,12 +166,12 @@ export function GerenciaDashboard() {
         {demoLocal ? <span className="text-xs text-slate-500">Datos de ejemplo</span> : !ledgerReady && <OriginTag origin="pending" />}
       </div>
 
-      <section aria-label="Resumen" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <section data-indicators={DASHBOARD_CALCULATIONS.resumen.join(" ")} aria-label="Resumen" className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-5">
         <Kpi label={anyPartial?"Ganancia económica acumulada (parcial)":"Ganancia económica acumulada"} value={formatCurrency(aggregate.profit)} hint={`Al ${cutoff} · todos los proyectos aprobados al corte. Margen ${formatPercent(aggregate.margin)}.`} ind="profit_views" href="#rentabilidad"/>
 
-        <Kpi label="Proyectos aprobados" value={formatCurrency(approved.reduce((s,p) => s+(p.baseline?.salesPrice ?? currentContract(p,cutoffLedger)),0))} hint={`${approved.length} proyectos · aprobaciones de ${month.label}`} ind="contract_current" href="#aprobaciones" />
+        <Kpi label="Proyectos aprobados" value={formatCurrency(approved.reduce((s,p) => s+(p.baseline?.salesPrice ?? currentContract(p,cutoffLedger)),0))} hint={`${approved.length} proyectos · aprobaciones de ${month.label}`} ind="approved_period" href="#aprobaciones" />
         <Kpi label="Dinero cobrado" value={formatCurrency(collections.reduce((s,c) => s+c.amount,0))} hint={`Por fecha de ingreso · ${month.label}`} ind="collected" href="#cobros-proyecto" />
-        <Kpi label="Pendiente de cobro" value={formatCurrency(totals.pendingToCollect)} hint={`Al ${cutoff} · de ${formatCurrency(totals.contracted)} acordados.`} ind="collected" href="#facturacion" />
+        <Kpi label="Pendiente de cobro" value={formatCurrency(totals.pendingToCollect)} hint={`Saldo contractual al ${cutoff}, facturado o no · de ${formatCurrency(totals.contracted)} acordados.`} ind="contract_balance" href="#facturacion" />
         <Kpi
           label={anyPartial ? "Rentabilidad total al corte (parcial)" : "Rentabilidad total"}
           value={formatPercent(aggregate.margin)}
@@ -180,7 +183,7 @@ export function GerenciaDashboard() {
       </section>
 
       {alerts.length > 0 && (
-        <section aria-label="Pendientes" className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+        <section data-indicators={DASHBOARD_CALCULATIONS.pendientes.join(" ")} aria-label="Pendientes" className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
           <h2 className="mb-2 text-sm font-semibold text-slate-800">Para mirar hoy</h2>
           <ul className="space-y-2">
             {alerts.map((a) => (
@@ -200,13 +203,13 @@ export function GerenciaDashboard() {
         <p>Aprobaciones entre {month.from} y {cutoff}; esta cohorte es diferente de la ganancia acumulada al corte.</p><Table><THead><TR><TH>Proyecto</TH><TH>Fecha de aprobación</TH><TH>Importe aprobado</TH></TR></THead><TBody>{approved.map(p=><TR key={p.id}><TD><Link href={`/projects/${p.id}`}>{p.code}</Link></TD><TD>{approvalDate(p)}</TD><TD>{formatCurrency(p.baseline?.salesPrice??currentContract(p,cutoffLedger))}</TD></TR>)}<TR><TD>Total</TD><TD/><TD>{formatCurrency(approved.reduce((s,p)=>s+(p.baseline?.salesPrice??currentContract(p,cutoffLedger)),0))}</TD></TR></TBody></Table>
       </Section>
       <Section id="cobros-proyecto" title="Dinero cobrado por proyecto" open>
-        <p className="mb-2 text-xs">Cobros efectivos entre {month.from} y {cutoff}; ganancia económica acumulada al {cutoff}. Todos los proyectos aprobados al corte. Son métricas separadas.</p>
-        <Table><THead><TR><TH>Proyecto</TH><TH>Cliente</TH><TH>Cobrado en el rango</TH><TH>Ganancia económica acumulada al {cutoff}</TH></TR></THead><TBody>{profits.map(({project:p,view})=><TR key={p.id}><TD><Link href={`/projects/${p.id}?tab=billing`}>{p.code}</Link></TD><TD>{p.client}</TD><TD>{formatCurrency(collections.filter(c=>c.projectId===p.id).reduce((s,c)=>s+c.amount,0))}</TD><TD>{formatCurrency(view.toDate.profit)} · {view.toDate.partial?"parcial":"final"}</TD></TR>)}<TR className="font-semibold"><TD>Total</TD><TD/><TD>{formatCurrency(collections.reduce((s,c)=>s+c.amount,0))}</TD><TD>{formatCurrency(aggregate.profit)}</TD></TR></TBody></Table>
+        <p className="mb-2 text-xs">Cobros efectivos entre {month.from} y {cutoff}; ganancia económica acumulada al {cutoff}. Incluye proyectos con cobros en el rango aunque su aprobación sea posterior al corte. En esos casos no se calcula ganancia al corte. Son métricas separadas.</p>
+        <Table><THead><TR><TH>Proyecto</TH><TH>Cliente</TH><TH>Cobrado en el rango</TH><TH>Ganancia económica acumulada al {cutoff}</TH></TR></THead><TBody>{collectionReport.rows.map(({project:p,view,collected})=><TR key={p.id}><TD><Link href={`/projects/${p.id}?tab=billing`}>{p.code}</Link></TD><TD>{p.client}</TD><TD>{formatCurrency(collected)}</TD><TD>{view?<>{formatCurrency(view.toDate.profit)} · {view.toDate.partial?"parcial":"final"}</>:"— · Sin aprobación registrada al corte; ganancia no calculable"}</TD></TR>)}<TR className="font-semibold"><TD>Total</TD><TD/><TD>{formatCurrency(collections.reduce((s,c)=>s+c.amount,0))}</TD><TD>{formatCurrency(aggregate.profit)}</TD></TR></TBody></Table>
       </Section>
       <Section id="caja" title="Resultado de caja registrado del período" open><p>{month.from} al {cutoff}: cobros efectivos {formatCurrency(cash.collected)} − pagos efectivos registrados {formatCurrency(cash.paid)} = <strong>{formatCurrency(cash.result)}</strong>.</p><p className="text-xs">Solo movimientos de cobros y pagos registrados en Blerp, por fecha efectiva. Solicitudes y e-cheqs emitidos no son débitos. Los costos generales de Configuración son informativos y no están asignados a proyectos ni acreditan pagos; tampoco hay pagos salariales capturados. No representa dinero en el banco ni una caja completa si faltan movimientos.</p></Section>
       <p className="text-xs text-slate-500">Desvíos acumulados hasta el {cutoff}; referencia cotizada completa. Las fechas del filtro seleccionan cobros y aprobaciones; saldos y rentabilidad se calculan al corte.</p>
       <ProductionDeviations projects={sales.map((p) => ({ ...p,actualEntries:p.actualEntries.filter((e) => e.date <= cutoff),materialUsages:p.materialUsages.filter((u) => u.date <= cutoff) }))} ledger={cutoffLedger} />
-      <ExternalWorkSection />
+      <div data-indicators="external_work"><p className="text-xs text-slate-500">Trabajos externos: estado operativo a hoy, independiente de Desde/Hasta.</p><ExternalWorkSection /></div>
       <Section id="facturacion" title="Facturación y cobros" ind="billing_project">
         <div className="space-y-4">
           <Table>
@@ -237,7 +240,7 @@ export function GerenciaDashboard() {
                 <TH className="text-right">Previsto</TH>
                 <TH className="text-right">Facturado</TH>
                 <TH className="text-right">Cobrado</TH>
-                <TH className="text-right">Pendiente de cobro</TH>
+                <TH className="text-right">Pendiente contractual de cobro</TH>
               </TR>
             </THead>
             <TBody>
@@ -321,7 +324,7 @@ export function GerenciaDashboard() {
         </Table>}
         {overview.causes.length > 0 && (
           <div className="mt-4 rounded-md border border-slate-200 p-3">
-            <h3 className="text-sm font-semibold text-slate-900">¿Por qué se pierde? (proyectos en curso)</h3>
+            <h3 className="text-sm font-semibold text-slate-900">¿Por qué se pierde? (proyectos en curso)</h3><p className="text-xs">Situación operativa a hoy; este listado no se recorta por Desde/Hasta.</p>
             <ul className="mt-1 divide-y divide-slate-100 text-sm">
               {overview.causes.slice(0, 5).map((c) => (
                 <li key={c.key} className="flex flex-wrap justify-between gap-2 py-1.5">
@@ -342,7 +345,7 @@ export function GerenciaDashboard() {
       <Section id="costos" title="Costos y horas" ind="actual_cost">
         <p className="mb-3 text-sm font-medium">Subtotal del período (desperdicios + otros gastos directos + costo financiero): {formatCurrency(periodCostSubtotal)}</p>
         <div className="space-y-4">
-          <p className="text-xs text-slate-500">Detalle acumulado de los proyectos. El subtotal anterior corresponde al período seleccionado.</p>
+          <p className="text-xs text-slate-500">Detalle acumulado al {cutoff}. El subtotal anterior corresponde al período seleccionado. Las subfilas de rubros desglosan mano de obra y no se suman nuevamente.</p>
           <Table>
             <THead>
               <TR>
@@ -352,7 +355,7 @@ export function GerenciaDashboard() {
               </TR>
             </THead>
             <TBody>
-              {[...costRows(sales),{ key:"external",label:"Externos y tercerizaciones (confirmados y estimados; costos pendientes señalados arriba)",budget:0,actual:sales.reduce((s,p) => s+(ledger.externalWork ?? []).filter((e) => e.projectId === p.id).reduce((v,e) => v+(e.confirmedCost ?? e.estimatedCost ?? 0),0),0) }].map((r) => (
+              {[...costRows(salesAtCut,cutoffLedger).map(r=>r.key==="financial"?{...r,actual:sales.reduce((sum,p)=>sum+economicView(p,ledger,cutoff).financialCost,0)}:r),{ key:"external",label:"Externos y tercerizaciones realizados (confirmados y estimados; pendientes señalados arriba)",budget:0,actual:sales.reduce((s,p)=>s+externalCost(cutoffLedger,p.id),0) }].map((r) => (
                 <TR key={r.key}>
                   <TD className={r.label.startsWith("·") ? "pl-6 text-slate-500" : undefined}>{r.label.replace(/^· /, "")}</TD>
                   <TD className="text-right tabular">{r.budget ? formatCurrency(r.budget) : "—"}</TD>
@@ -382,7 +385,7 @@ export function GerenciaDashboard() {
               </TR>
             </THead>
             <TBody>
-              {hoursRows(sales, hoursGroup)
+              {hoursRows(salesAtCut, hoursGroup)
                 .filter((r) => r.budget > 0 || r.actual > 0)
                 .map((r) => (
                   <TR key={r.key}>
@@ -398,7 +401,7 @@ export function GerenciaDashboard() {
       </Section>
 
       {pendingDemand.length > 0 && <p role="status" className="text-sm text-amber-800">Demanda pendiente de confirmar: {pendingDemand.map((r) => `${r.projectCode} · ${r.rubro}`).join(", ")}. Las horas cotizadas están agotadas y quedan muebles por terminar.</p>}
-      <div id="capacidad"><CapacityOverview/></div>
+      <div data-indicators={DASHBOARD_CALCULATIONS.capacidad.join(" ")} id="capacidad"><CapacityOverview/></div>
 
 
     </div>

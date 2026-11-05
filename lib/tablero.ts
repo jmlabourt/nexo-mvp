@@ -12,9 +12,9 @@
 import type { RubroId, DayException, Operator, WorkAssignment, Ledger, MaterialDelivery, Opportunity, Project, PurchaseOrder, RubroCapacity } from "@/types";
 import { dailyHoursReviews } from "./hours-review";
 import type { Threshold } from "./plant";
-import { externalCost, pendingExternal, weeklyCapacity, configuredOperators } from "./frontend-work";
+import { approvalDate, externalCost, pendingExternal, weeklyCapacity, configuredOperators } from "./frontend-work";
 import { inProduction } from "./plant-materials";
-import { actualCostToDate } from "./calculations";
+import { actualCostToDate, projectEconomics, categoryVariance,staffCostRecords, type ProjectEconomics } from "./calculations";
 import { financialCost } from "./financial";
 import { accruedFinancialInput, billingStatus, currentContract, handoverOf, staffHoursCost, termsOf } from "./ledger";
 import { capacityHours, generalState, inPeriod, loadByRubro, monthsBetween } from "./gerencia";
@@ -180,12 +180,15 @@ export function profitView(project: Project, ledger: Ledger, asOf?: string): Pro
   const additionalFinance = finance?.ok ? Math.max(0,finance.amount-recordedFinance) : 0;
   const cost = round2(actualCostToDate(project) + staffHoursCost(ledger, project.id) + externalCost(ledger, project.id) + additionalFinance);
   const closure = closureOf(ledger, project.id);
-  const complete = project.isClosed && !!closure && closure.pendingCosts.length === 0 && pendingExternal(ledger, project.id).length === 0;
-  const toDate = { contract, cost, profit: round2(contract - cost), margin: pct(contract - cost, contract), partial: !complete };
+  const missingStaffRate=staffCostRecords(project.id,ledger).some(h=>h.amount===null);
+  const complete = !missingStaffRate && project.isClosed && !!closure && closure.pendingCosts.length === 0 && pendingExternal(ledger, project.id).length === 0;
+  const toDate = { contract, cost, profit: round2(contract - cost), margin: pct(contract - cost, contract), partial: !complete || contract<=0 };
   const finalReason = !project.isClosed
     ? "No calculable: el proyecto sigue abierto."
     : !closure
       ? "No calculable: cierre histórico sin validación de costos registrada."
+    : missingStaffRate
+      ? "No calculable: faltan tarifas históricas en horas no operarias."
     : !complete
       ? "No calculable: se cerró con costos pendientes."
       : contract > 0
@@ -280,4 +283,36 @@ export function financialCostInPeriod(projects: Project[], ledger: Ledger, from:
     const registered = sum(p.actualEntries.filter((e) => e.category === "financial" && inPeriod(e.date,{ from,to })).map((e) => e.amount));
     return Math.max(accrued,registered);
   }));
+}
+
+/** El costo usado en el margen de la ficha y el mostrado en Proyectos tienen el mismo alcance. */
+export function economicView(project:Project,ledger:Ledger,asOf:string,originalEcon:ProjectEconomics=projectEconomics(project)) {
+ const result=profitView(project,ledger,asOf);
+ const cutoffProject={...project,purchaseEntries:project.purchaseEntries.filter(e=>e.date<=asOf),actualEntries:project.actualEntries.filter(e=>e.date<=asOf),materialUsages:project.materialUsages.filter(u=>u.date<=asOf)};
+ const cutoffLedger=ledgerAtDate(ledger,asOf),base=projectEconomics(cutoffProject,cutoffLedger);
+ const ownHours=staffHoursCost(cutoffLedger,project.id),external=externalCost(cutoffLedger,project.id);
+ const recordedFinance=cutoffProject.actualEntries.filter(e=>e.category==="financial").reduce((sum,e)=>sum+e.amount,0);
+ const financialCost=round2(recordedFinance+Math.max(0,result.toDate.cost-actualCostToDate(cutoffProject)-ownHours-external));
+ const categories=base.categories.map(c=>{if(c.category!=="financial")return c;const projected=project.isClosed?financialCost:Math.max(c.budget,financialCost);return {...c,actual:financialCost,projected,actualVariance:categoryVariance(financialCost,c.budget),projectedVariance:categoryVariance(projected,c.budget)};});
+ const projectedFinalCost=round2(categories.reduce((sum,c)=>sum+c.projected,0));
+ const projectedMargin=result.toDate.contract>0?(result.toDate.contract-projectedFinalCost)/result.toDate.contract*100:null;
+ const extra=result.toDate.cost-originalEcon.actualCostToDate;
+ const econ={...base,categories,salesPrice:result.toDate.contract,actualCostToDate:result.toDate.cost,projectedFinalCost,
+  currentMargin:projectedMargin,projectedProfit:result.toDate.contract>0?round2(result.toDate.contract-projectedFinalCost):null,projectedMargin,
+  finalActualCost:result.final?.cost??null,finalProfit:result.final?.profit??null,finalMargin:result.final?.margin??null,
+  costOverrun:round2(projectedFinalCost-base.budgetTotal),costOverrunPercent:base.budgetTotal?(projectedFinalCost-base.budgetTotal)/base.budgetTotal*100:null,
+  marginDeltaPp:projectedMargin===null||base.expectedMargin===null?null:projectedMargin-base.expectedMargin,
+ };
+ return {result,econ,extra,financialCost};
+}
+
+/** Cohorte de cobros efectivos independiente de la cohorte de aprobación: las filas siempre concilian con el KPI. */
+export function collectionsReport(projects:Project[],ledger:Ledger,from:string,to:string) {
+ const collections=ledger.collections.filter(c=>c.date>=from&&c.date<=to&&projects.some(p=>p.id===c.projectId&&p.status!=="quotation"));
+ const rows=projects.filter(p=>p.status!=="quotation"&&(!approvalDate(p)||approvalDate(p)!<=to||collections.some(c=>c.projectId===p.id))).map(project=>({
+  project,
+  collected:sum(collections.filter(c=>c.projectId===project.id).map(c=>c.amount)),
+  view:approvalDate(project)&&approvalDate(project)!>to?null:profitView(project,ledger,to),
+ }));
+ return {collections,rows,total:sum(collections.map(c=>c.amount))};
 }

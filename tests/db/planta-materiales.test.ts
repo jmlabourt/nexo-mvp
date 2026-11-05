@@ -4,6 +4,7 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import type { PGlite } from "@electric-sql/pglite";
 import type { MaterialDelivery } from "@/types";
+import { todayISO } from "@/lib/formatting";
 import { DEFAULT_SETTINGS } from "@/lib/constants";
 import { buildSeed, STAR_PROJECT_ID } from "@/lib/seed-data";
 import { workspacePayload } from "@/lib/supabase/workspace";
@@ -22,7 +23,7 @@ const seed = buildSeed(new Date());
 const star = seed.projects.find((p) => p.id === STAR_PROJECT_ID)!;
 /** Como lo ve el Jefe: lotes sin costo. */
 const blind = (s: StockState): StockState => ({ lots: s.lots.map((l) => ({ ...l, unitCost: 0, supplier: undefined })), movements: s.movements });
-const today = new Date().toISOString().slice(0, 10);
+const today = todayISO();
 const ctx = (actor: string) => ({ actor, now: new Date().toISOString(), today });
 
 const rows = async (userId: string, sql: string, params: unknown[] = []) =>

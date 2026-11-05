@@ -30,7 +30,7 @@ function Review({ row, reviewed }: { row: HoursReview; reviewed: boolean }) {
   const [hours,setHours] = useState<Record<string,string>>({});
   const [reason,setReason] = useState("");
   const [error,setError] = useState("");
-  const [requestId] = useState(() => createId("hc"));
+  const [requestId,setRequestId] = useState(() => createId("hc"));
   const busy = useAppStore(s=>s.syncStatus === "saving");
   const projects = useAppStore(s=>s.projects);
   const entry = row.entries.find(e => e.id === entryId);
@@ -40,9 +40,9 @@ function Review({ row, reviewed }: { row: HoursReview; reviewed: boolean }) {
     if (st.demoLocal) {
       // Demo: misma regla, guardada en este navegador.
       const r = correct && entry
-        ? st.correctHoursLocal({ entryId: entry.id, reason, allocations: row.assignments.map(a => ({ assignmentId: a.id, hours: Number((hours[a.id] ?? "0").replace(",", ".")) })) })
+        ? st.correctHoursLocal({ requestId,entryId: entry.id, reason, allocations: row.assignments.map(a => ({ assignmentId: a.id, hours: Number((hours[a.id] ?? "0").replace(",", ".")) })) })
         : st.confirmHoursLocal(row.key);
-      if (!r.ok) setError(r.error); else setOpen(false);
+      if (!r.ok) setError(r.error); else {setOpen(false);setRequestId(createId("hc"));}
       return;
     }
     const result = await useAppStore.getState().confirmOperation(async () => {
@@ -54,7 +54,7 @@ function Review({ row, reviewed }: { row: HoursReview; reviewed: boolean }) {
       if (response.error) throw new Error(response.error.message);
       return { ok:true as const, value:undefined };
     });
-    if (!result.ok) setError(result.error); else setOpen(false);
+    if (!result.ok) setError(result.error); else {setOpen(false);setRequestId(createId("hc"));}
   };
   return <div className="rounded-lg border p-4 space-y-3">
     <p className="text-sm">{row.date} · {row.message}</p>

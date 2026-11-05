@@ -12,6 +12,7 @@ import { pendingDemandEstimates, withExternalHours, pendingExternal } from "@/li
 import { plantAlerts } from "@/lib/plant";
 import { materialNeeds, materialsState, plantMaterialAlerts, purchasingAlerts, type MaterialNeed, type MaterialsState } from "@/lib/purchasing";
 import type { RoleKey } from "@/lib/permissions";
+import { economicView } from "@/lib/tablero";
 import { projectEconomics, type ProjectEconomics } from "@/lib/calculations";
 import { todayISO } from "@/lib/formatting";
 import { isBuyer, isManager, isQuoter } from "@/lib/project-rules";
@@ -119,6 +120,7 @@ export function useAlertCount(role: RoleKey): number {
  * Es la única cuenta: globo, pestaña "Todas", alertas del proyecto y salud.
  */
 export function useAlerts(): { open: Alert[]; resolved: Alert[]; count: number } {
+  const ledger=useAppStore(s=>s.ledger);
   const projects = useAppStore((s) => s.projects);
   const settings = useAppStore((s) => s.settings);
   const resolvedKeys = useAppStore((s) => s.resolvedAlertIds);
@@ -134,10 +136,10 @@ export function useAlerts(): { open: Alert[]; resolved: Alert[]; count: number }
     const fromPlant = plant.filter((a) => a.kind !== "material_missing" && a.kind !== "delivery_open");
     // Entregas y cierres del Jefe de planta, con su costo (solo el Administrativo lo ve).
     const planta = deliveryReviewAlerts(projects, stock, deliveries, today);
-    const all = withEconomicImpact([...allAlerts(projects, settings, today), ...fromPlant, ...buying, ...planta], projects, assignments, today);
+    const all = withEconomicImpact([...allAlerts(projects, settings, today,p=>economicView(p,ledger,today).econ), ...fromPlant, ...buying, ...planta], projects, assignments, today);
     const split = splitAlerts(sortAlerts(all), resolvedKeys);
     return { ...split, count: openAlertCount(split.open) };
-  }, [projects, settings, resolvedKeys, today, plant, buying, assignments, stock, deliveries]);
+  }, [projects, settings, resolvedKeys, today, plant, buying, assignments, stock, deliveries,ledger]);
 }
 
 export function useProjectAlerts(project: Project | undefined): Alert[] {

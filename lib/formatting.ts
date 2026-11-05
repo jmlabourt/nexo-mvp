@@ -155,5 +155,5 @@ export function pluralizeUnit(unit: string, qty: number): string {
 }
 
 export function formatQty(qty: number, unit: string): string {
-  return `${formatNumber(qty)} ${pluralizeUnit(unit, qty)}`;
+  return `${formatNumber(qty,3)} ${pluralizeUnit(unit, qty)}`;
 }

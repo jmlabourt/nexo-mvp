@@ -98,10 +98,10 @@ export function StockPage({ material, lot, tab, basePath = "/stock" }: { materia
                     <Fragment key={r.key}>
                       <TR className={r.key === material ? "bg-amber-50" : undefined}>
                         <TD className="min-w-44 font-medium text-slate-900">{r.name}<div className="text-xs font-normal text-slate-500">{r.unit}</div></TD>
-                        <TD className="text-right tabular">{formatNumber(r.physical)}</TD>
-                        <TD className="text-right tabular font-medium">{formatNumber(r.available)}</TD>
-                        <TD className="text-right tabular">{formatNumber(r.assigned)}</TD>
-                        <TD className="text-right tabular">{r.leftoverQty > 0 ? formatNumber(r.leftoverQty) : <span className="text-slate-300">0</span>}</TD>
+                        <TD className="text-right tabular">{formatNumber(r.physical,3)}</TD>
+                        <TD className="text-right tabular font-medium">{formatNumber(r.available,3)}</TD>
+                        <TD className="text-right tabular">{formatNumber(r.assigned,3)}</TD>
+                        <TD className="text-right tabular">{r.leftoverQty > 0 ? formatNumber(r.leftoverQty,3) : <span className="text-slate-300">0</span>}</TD>
                         <TD>
                           {canAssign && <Button size="sm" variant="outline" disabled={r.available <= EPS} onClick={() => setStockAction({ kind:"assign",target:{ materialId:r.materialId,materialName:r.name,unit:r.unit,max:r.available } })}>Asignar a proyecto</Button>}
                           {canAssign && <details className="text-xs mt-2"><summary>Asignaciones</summary>{stock.movements.filter((m) => m.kind === "assign" && stock.lots.some((l) => l.id === m.lotId && l.materialId === r.materialId && l.unit === r.unit)).map((m) => <p key={m.id}>{formatDate(m.date)} · {m.to.type === "project" ? projectCode(projects,m.to.projectId) : ""} · {formatQty(m.quantity,r.unit)}{stock.movements.some((n) => n.reversalOf === m.id) ? " · Revertida" : local && <Button size="sm" variant="ghost" onClick={() => { setUndo(m.id);setReason("");setError(""); }}>Revertir asignación</Button>}</p>)}</details>}

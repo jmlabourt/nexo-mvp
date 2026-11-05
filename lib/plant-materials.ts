@@ -428,6 +428,7 @@ export function deliveryReviewAlerts(projects: Project[], stock: StockState, del
 
 /** Local unified registration: no artificial delivery. Stocks and valued usages are committed together. */
 export function registerMaterialsLocal(project: Project, stock: StockState, deliveries: MaterialDelivery[], input: DirectMaterialUsageInput, ctx: StockCtx & { today:string }): CloseDayResult {
+  if(input.source!=="project")throw new DomainError("Compras debe asignar el stock libre; Planta registra el material asignado al proyecto.");
   const quantity = input.consumed + input.waste + input.leftover;
   if (new Set(stock.lots.filter((l) => l.materialId === input.materialId).map((l) => l.unit)).size > 1) throw new DomainError("El material tiene unidades incompatibles entre lotes; no se pueden sumar ni consumir sin identificar una unidad válida.");
   if (![input.consumed,input.waste,input.leftover].every((q) => Number.isFinite(q) && q >= 0) || quantity <= EPS) throw new DomainError("Indicá consumo, desperdicio o sobrante válido.");
@@ -437,10 +438,6 @@ export function registerMaterialsLocal(project: Project, stock: StockState, deli
   const id = createId("materials");
   let next = stock;
   const change: StockChange = { lots:[],movements:[] };
-  if (input.source === "warehouse") {
-    const assigned = assignToProject(next,{ projectId:project.id,materialId:input.materialId,quantity,date:input.date,note:`Registro de materiales ${id}` },ctx);
-    next = applyChange(next,assigned);change.movements.push(...assigned.movements);
-  }
   const used = input.consumed + input.waste > EPS ? consumeMaterial(next,{ projectId:project.id,materialId:input.materialId,consumed:input.consumed,waste:input.waste,itemId:input.itemId,date:input.date,note:`Registro de materiales ${id}` },ctx) : { lots:[],movements:[],parts:[] };
   next = applyChange(next,used);change.movements.push(...used.movements);
   const usages: MaterialUsageEntry[] = used.parts.map((part) => ({ id:createId("use"),projectId:project.id,itemId:input.itemId,materialId:input.materialId,materialName:part.lot.materialName,unit:part.lot.unit,date:input.date,quantityConsumed:part.consumed,wasteQuantity:part.waste,reusableLeftoverQuantity:0,unitCost:part.lot.unitCost,unitCostOrigin:usageOrigin(part.lot),source:usageSource(part.lot,project.id),lotId:part.lot.id,notes:`Registro de materiales ${id}`,createdBy:ctx.actor,createdAt:ctx.now }));

@@ -169,13 +169,15 @@ export function OperatorsPage({ op }: { op?: string }) {
 
   return (
     <div>
-      <label>Categoría laboral a consultar<Select value={categoryFilter} onChange={e=>setCategoryFilter(e.target.value)}><option value="">Todas las categorías</option>{(ledger.staffCategories??[]).map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</Select></label>
       <PageHeader
         back
         title="Personal"
         subtitle="Empleados, categorías laborales y rubros productivos."
         actions={isManager ? <Button onClick={() => setEditing("new")}><Plus /> Agregar empleado</Button> : undefined}
       />
+      <nav aria-label="Secciones de Personal" className="mb-6 flex flex-wrap gap-2 text-sm"><a className="rounded-md border border-slate-300 bg-white px-3 py-2 text-blue-700 hover:bg-blue-50" href="#empleados">Empleados</a><a className="rounded-md border border-slate-300 bg-white px-3 py-2 text-blue-700 hover:bg-blue-50" href="#categorias">Categorías laborales y tarifas</a><a className="rounded-md border border-slate-300 bg-white px-3 py-2 text-blue-700 hover:bg-blue-50" href="#rubros">Rubros habilitados</a></nav>
+      <h2 id="empleados" className="mb-3 scroll-mt-20 text-lg font-semibold">Empleados</h2>
+      <label className="mb-4 block max-w-md text-sm">Categoría laboral a consultar<Select value={categoryFilter} onChange={e=>setCategoryFilter(e.target.value)}><option value="">Todas las categorías</option>{(ledger.staffCategories??[]).map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</Select></label>
       {operators.length > 0 && (
         <label className="mb-3 flex items-center gap-2 text-sm text-slate-700">
           <input type="checkbox" className="size-4" checked={showDeactivated} onChange={(e) => setShowDeactivated(e.target.checked)} />
@@ -194,7 +196,6 @@ export function OperatorsPage({ op }: { op?: string }) {
                 <TH>Nombre</TH>
                 <TH>Categoría</TH><TH>Rubros</TH>
                 <TH>Vista de Blerp</TH>
-                <TH>Estado</TH>
                 <TH>Jornada y días</TH>
                 <TH className="text-right">Costo por hora</TH>
                 <TH><span className="sr-only">Acciones</span></TH>
@@ -205,15 +206,10 @@ export function OperatorsPage({ op }: { op?: string }) {
                 return (
                   <TR key={o.id} className={o.id === op ? "bg-amber-50" : undefined}>
                     <TD className="font-medium text-slate-900">
-                      {o.name}
+                      {o.name}<span className="mt-2 block"><Badge tone={o.active ? "green" : "gray"}>{o.active ? "Activo" : `Inactivo${o.deactivatedAt ? ` desde el ${formatDate(o.deactivatedAt)}` : ""}`}</Badge></span>
                     </TD>
-                    <TD>{laborCategories(ledger,o.id,false).map((c) => c.name).join(", ") || "Pendiente de configurar"}</TD><TD>{!ledger.personnel?.some((p)=>p.employeeId===o.id) && o.productive === undefined ? "Pendiente de configurar" : o.productive === false ? "—" : (o.enabledRubros?.length ?? 0) > 1 ? <details><summary>Varios</summary>{o.enabledRubros?.map((id) => ledger.rubroCatalog.find((r) => r.id === id)?.name ?? id).join(", ")}</details> : o.enabledRubros?.map((id) => ledger.rubroCatalog.find((r) => r.id === id)?.name ?? id).join(", ") || "Pendiente de configurar"}</TD>
-                    <TD className="text-xs text-slate-600">{ledger.personnel?.find((p)=>p.employeeId===o.id)?.views?.map((v)=>SESSION_LABELS[v]).join(", ") || (ledger.personnel?.find((p)=>p.employeeId===o.id) ? SESSION_LABELS[personnelViews(ledger.personnel.find((p)=>p.employeeId===o.id)!)[0]] : "Pendiente de configurar")}</TD>
-                    <TD>
-                      <Badge tone={o.active ? "green" : "gray"}>
-                        {o.active ? "Activo" : `Inactivo${o.deactivatedAt ? ` desde el ${formatDate(o.deactivatedAt)}` : ""}`}
-                      </Badge>
-                    </TD>
+                    <TD>{laborCategories(ledger,o.id,false).map((c) => c.name).join(", ") || "Sin categoría"}</TD><TD>{!ledger.personnel?.some((p)=>p.employeeId===o.id) && o.productive === undefined ? "Sin rubros" : o.productive === false ? "—" : (o.enabledRubros?.length ?? 0) > 1 ? <details open><summary>Rubros habilitados</summary>{o.enabledRubros?.map((id) => ledger.rubroCatalog.find((r) => r.id === id)?.name ?? id).join(", ")}</details> : o.enabledRubros?.map((id) => ledger.rubroCatalog.find((r) => r.id === id)?.name ?? id).join(", ") || "Sin rubros"}</TD>
+                    <TD className="text-xs text-slate-600">{ledger.personnel?.find((p)=>p.employeeId===o.id)?.views?.map((v)=>SESSION_LABELS[v]).join(", ") || (ledger.personnel?.find((p)=>p.employeeId===o.id) ? SESSION_LABELS[personnelViews(ledger.personnel.find((p)=>p.employeeId===o.id)!)[0]] : "Sin vista")}</TD>
                     <TD className="text-xs text-slate-600">
                       {formatNumber(o.hoursPerDay ?? hoursPerDay)} h por día
                       <span className="block">{daysLabel(o.workDays)}</span>
@@ -240,8 +236,8 @@ export function OperatorsPage({ op }: { op?: string }) {
           </Table>
         </Card>
       )}
-      <div className="mt-6 space-y-4"><StaffCategoriesSettings /><RubroCatalogSection /></div>
-      {editing !== null && local && <Dialog open onOpenChange={(open)=>!open && setEditing(null)}><DialogContent><DialogHeader><DialogTitle>{editing === "new" ? "Nuevo empleado" : "Editar empleado"}</DialogTitle><DialogDescription>Datos de Personal</DialogDescription></DialogHeader><EmployeeForm key={editing === "new" ? "new" : editing.id} employee={editing === "new" ? undefined : editing} onSaved={()=>setEditing(null)} /></DialogContent></Dialog>}
+      <div className="mt-6 space-y-6"><section id="categorias" className="scroll-mt-20"><StaffCategoriesSettings /></section><section id="rubros" className="scroll-mt-20"><RubroCatalogSection /></section></div>
+      {editing !== null && local && <Dialog open onOpenChange={(open)=>!open && setEditing(null)}><DialogContent className="max-w-3xl overflow-hidden"><DialogHeader><DialogTitle>{editing === "new" ? "Nuevo empleado" : "Editar empleado"}</DialogTitle><DialogDescription>Datos de Personal</DialogDescription></DialogHeader><EmployeeForm key={editing === "new" ? "new" : editing.id} employee={editing === "new" ? undefined : editing} onSaved={()=>setEditing(null)} onCancel={()=>setEditing(null)} /></DialogContent></Dialog>}
       {editing !== null && !local && (
         <OperatorDialog
           key={editing === "new" ? "new" : editing.id}

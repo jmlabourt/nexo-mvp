@@ -26,7 +26,6 @@ import { cn } from "@/lib/utils";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PendingAction } from "@/components/shared/data-origin";
 import { ScheduleDialog } from "./schedule-dialog";
-import { AssignmentsPage } from "./assignments-page";
 
 export function PlantSummaryPage() {
   const today = useToday();
@@ -42,7 +41,7 @@ export function PlantSummaryPage() {
   </div>;
 }
 
-export function PlantOperatorsPage({ tab = "asignaciones" }: { tab?: string } = {}) {
+export function PlantOperatorsPage({ tab = "disponibilidad" }: { tab?: string } = {}) {
   const today = useToday();
   const projects = useAppStore((s) => s.projects);
   const allOperators = useConfiguredOperators();
@@ -56,16 +55,12 @@ export function PlantOperatorsPage({ tab = "asignaciones" }: { tab?: string } = 
 
   return (
     <div className="space-y-4">
-      <PageHeader title="Operarios" subtitle="Asignaciones, disponibilidad y revisión de las horas cargadas. Sin costos." />
-      <Tabs defaultValue={["asignaciones", "disponibilidad", "horas"].includes(tab) ? tab : "asignaciones"}>
+      <PageHeader title="Operarios" subtitle="Disponibilidad y revisión de las horas cargadas. Sin costos." />
+      <Tabs defaultValue={["disponibilidad", "horas"].includes(tab) ? tab : "disponibilidad"}>
         <TabsList aria-label="Secciones de Operarios">
-          <TabsTrigger value="asignaciones">Asignaciones</TabsTrigger>
           <TabsTrigger value="disponibilidad">Disponibilidad</TabsTrigger>
           <TabsTrigger value="horas">Correcciones de horas</TabsTrigger>
         </TabsList>
-        <TabsContent value="asignaciones">
-          <AssignmentsPage embedded />
-        </TabsContent>
         <TabsContent value="horas">
           <HoursReviews />
         </TabsContent>
