@@ -34,7 +34,7 @@ export function DelaySection({ result, state, onState }: { result: CalculatorRes
           <span className="block">Costo con días extra = costo presupuestado + días × costo por día. Rentabilidad = (precio − costo) / precio.</span>
           <span className="block">
             Supuestos a confirmar con el cliente: trabaja el mismo equipo (el rubro con más operarios: {crewSize}); no se suman horas de diseño ni de
-            administración; el gasto financiero no cambia con los días.
+            administración; el costo financiero no cambia con los días.
           </span>
         </>
       }

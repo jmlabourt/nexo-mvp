@@ -23,6 +23,11 @@ const r2 = (n: number) => Math.round(n * 100) / 100;
 export const r3 = (n: number) => Math.round(n * 1000) / 1000;
 
 export class StockError extends Error {}
+/** El libro físico admite milésimas para todas las unidades de su catálogo; dinero conserva dos decimales. */
+export function quantityError(quantity:number,allowZero=false):string|null {
+  return !Number.isFinite(quantity)||quantity<0||(!allowZero&&quantity===0)||Math.abs(quantity-r3(quantity))>1e-9
+    ? "La cantidad debe ser positiva y admitir como máximo tres decimales (milésimas)." : null;
+}
 
 export interface StockState {
   lots: StockLot[];
@@ -262,7 +267,7 @@ export function receiveStock(
   ctx: StockCtx,
   opts: { allowZeroCost?: boolean } = {},
 ): StockChange & { lot: StockLot } {
-  if (!(input.quantity > EPS)) throw new StockError("La cantidad debe ser mayor a cero.");
+  const error=quantityError(input.quantity);if(error)throw new StockError(error);
   if (!opts.allowZeroCost && !(input.unitCost > 0)) throw new StockError("Indicá el costo unitario: el material tiene que tener valor.");
   const kind = input.kind ?? "purchase";
   const dest = input.destination;
@@ -292,6 +297,7 @@ export function receiveStock(
 // ── Movimientos entre lugares ─────────────────────────────────
 
 export interface MoveInput {
+  unit?: string;
   materialId: string;
   quantity: number;
   /** Lote puntual (ej.: un sobrante concreto). Si falta se elige solo. */
@@ -306,7 +312,7 @@ export function assignToProject(
   input: MoveInput & { projectId: string },
   ctx: StockCtx,
 ): StockChange {
-  const parts = allocate(warehouseHoldings(state), input.materialId, input.quantity, input.lotId);
+  const parts = allocate(warehouseHoldings(state).filter((h) => !input.unit || h.lot.unit === input.unit), input.materialId, input.quantity, input.lotId);
   return {
     lots: [],
     movements: parts.map((a) =>
@@ -343,7 +349,7 @@ export function transferBetweenProjects(
   ctx: StockCtx,
 ): StockChange {
   if (input.fromProjectId === input.toProjectId) throw new StockError("Elegí un proyecto de destino distinto.");
-  const parts = allocate(projectHoldings(state, input.fromProjectId), input.materialId, input.quantity, input.lotId);
+  const parts = allocate(projectHoldings(state, input.fromProjectId).filter((h) => !input.unit || h.lot.unit === input.unit), input.materialId, input.quantity, input.lotId);
   const groupId = createId("grp");
   return {
     lots: [],
@@ -544,6 +550,8 @@ export interface StockRow {
 export function stockRows(state: StockState): StockRow[] {
   const lots = lotMap(state);
   const rows = new Map<string, StockRow>();
+  const units=new Map<string,Set<string>>();
+  for(const lot of state.lots) {if(!units.has(lot.materialId)) units.set(lot.materialId,new Set());units.get(lot.materialId)!.add(lot.unit);}
   const costNum = new Map<string, number>();
   for (const b of computeBalances(state.movements).values()) {
     const lot = lots.get(b.lotId);
@@ -551,10 +559,11 @@ export function stockRows(state: StockState): StockRow[] {
     const heldTotal = Object.values(b.held).reduce((s, q) => s + q, 0);
     const physical = b.warehouse + heldTotal;
     if (physical <= EPS) continue;
-    let row = rows.get(lot.materialId);
+    const rowKey=units.get(lot.materialId)!.size>1 ? `${lot.materialId}|${lot.unit}` : lot.materialId;
+    let row = rows.get(rowKey);
     if (!row) {
       row = {
-        key: lot.materialId,
+        key: rowKey,
         materialId: lot.materialId,
         name: lot.materialName,
         unit: lot.unit,
@@ -568,13 +577,13 @@ export function stockRows(state: StockState): StockRow[] {
         locations: [],
         byProject: [],
       };
-      rows.set(lot.materialId, row);
+      rows.set(rowKey, row);
     }
     row.physical += physical;
     row.available += Math.max(0, b.warehouse);
     row.assigned += heldTotal;
     row.value += physical * lot.unitCost;
-    costNum.set(lot.materialId, (costNum.get(lot.materialId) ?? 0) + physical * lot.unitCost);
+    costNum.set(rowKey, (costNum.get(rowKey) ?? 0) + physical * lot.unitCost);
     if (lot.kind === "leftover") {
       row.leftoverQty += physical;
       row.leftoverCount += 1;
@@ -642,4 +651,25 @@ export function lotTrail(state: StockState, lotId: string): StockMovement[] {
   return state.movements
     .filter((m) => ids.has(m.lotId))
     .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
+}
+
+/** Append-only reversal of an untouched reservation; no quantities or historical costs are rewritten. */
+export function reverseAssignment(state: StockState, movementId: string, reason: string, ctx: StockCtx, committed = false): StockState {
+  const original = state.movements.find((m) => m.id === movementId && m.kind === "assign");
+  if (!original || original.to.type !== "project") throw new StockError("Asignación no encontrada.");
+  if (reason.trim().length < 3) throw new StockError("Indicá el motivo de la reversión.");
+  const index = state.movements.indexOf(original);
+  if (committed || state.movements.slice(index+1).some((m) => m.lotId === original.lotId && m.from.type === "project" && m.from.projectId === (original.to as { projectId:string }).projectId)) throw new StockError("El material fue consumido, transferido o comprometido; no se puede revertir esta asignación.");
+  const held = computeBalances(state.movements).get(original.lotId)?.held[original.to.projectId] ?? 0;
+  if (held + EPS < original.quantity) throw new StockError("No queda disponible la cantidad asignada.");
+  return applyChange(state,{ lots:[],movements:[{ id:createId("reverse-assignment"),lotId:original.lotId,kind:"release",quantity:original.quantity,from:original.to,to:{ type:"warehouse" },date:ctx.now.slice(0,10),note:`Reversión de ${movementId}: ${reason.trim()}`,reversalOf:movementId,createdBy:ctx.actor,createdAt:ctx.now }] });
+}
+
+/** Coverage of the total valuation; missing origin prices are never presented as a confirmed zero. */
+export function stockValuation(state:StockState) {
+ const balances=computeBalances(state.movements);let value=0,complete=true;
+ for(const lot of state.lots) { const b=balances.get(lot.id);const quantity=b ? b.warehouse+Object.values(b.held).reduce((s,q)=>s+q,0) : 0;if(quantity<=EPS) continue;
+  if(typeof lot.unitCost!=="number" || !Number.isFinite(lot.unitCost) || lot.unitCost<0) { complete=false;continue; } value+=quantity*lot.unitCost;
+ }
+ return {value:Math.round(value*100)/100,complete};
 }

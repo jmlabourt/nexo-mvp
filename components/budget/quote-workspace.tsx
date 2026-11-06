@@ -2,6 +2,10 @@
 // Una sola pantalla de cotización: la usan el Cotizador y el paso "Costo presupuestado" de Nuevo proyecto.
 // Solo cambian el contexto (en Nuevo proyecto ya hay datos del proyecto) y el botón final.
 // El panel lateral es la única fuente del resumen: costo, precio, ganancia, rentabilidad, días y plazo.
+import { downloadCommercialQuote,commercialQuoteOf,quotedCommercialConditions,type CommercialQuote } from "@/lib/commercial-quote";
+import { useAppStore } from "@/store/use-app-store";
+import type { Project } from "@/types";
+import { FrozenQuote } from "./frozen-quote";
 import type { ReactNode } from "react";
 import { TriangleAlert } from "lucide-react";
 import { formatCurrency, formatCurrencyOrDash, formatNumber, formatPercent, formatWorkingDays } from "@/lib/formatting";
@@ -25,17 +29,21 @@ export interface QuoteWorkspaceProps {
   onAction: () => void;
   /** Línea de contexto arriba del resumen (en Nuevo proyecto: código y cliente). */
   context?: ReactNode;
+  commercial?: Partial<Pick<CommercialQuote,"title"|"client"|"description"|"deadline"|"conditions">>;
   /** Nuevo proyecto: no se sigue sin al menos un producto. */
   requireProducts?: boolean;
 }
 
-export function QuoteWorkspace({ state, onState, result, projectType, salesPrice, onSalesPrice, priceError, actionLabel, onAction, context, requireProducts }: QuoteWorkspaceProps) {
+export function QuoteWorkspace(props: QuoteWorkspaceProps | { readOnly:true;project:Project }) {
+  if ("readOnly" in props) return <div className="space-y-4"><Button variant="outline" onClick={()=>downloadCommercialQuote(commercialQuoteOf(props.project,useAppStore.getState().ledger.paymentTerms.find(t=>t.projectId===props.project.id)))}>Descargar cotización</Button><FrozenQuote project={props.project} /></div>;
+  const { state, onState, result, projectType, salesPrice, onSalesPrice, priceError, actionLabel, onAction, context, requireProducts } = props;
   const blocker = quoteActionBlocker(result, salesPrice, { requireProducts });
   const { schedule, breakdown: b } = result;
   const sale = (v: number | null) => (v === null ? "—" : formatCurrency(v));
 
+  if(result.errors.length)return <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_300px]" data-testid="quote-workspace"><BudgetCalculator state={state} onState={onState} result={result} projectType={projectType} salesPrice={salesPrice} onSalesPrice={onSalesPrice} priceError={priceError}/><aside aria-label="Resumen de la cotización"><Card><CardContent className="space-y-3 pt-5"><h2 className="font-semibold">Cotización pendiente de validar</h2><p>Completá las tarifas y horas indicadas para calcular costo y precio.</p><Button disabled>{actionLabel}</Button><Button disabled variant="outline">Descargar cotización</Button></CardContent></Card></aside></div>;
   return (
-    <div className="grid gap-6 lg:grid-cols-[1fr_320px]" data-testid="quote-workspace">
+    <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_300px]" data-testid="quote-workspace">
       <BudgetCalculator
         state={state}
         onState={onState}
@@ -46,14 +54,14 @@ export function QuoteWorkspace({ state, onState, result, projectType, salesPrice
         priceError={priceError}
       />
 
-      <aside className="lg:sticky lg:top-20 lg:max-h-[calc(100vh-6rem)] lg:self-start lg:overflow-y-auto" aria-label="Resumen de la cotización">
+      <aside className="min-w-0 xl:sticky xl:top-20 xl:max-h-[calc(100dvh-6rem)] xl:self-start xl:overflow-y-auto" aria-label="Resumen de la cotización">
         <Card>
           <CardContent className="space-y-3 pt-5 text-sm">
             {context && <div className="text-xs text-slate-500">{context}</div>}
             <h2 className="flex items-center gap-1 text-sm font-semibold text-slate-900">
               Resumen <span className="font-normal text-slate-500">(importes sin IVA)</span>
               <HelpTip label="Resumen">
-                Igual que la planilla de costeo: costo, rentabilidad y venta de materiales y de mano de obra; después transporte, imprevistos y gasto financiero.
+                Igual que la planilla de costeo: costo, rentabilidad y venta de materiales y de mano de obra; después transporte, imprevistos y costo financiero.
                 Las rentabilidades se cambian en Resultado.
               </HelpTip>
             </h2>
@@ -68,7 +76,9 @@ export function QuoteWorkspace({ state, onState, result, projectType, salesPrice
             <Group title="Mano de obra">
               <Row label="Costo" value={formatCurrency(b.labor.cost)} />
               <p className="text-xs text-slate-500 tabular">
-                Operarios {formatCurrency(b.labor.operators)} · Diseño {formatCurrency(b.labor.design)} · Administración {formatCurrency(b.labor.admin)}
+                Operarios {formatCurrency(b.labor.operators)}
+                {result.lines.filter(l=>l.staffCategoryId&&l.category!=="labor").map((l,i)=><span key={i}> · {l.staffCategoryName}: {formatCurrency((l.quantity??1)*l.unitCost)}</span>)}
+                {!result.lines.some(l=>l.staffCategoryId&&l.category!=="labor")&&<> · Diseño {formatCurrency(b.labor.design)} · Administración {formatCurrency(b.labor.admin)}</>}
               </p>
               {b.labor.safetyMargin > 0 && <Row label="incluye margen de seguridad" value={`+${formatCurrency(b.labor.safetyMargin)}`} small />}
               <Row label="Rentabilidad" value={formatPercent(b.labor.targetPct)} />
@@ -79,7 +89,7 @@ export function QuoteWorkspace({ state, onState, result, projectType, salesPrice
               <div className="space-y-1.5 border-t border-slate-100 pt-3">
                 {b.transport > 0 && <Row label="Transporte" value={formatCurrency(b.transport)} />}
                 {b.contingency > 0 && <Row label="Imprevistos" value={formatCurrency(b.contingency)} />}
-                <Row label={`Gasto financiero (${formatNumber(b.financial.pct, 2)} %)`} value={formatCurrency(b.financial.amount)} />
+                <Row label={`Costo financiero (${formatNumber(b.financial.pct, 2)} %)`} value={formatCurrency(b.financial.amount)} />
               </div>
             )}
 
@@ -119,6 +129,7 @@ export function QuoteWorkspace({ state, onState, result, projectType, salesPrice
               <Button className="w-full" onClick={onAction} disabled={blocker !== null} aria-describedby={blocker ? "quote-action-blocker" : undefined}>
                 {actionLabel}
               </Button>
+              <Button variant="outline" className="mt-2 w-full" disabled={blocker!==null} onClick={()=>downloadCommercialQuote({title:props.commercial?.title??"Cotización",...props.commercial,items:result.products.map(p=>({name:p.name,quantity:p.quantity})),price:salesPrice,conditions:props.commercial?.conditions??quotedCommercialConditions(state.finance),deadline:props.commercial?.deadline??(schedule.availableDays!==null?`Plazo estimado: ${formatWorkingDays(schedule.availableDays)}`:undefined)})}>Descargar cotización</Button>
               {blocker && (
                 <p id="quote-action-blocker" className="mt-1.5 text-xs text-slate-500">
                   {blocker}

@@ -101,6 +101,19 @@ export interface DeliveryResult {
   stock: StockState;
 }
 
+export interface DirectMaterialUsageInput extends DeliveryInput {
+  consumed: number;
+  waste: number;
+  leftover: number;
+  units?: Array<{ itemId: string; units: number }>;
+}
+
+export interface DirectMaterialUsageResult extends CloseDayResult {
+  deliveryResult: DeliveryResult;
+  delivery: MaterialDelivery;
+  closeInput: CloseDayInput;
+}
+
 export function deliverMaterial(
   project: Project,
   stock: StockState,
@@ -198,6 +211,32 @@ export interface CloseDayResult {
  * Cierre del día: unidades terminadas y, por entrega, consumo y desperdicio (usos de material con el costo del lote) y
  * sobrante reutilizable (lote sobrante en el depósito, mismo costo). Lo no cerrado sigue asignado al proyecto.
  */
+export function directMaterialUsage(
+  project: Project,
+  stock: StockState,
+  deliveries: MaterialDelivery[],
+  input: DirectMaterialUsageInput,
+  ctx: StockCtx & { today: string; carryOver?: boolean },
+): DirectMaterialUsageResult {
+  const deliveryResult = deliverMaterial(project, stock, deliveries, {
+    projectId: input.projectId,
+    itemId: input.itemId,
+    operatorId: input.operatorId,
+    materialId: input.materialId,
+    quantity: input.quantity,
+    source: input.source,
+    date: input.date,
+  }, ctx);
+  const closeInput: CloseDayInput = {
+    projectId: project.id,
+    date: input.date,
+    units: input.units ?? [],
+    deliveries: [{ id: deliveryResult.delivery.id, consumed: input.consumed, waste: input.waste, leftover: input.leftover }],
+  };
+  const closeResult = closeDay(project, deliveryResult.stock, [...deliveries, deliveryResult.delivery], closeInput, ctx);
+  return { ...closeResult, deliveryResult, delivery: deliveryResult.delivery, closeInput };
+}
+
 export function closeDay(
   project: Project,
   stock: StockState,
@@ -385,4 +424,35 @@ export function deliveryReviewAlerts(projects: Project[], stock: StockState, del
     }
   }
   return alerts;
+}
+
+/** Local unified registration: no artificial delivery. Stocks and valued usages are committed together. */
+export function registerMaterialsLocal(project: Project, stock: StockState, deliveries: MaterialDelivery[], input: DirectMaterialUsageInput, ctx: StockCtx & { today:string }): CloseDayResult {
+  if(input.source!=="project")throw new DomainError("Compras debe asignar el stock libre; Planta registra el material asignado al proyecto.");
+  const quantity = input.consumed + input.waste + input.leftover;
+  if (new Set(stock.lots.filter((l) => l.materialId === input.materialId).map((l) => l.unit)).size > 1) throw new DomainError("El material tiene unidades incompatibles entre lotes; no se pueden sumar ni consumir sin identificar una unidad válida.");
+  if (![input.consumed,input.waste,input.leftover].every((q) => Number.isFinite(q) && q >= 0) || quantity <= EPS) throw new DomainError("Indicá consumo, desperdicio o sobrante válido.");
+  const error = deliveryError(project,stock,deliveries,{ ...input,quantity },ctx.today);
+  if (error) throw new DomainError(error);
+  const option = deliveryOptions(stock,deliveries,project.id).find((o) => o.materialId === input.materialId)!;
+  const id = createId("materials");
+  let next = stock;
+  const change: StockChange = { lots:[],movements:[] };
+  const used = input.consumed + input.waste > EPS ? consumeMaterial(next,{ projectId:project.id,materialId:input.materialId,consumed:input.consumed,waste:input.waste,itemId:input.itemId,date:input.date,note:`Registro de materiales ${id}` },ctx) : { lots:[],movements:[],parts:[] };
+  next = applyChange(next,used);change.movements.push(...used.movements);
+  const usages: MaterialUsageEntry[] = used.parts.map((part) => ({ id:createId("use"),projectId:project.id,itemId:input.itemId,materialId:input.materialId,materialName:part.lot.materialName,unit:part.lot.unit,date:input.date,quantityConsumed:part.consumed,wasteQuantity:part.waste,reusableLeftoverQuantity:0,unitCost:part.lot.unitCost,unitCostOrigin:usageOrigin(part.lot),source:usageSource(part.lot,project.id),lotId:part.lot.id,notes:`Registro de materiales ${id}`,createdBy:ctx.actor,createdAt:ctx.now }));
+  if (input.leftover > EPS) {
+    const left = markLeftover(next,{ projectId:project.id,materialId:input.materialId,quantity:input.leftover,date:input.date,note:`Registro de materiales ${id}` },ctx);
+    next = applyChange(next,left);change.lots.push(...left.lots);change.movements.push(...left.movements);
+    for (const m of left.movements.filter((m) => m.kind === "to_leftover")) {
+      const lot = stock.lots.find((l) => l.id === m.lotId) ?? next.lots.find((l) => l.id === m.lotId)!;
+      usages.push({ id:createId("use"),projectId:project.id,itemId:input.itemId,materialId:input.materialId,materialName:option.materialName,unit:lot.unit,date:input.date,quantityConsumed:0,wasteQuantity:0,reusableLeftoverQuantity:m.quantity,unitCost:lot.unitCost,unitCostOrigin:usageOrigin(lot),source:usageSource(lot,project.id),lotId:lot.id,notes:`Registro de materiales ${id}`,createdBy:ctx.actor,createdAt:ctx.now });
+    }
+  }
+  for (const u of input.units ?? []) {
+    const item = project.items.find((i) => i.id === u.itemId);
+    if (!item) throw new DomainError("Mueble inexistente.");
+    const problem = completedUnitsError(item,u.units);if (problem) throw new DomainError(problem);
+  }
+  return { closeId:id,project:{ ...project,updatedAt:ctx.now,materialUsages:[...project.materialUsages,...usages],items:project.items.map((i) => ({ ...i,completedUnits:input.units?.find((u) => u.itemId === i.id)?.units ?? i.completedUnits })),activity:[...project.activity,activity("usage",ctx.actor,`Registro de materiales ${id}`,ctx.now)] },stock:next,deliveries,change,usages };
 }

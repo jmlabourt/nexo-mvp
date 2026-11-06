@@ -1,4 +1,6 @@
 "use client";
+import { demoOperatorEligible, laborCategories } from "@/lib/personnel";
+import { FlexibleWork } from "./flexible-work";
 import { useConfirmedAction } from "@/store/confirmed-action";
 // "Mi día" del Operario (Lote 6): lo mínimo posible, pensado para el celular.
 // Solo lo asignado a esa persona para HOY: proyecto, mueble y rubro, con un único campo de horas y "Registrar horas".
@@ -23,6 +25,8 @@ import { Input, Select } from "@/components/ui/input";
 export function WorkshopHome() {
   const projects = useAppStore((s) => s.projects);
   const operators = useAppStore((s) => s.operators);
+  const ledger = useAppStore((s)=>s.ledger);
+  const local = useAppStore((s)=>s.demoLocal);
   const assignments = useAppStore((s) => s.assignments);
   const setActingOperator = useAppStore((s) => s.setActingOperator);
   const userId = useAppStore((s) => s.userId);
@@ -36,7 +40,7 @@ export function WorkshopHome() {
   const day = useMemo(() => (operator ? myDay(projects, assignments, operator.id, today) : null), [projects, assignments, operator, today]);
 
   return (
-    <div className="mx-auto min-h-screen max-w-md bg-white px-4 pb-12">
+    <div className="blerp-workshop mx-auto min-h-screen max-w-md bg-white px-4 pb-12">
       <header className="flex items-center justify-between gap-3 py-4">
         <div className="min-w-0">
           <div className="text-lg font-semibold tracking-tight">{APP_NAME}</div>
@@ -53,7 +57,7 @@ export function WorkshopHome() {
         <div className="mb-4 rounded-lg border border-slate-200 bg-slate-50 p-3">
           <label htmlFor="acting-op" className="mb-1.5 block text-xs font-medium text-slate-600">Demo: ver el día de</label>
           <Select id="acting-op" value={operator?.id ?? ""} onChange={(e) => setActingOperator(e.target.value)}>
-            {activeOperators(operators).map((o) => (
+            {activeOperators(operators).filter((o)=>!local || demoOperatorEligible(ledger,o)).map((o) => (
               <option key={o.id} value={o.id}>{o.name} · {o.role}</option>
             ))}
           </Select>
@@ -78,11 +82,12 @@ export function WorkshopHome() {
           )}
           <section aria-label="Lo que tenés asignado hoy" className="mt-4 space-y-3">
             {day.items.length === 0 ? (
-              <p className="rounded-md bg-slate-100 p-4 text-sm text-slate-700">Hoy no tenés trabajos asignados. Si trabajaste en algo, avisale al Jefe de planta.</p>
+              <p className="rounded-md bg-slate-100 p-4 text-sm text-slate-700">Hoy no tenés trabajos asignados. Podés registrar otro trabajo válido.</p>
             ) : (
               day.items.map((item) => <AssignmentCard key={item.assignment.id} item={item} onSaved={setSaved} />)
             )}
           </section>
+          <details open className="mt-4"><summary className="cursor-pointer font-medium">Agregar otro trabajo / Trabajo interno general</summary><FlexibleWork operator={operator} onSaved={setSaved} /></details>
 
         </>
       )}
@@ -100,6 +105,12 @@ export function WorkshopHome() {
 /** Una asignación de hoy: proyecto, mueble y rubro; un solo campo de horas y "Registrar horas". */
 function AssignmentCard({ item, onSaved }: { item: MyDayItem; onSaved: (msg: string) => void }) {
   const logHours = useConfirmedAction("logHours");
+  const local = useAppStore((s) => s.demoLocal);
+  const ledger = useAppStore((s) => s.ledger);
+  const [categoryId, setCategoryId] = useState("");
+  const categories = laborCategories(ledger, item.assignment.operatorId).filter((c) => c.category === (item.assignment.hourKind ?? "labor"));
+  const selectedCategory = categories.some((c) => c.id === categoryId) ? categoryId : categories.length === 1 ? categories[0].id : undefined;
+  const operator = useAppStore((s) => s.operators.find((o) => o.id === item.assignment.operatorId));
   const hoursPerDay = useAppStore((s) => s.costSettings.hoursPerDay);
   const projects = useAppStore((s) => s.projects);
   const [hours, setHours] = useState("");
@@ -117,7 +128,7 @@ function AssignmentCard({ item, onSaved }: { item: MyDayItem; onSaved: (msg: str
     if (check.level === "block") return setError(check.message ?? "Horas inválidas.");
     if (check.level === "warn" && !confirmed) return setWarn(check.message ?? "");
     requestId.current ??= createId("act");
-    const r = await logHours(item.project.id, { requestId: requestId.current, assignmentId: a.id, hours: h, confirmHighHours: true });
+    const r = await logHours(item.project.id, { requestId: requestId.current, assignmentId: a.id, categoryId: selectedCategory, hours: h, confirmHighHours: true });
     if (!r.ok) return setError(r.error);
     requestId.current = null;
     setHours("");
@@ -133,25 +144,28 @@ function AssignmentCard({ item, onSaved }: { item: MyDayItem; onSaved: (msg: str
       <div className="text-sm text-slate-600">
         {a.hourKind === "design" ? "Diseño" : a.hourKind === "admin" ? "Administración" : rubroLabel(a.rubro)}
       </div>
+      <p className="mt-2 text-xs text-slate-500">Horas planificadas: {formatNumber(a.plannedHours)} h · Horas reales: {formatNumber(item.logged)} h</p>
       {item.logged > 0 && (
         <p className="mt-3 flex items-center gap-1.5 text-sm font-medium text-emerald-700">
           <CheckCircle2 className="size-4" aria-hidden /> Cargaste {formatNumber(item.logged)} h
         </p>
       )}
+      {local && categories.length > 1 && <label className="mt-2 block text-sm">Categoría laboral<Select value={selectedCategory ?? ""} onChange={(e) => setCategoryId(e.target.value)}><option value="">Elegí la categoría…</option>{categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</Select></label>}
         <form
           noValidate
-          className="mt-3 flex items-end gap-2"
+          className="mt-3 flex flex-wrap items-end gap-2"
           onSubmit={(e) => {
             e.preventDefault();
             submit(false);
           }}
         >
-          <div className="w-32">
+          <div className="w-24 min-w-0">
             <label htmlFor={id} className="mb-1 block text-xs font-medium text-slate-600">{item.logged > 0 ? "Agregar horas" : "Horas trabajadas"}</label>
             <Input id={id} inputMode="decimal" value={hours} onChange={(e) => setHours(e.target.value)} aria-invalid={!!error} />
           </div>
           <Button type="submit" size="lg" className="flex-1" disabled={busy}>{busy ? "Guardando…" : "Registrar horas"}</Button>
         </form>
+      {local && operator && <details className="mt-3"><summary className="cursor-pointer text-sm text-blue-700">Cambiar proyecto, mueble o rubro al registrar</summary><FlexibleWork operator={operator} assignment={a} onSaved={onSaved} /></details>}
       {error && <p role="alert" className="mt-2 text-sm text-red-600">{error}</p>}
       {warn && !error && (
         <div role="alert" className="mt-2 space-y-2 rounded-md bg-amber-50 p-3 text-sm text-amber-900">

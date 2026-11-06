@@ -27,7 +27,7 @@ export function ItemsTab({ project }: { project: Project }) {
   // El costo asociado a cada mueble lo ve solo Gerencia.
   const showCost = session === "gerencia";
   const [editing, setEditing] = useState<string | null>(null);
-  const editable = !project.isClosed && canQuoteProject(role, project);
+  const editable = !project.isClosed && canQuoteProject(role, project) && (session !== "administracion" || project.status === "quotation");
 
   const costOf = (itemId: string | undefined) => {
     const mats = project.materialUsages.filter((u) => u.itemId === itemId).reduce((s, u) => s + (u.quantityConsumed + u.wasteQuantity) * u.unitCost, 0);

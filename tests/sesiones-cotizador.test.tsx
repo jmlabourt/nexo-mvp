@@ -161,8 +161,11 @@ describe("una sola estructura: pantalla", () => {
     expect(within(add).queryByRole("option", { name: "Carpintería madera" })).toBeNull();
     await user.selectOptions(add, "embalaje");
     const emb = within(card).getByRole("region", { name: "Embalaje de Mesa ratona" });
-    // Dentro del rubro, todo junto.
-    for (const label of ["Horas", "Operarios", "Horas de diseño", "Horas de administración"]) expect(within(emb).getByLabelText(label)).toBeInTheDocument();
+    // Horas productivas y categorías configurables; sin campos fijos.
+    expect(within(emb).queryByLabelText("Horas de diseño")).not.toBeInTheDocument();
+    expect(within(emb).queryByText("Trabajo no operativo")).not.toBeInTheDocument();
+    expect(screen.getByText("Horas de personal no operario del proyecto")).toBeInTheDocument();
+    for (const label of ["Horas", "Operarios"]) expect(within(emb).getByLabelText(label)).toBeInTheDocument();
     expect(within(emb).getByRole("button", { name: "Material" })).toBeInTheDocument();
     expect(within(within(card).getByLabelText("Agregar rubro a Mesa ratona")).queryByRole("option", { name: "Embalaje" })).toBeNull();
   });
@@ -184,7 +187,7 @@ describe("Resultado: porcentajes, transporte, imprevistos y gasto financiero", (
     const result = screen.getByRole("region", { name: "Resultado" });
     expect(within(result).getByLabelText("Rentabilidad objetivo de materiales")).toHaveValue("30");
     expect(within(result).getByLabelText("Rentabilidad objetivo de mano de obra")).toHaveValue("30");
-    expect(within(result).getByLabelText("Gasto financiero")).toHaveValue("5");
+    expect(within(result).getByLabelText("Costo financiero")).toHaveValue("5");
     const aside = screen.getByRole("complementary", { name: "Resumen de la cotización" });
     expect(within(aside).getByText("Rentabilidad total")).toBeInTheDocument();
     expect(within(aside).getAllByText("Rentabilidad")).toHaveLength(2);

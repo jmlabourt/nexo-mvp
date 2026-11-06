@@ -1,8 +1,7 @@
 "use client";
 // Clientes y Proveedores en el modo demostración: alta, edición y baja reales (lib/ledger.ts), sin duplicar nombres.
 // Administración edita los dos; Compras edita proveedores. En una empresa real siguen como "Pendiente de backend".
-import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { Plus, Search } from "lucide-react";
 import type { ClientEntry, SupplierEntry } from "@/types";
 import { upsertClient, upsertSupplier } from "@/lib/ledger";
@@ -18,9 +17,9 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 
 type Kind = "clients" | "suppliers";
 type Entry = ClientEntry | SupplierEntry;
-type Form = { id?: string; name: string; contact: string; phone: string; email: string; address: string; notes: string; active: boolean };
+type Form = { id?: string; name: string; contact: string; phone: string; email: string; address: string; notes: string; active: boolean; website: string };
 
-const FIELDS: Array<{ key: keyof Omit<Form, "id" | "active">; label: string }> = [
+const FIELDS: Array<{ key: keyof Omit<Form, "id" | "active" | "website">; label: string }> = [
   { key: "name", label: "Nombre" },
   { key: "contact", label: "Contacto" },
   { key: "phone", label: "Teléfono" },
@@ -38,12 +37,11 @@ const toForm = (e: Entry | null): Form => ({
   address: e?.address ?? "",
   notes: e?.notes ?? "",
   active: (e as ClientEntry | null)?.active ?? true,
+  website: (e as SupplierEntry | null)?.website ?? "",
 });
 
 export function LedgerDirectory({ kind }: { kind: Kind }) {
   const ledger = useAppStore((s) => s.ledger);
-  const projects = useAppStore((s) => s.projects);
-  const orders = useAppStore((s) => s.orders);
   const record = useAppStore((s) => s.recordLedger);
   const demoLocal = useAppStore((s) => s.demoLocal);
   const entries: Entry[] = kind === "clients" ? ledger.clients : ledger.suppliers;
@@ -52,14 +50,6 @@ export function LedgerDirectory({ kind }: { kind: Kind }) {
   const [error, setError] = useState("");
   const [showInactive, setShowInactive] = useState(false);
   const title = kind === "clients" ? "Clientes" : "Proveedores";
-  const usage = useMemo(() => {
-    const m = new Map<string, number>();
-    for (const e of entries) {
-      const n = normalizeName(e.name);
-      m.set(e.id, kind === "clients" ? projects.filter((p) => normalizeName(p.client) === n).length : orders.filter((o) => normalizeName(o.supplier) === n).length);
-    }
-    return m;
-  }, [entries, projects, orders, kind]);
   const list = entries
     .filter((e) => showInactive || (e as ClientEntry).active !== false)
     .filter((e) => !q.trim() || normalizeName(e.name).includes(normalizeName(q)))
@@ -67,7 +57,7 @@ export function LedgerDirectory({ kind }: { kind: Kind }) {
 
   const save = () => {
     if (!form) return;
-    const data = { id: form.id, name: form.name, contact: form.contact || undefined, phone: form.phone || undefined, email: form.email || undefined, address: form.address || undefined, notes: form.notes || undefined, active: form.active };
+    const data = { id: form.id, name: form.name, contact: form.contact || undefined, phone: form.phone || undefined, email: form.email || undefined, address: form.address || undefined, notes: form.notes || undefined, active: form.active, ...(kind === "suppliers" ? { website:form.website || undefined } : {}) };
     const r = record(kind === "clients" ? ["administracion", "gerencia"] : ["administracion", "gerencia", "compras"], (l, ctx) => (kind === "clients" ? upsertClient(l, data, ctx) : upsertSupplier(l, data, ctx)));
     if (!r.ok) return setError(r.error);
     setError("");
@@ -104,7 +94,7 @@ export function LedgerDirectory({ kind }: { kind: Kind }) {
                 <TH>Contacto</TH>
                 <TH>Teléfono</TH>
                 <TH>Correo</TH>
-                <TH className="text-right">{kind === "clients" ? "Proyectos" : "Órdenes"}</TH>
+                <TH>Dirección</TH>{kind === "suppliers" && <TH>Catálogo</TH>}
               </TR>
             </THead>
             <TBody>
@@ -122,9 +112,7 @@ export function LedgerDirectory({ kind }: { kind: Kind }) {
                   <TD>{e.contact ?? "—"}</TD>
                   <TD className="tabular">{e.phone ?? "—"}</TD>
                   <TD>{e.email ?? "—"}</TD>
-                  <TD className="text-right tabular">
-                    {kind === "clients" && (usage.get(e.id) ?? 0) > 0 ? <Link href={`/projects?q=${encodeURIComponent(e.name)}`} className="hover:underline">{usage.get(e.id)}</Link> : (usage.get(e.id) ?? 0)}
-                  </TD>
+                  <TD>{e.address ?? "Sin registro"}</TD>{kind === "suppliers" && <TD>{/^https?:\/\//i.test((e as SupplierEntry).website ?? "") ? <a href={(e as SupplierEntry).website} target="_blank" rel="noreferrer" className="text-blue-700 hover:underline">Ver catálogo</a> : "Sin registro"}</TD>}
                 </TR>
               ))}
             </TBody>
@@ -153,6 +141,7 @@ export function LedgerDirectory({ kind }: { kind: Kind }) {
                   <Input className="mt-1" value={form[f.key]} onChange={(e) => setForm({ ...form, [f.key]: e.target.value })} />
                 </label>
               ))}
+              {kind === "suppliers" && <label className="block text-sm">Enlace al catálogo<Input type="url" value={form.website} onChange={(e) => setForm({ ...form,website:e.target.value })} /></label>}
               {form.id && (
                 <label className="flex items-center gap-2 text-sm text-slate-700">
                   <input type="checkbox" className="size-4" checked={form.active} onChange={(e) => setForm({ ...form, active: e.target.checked })} /> Activo

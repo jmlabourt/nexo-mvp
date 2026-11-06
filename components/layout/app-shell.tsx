@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Boxes,
   Building2,
@@ -24,6 +24,7 @@ import {
   X,
   type LucideIcon,
 } from "lucide-react";
+import { FINANCE_HREF,pendingPaymentCount } from "@/lib/finance-workspace";
 import { cn } from "@/lib/utils";
 import { APP_NAME, APP_SUBTITLE } from "@/lib/constants";
 import { useAppStore } from "@/store/use-app-store";
@@ -76,6 +77,7 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
   const { roleKey, session, actor } = useIdentity();
   const count = useAlertCount(roleKey);
+  const ledger=useAppStore(s=>s.ledger);const paymentCount=pendingPaymentCount(ledger);
   const userEmail = useAppStore((s) => s.userEmail);
   const organizationName = useAppStore((s) => s.organizationName);
 
@@ -102,6 +104,7 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
             >
               <Icon className="size-4 shrink-0" aria-hidden />
               <span className="min-w-0 flex-1 break-words">{item.label}</span>
+              {item.href===FINANCE_HREF&&paymentCount>0&&<span aria-label={`${paymentCount} solicitudes de pago pendientes`} className="rounded-full bg-amber-100 px-1.5 text-xs text-amber-900">{paymentCount}</span>}
               {item.icon === "alerts" && count > 0 && (
                 <span className="shrink-0 rounded-full bg-red-100 px-1.5 text-xs font-semibold text-red-700 tabular">{count}</span>
               )}
@@ -133,12 +136,12 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   );
 }
 
-function Header({ onMenu }: { onMenu: () => void }) {
+function Header({ onMenu, menuOpen }: { onMenu: () => void; menuOpen: boolean }) {
   const crumbs = useBreadcrumb();
   const { session } = useIdentity();
   return (
     <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-slate-200 bg-white/95 px-4 backdrop-blur lg:px-8">
-      <Button variant="ghost" size="icon" className="lg:hidden" onClick={onMenu} aria-label="Abrir menú">
+      <Button variant="ghost" size="icon" className="lg:hidden" onClick={onMenu} aria-label="Abrir menú" aria-haspopup="dialog" aria-expanded={menuOpen} aria-controls={menuOpen ? "mobile-menu" : undefined}>
         <Menu />
       </Button>
       <nav aria-label="Breadcrumb" className="hidden min-w-0 text-sm text-slate-500 sm:block">
@@ -192,18 +195,32 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const demoLocal = useAppStore((s) => s.demoLocal);
   const realRole = useAppStore((s) => s.role);
   const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!menuOpen) return;
+    const previous = document.activeElement;
+    menuRef.current?.querySelector<HTMLButtonElement>("button")?.focus();
+    return () => { if (previous instanceof HTMLElement && previous.isConnected) previous.focus(); };
+  }, [menuOpen]);
   useTrackNavigation();
 
   if (session === "operario") return <WorkshopHome />;
   const allowed = canAccess(session, pathname);
 
   return (
-    <div className="min-h-screen">
+    <div className="blerp-app min-h-screen">
       <aside className="fixed inset-y-0 left-0 z-40 hidden w-60 border-r border-slate-200 bg-white lg:block">
         <Sidebar />
       </aside>
       {menuOpen && (
-        <div className="fixed inset-0 z-50 lg:hidden" role="dialog" aria-modal="true" aria-label="Menú">
+        <div ref={menuRef} id="mobile-menu" className="fixed inset-0 z-50 lg:hidden" role="dialog" aria-modal="true" aria-label="Menú" onKeyDown={(event) => {
+          if (event.key === "Escape") { event.preventDefault(); setMenuOpen(false); }
+          if (event.key !== "Tab") return;
+          const controls = [...event.currentTarget.querySelectorAll<HTMLElement>('a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex="0"]')].filter(el => el.getClientRects().length > 0);
+          const first = controls[0], last = controls.at(-1);
+          if (event.shiftKey && document.activeElement === first && last) { event.preventDefault(); last.focus(); }
+          else if (!event.shiftKey && document.activeElement === last && first) { event.preventDefault(); first.focus(); }
+        }}>
           <div className="absolute inset-0 bg-slate-900/40" onClick={() => setMenuOpen(false)} />
           <aside className="absolute inset-y-0 left-0 w-64 bg-white shadow-xl">
             <Button variant="ghost" size="icon" className="absolute right-2 top-3" onClick={() => setMenuOpen(false)} aria-label="Cerrar menú">
@@ -214,7 +231,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       )}
       <div className="min-w-0 lg:pl-60">
-        <Header onMenu={() => setMenuOpen(true)} />
+        <Header onMenu={() => setMenuOpen(true)} menuOpen={menuOpen} />
         <main className="mx-auto max-w-7xl px-4 py-6 lg:px-8 lg:py-8">
           <LocalDemoBar />
           {isDemo && !demoLocal && (realRole === "owner" || realRole === "member") && <DemoBanner />}

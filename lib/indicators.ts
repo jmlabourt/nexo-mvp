@@ -1,3 +1,4 @@
+import {DASHBOARD_INDICATORS} from "./dashboard-indicators";
 // Indicadores de Gerencia: qué significan, cómo se calculan y de dónde salen. Una sola fuente para las ayudas ⓘ del
 // Dashboard y para Configuración → Indicadores y cálculos. Las fórmulas viven en lib/gerencia.ts y lib/calculations.ts
 // (probadas); acá solo se explican. Los parámetros se configuran; las fórmulas no se editan.
@@ -18,10 +19,25 @@ const PERIOD = "El período elegido arriba del Dashboard (mes, trimestre, año o
 const ON_RECORD = "Al registrar el dato de origen (sin recalcular a mano).";
 const NO_IVA = "Importes sin IVA.";
 
-export const INDICATORS: Indicator[] = [
+const BASE_INDICATORS: Indicator[] = [
+  {
+    id: "quote_defaults",
+    name: "Objetivos de nuevas cotizaciones",
+    meaning: "Materiales y mano de obra tienen objetivos independientes; el cotizador permite modificarlos en su borrador.",
+    formula: "Precio de cada componente = costo / (1 − objetivo / 100). Se conservan los demás componentes del cálculo existente.",
+    source: "Configuración de Gerencia; valores editados en la cotización y congelados al aprobar.",
+    params: "Objetivo de materiales y objetivo de mano de obra, entre 0 y menos de 100%.",
+    period: "Solo inicialización de nuevas cotizaciones.",
+    limits: "Cambiar predeterminados no sobrescribe borradores ni presupuestos aprobados; no es un recargo sobre costo.",
+    updates: "Al crear una cotización nueva o modificar sus objetivos.",
+  },
+  {
+    id:"cash_period",name:"Resultado de caja registrado",meaning:"Cobros efectivos menos pagos efectivos registrados en el rango; no es ganancia económica.",
+    formula:"Σ cobros por fecha de ingreso − Σ pagos de proveedores por fecha efectiva de débito.",source:"Ledger compartido de Administración; solicitudes de Compras y e-cheqs emitidos no generan pagos.",params:"Desde/Hasta del Dashboard.",period:"Movimientos dentro del rango, hasta el corte de hoy si Hasta es futuro.",limits:"Sin integración bancaria. No equivale a saldo en banco; faltan flujos no registrados. Costos generales informativos y salarios no acreditan pagos.",updates:"Al registrar o corregir un cobro/pago efectivo."
+  },
   {
     id: "contract_current",
-    name: "Contrato vigente",
+    name: "Total acordado con el cliente",
     meaning: "El monto vendido hoy: el aprobado, o el último cambio que registró Administración con su motivo.",
     formula: "Última revisión del contrato; sin revisiones, el precio aprobado (presupuesto base).",
     source: "Aprobación de la cotización y revisiones del contrato.",
@@ -33,9 +49,9 @@ export const INDICATORS: Indicator[] = [
   {
     id: "collected",
     name: "Cobrado y pendiente de cobro",
-    meaning: "Lo que efectivamente ingresó y lo que falta cobrar del contrato vigente.",
+    meaning: "Cobrado: ingresos efectivos del período elegido. Pendiente: total acordado menos cobros acumulados hasta la fecha de corte.",
     formula: "Cobrado = suma de cobros por fecha de ingreso (anticipos incluidos, sin duplicar al aplicarlos) · Pendiente = contrato vigente − cobrado.",
-    source: "Cobros que registra Gerencia.",
+    source: "Cobros efectivos que registra Administración; Gerencia consulta.",
     params: "Ninguno.",
     period: PERIOD,
     limits: `Un pago a proveedor no es ingreso. ${NO_IVA}`,
@@ -46,9 +62,9 @@ export const INDICATORS: Indicator[] = [
     name: "Rentabilidad presupuestada, hasta hoy y final",
     meaning: "Presupuestada: la foto aprobada. Hasta hoy: lo que queda del contrato con el costo cargado (PARCIAL). Final: solo al cerrar sin costos pendientes.",
     formula: "Ganancia = contrato − costo · Rentabilidad = ganancia / contrato × 100.",
-    source: "Presupuesto base, contrato vigente y costos reales del proyecto.",
+    source: "Presupuesto base; contrato/revisiones al corte; consumos y desperdicios con costo de origen; horas individuales y propias/distribuidas; externos; costo financiero devengado sin duplicación.",
     params: "Ninguno.",
-    period: "Por proyecto.",
+    period: "Por proyecto, acumulado hasta la fecha de corte elegida. Cotizado: presupuesto congelado al aprobar.",
     limits: "La de hoy es parcial: faltan costos por cargar. Sin datos se muestra \"No calculable\".",
     updates: ON_RECORD,
   },
@@ -65,11 +81,11 @@ export const INDICATORS: Indicator[] = [
   },
   {
     id: "financial_cost",
-    name: "Gasto financiero estimado",
+    name: "Costo financiero estimado",
     meaning: "Lo que cuesta financiar la obra hasta que el cliente paga.",
     formula: "Precio sin IVA × tasa mensual / 100 × días financiados / 30. Días financiados = producción (inicio → entrega) + días que tarda en pagar. Con seña o cuotas, por tramos sobre el saldo pendiente.",
     source: "Fechas y condiciones de pago de la cotización.",
-    params: "Tasa mensual (Configuración → Gasto financiero).",
+    params: "Tasa mensual (Configuración → Costo financiero).",
     period: "Del inicio al último cobro.",
     limits: "Es una estimación: nunca un costo pagado. El presupuesto aprobado guarda su valor; el actualizado se muestra aparte. No entra en su propia base.",
     updates: "Al cambiar la tasa, las fechas o las cuotas.",
@@ -79,7 +95,7 @@ export const INDICATORS: Indicator[] = [
     name: "Facturación por proyecto",
     meaning: "Cuánto se le facturó a cada cliente por un proyecto aprobado y cuánto falta facturar.",
     formula: "Facturado = suma de facturas de venta del proyecto · Pendiente de facturar = contrato vigente − facturado · Pendiente de cobro = contrato vigente − cobrado.",
-    source: "Facturas y cobros que registra Gerencia en el proyecto (en la demo, guardados en el navegador; en una empresa real, pendiente de backend).",
+    source: "Facturas y cobros que registra Administración en el proyecto (en la demo, guardados en el navegador; en una empresa real, pendiente de backend).",
     params: "Ninguno.",
     period: "Todas las fechas (la tabla muestra la próxima fecha prevista).",
     limits: `Solo proyectos aprobados, en proceso o cerrados: una cotización nunca es venta. ${NO_IVA}`,
@@ -155,10 +171,10 @@ export const INDICATORS: Indicator[] = [
     id: "projected_cost",
     name: "Costo final proyectado",
     meaning: "Cuánto va a costar el proyecto al cerrarse si lo que falta sale como se presupuestó.",
-    formula: "Por categoría: el mayor entre lo presupuestado y lo real + lo pendiente identificable.",
-    source: "Costo presupuestado (congelado al aprobar) y costos reales.",
+    formula: "Suma por grupo identificable de categoría/rubro: max(presupuesto, real + horas/cantidades pendientes a valor cotizado). Horas no operarias del ledger sustituyen su partida; no se suman completas al presupuesto ya inclusivo. Financiero proyectado=max(presupuestado,incurrido), sin duplicación.",
+    source: "Presupuesto congelado, actualEntries, materialUsages, internalHours/categorías, asignaciones monetarias y externos: laborCostDetails/projectedAmounts/projectEconomics; economicView completa financiación y corte temporal.",
     params: "Ninguno.",
-    period: "Proyectos en curso (en los cerrados es el real final).",
+    period: "Proyectos en curso: proyección al corte. Cerrados: costos registrados; solo es final con validación compartida de profitView y sin pendientes.",
     limits: "Nunca baja del presupuesto ni del costo real. No es una predicción.",
     updates: ON_RECORD,
   },
@@ -199,9 +215,9 @@ export const INDICATORS: Indicator[] = [
     id: "design_cost",
     name: "Costo de Diseño",
     meaning: "Lo que costaron las horas de Diseño imputadas al proyecto.",
-    formula: "Horas de Diseño × tarifa de Diseño vigente.",
+    formula: "Horas reales × excepción individual vigente; si falta, tarifa vigente de la categoría identificada. Se conserva el costo registrado.",
     source: "Horas de Diseño cargadas en el proyecto.",
-    params: "Tarifa de Diseño (Configuración).",
+    params: "Tarifas de Personal, categoría elegida y fecha del trabajo.",
     period: PERIOD,
     limits: "Solo las horas cargadas; nunca se estima con la jornada.",
     updates: "Al cargar horas.",
@@ -221,7 +237,7 @@ export const INDICATORS: Indicator[] = [
     id: "hours_budget",
     name: "Horas presupuestadas",
     meaning: "Horas que se estimaron al cotizar, por mueble y rubro.",
-    formula: "Suma de horas estimadas de cada mueble + horas de Diseño y Administración del presupuesto.",
+    formula: "Suma de horas productivas y de categorías no operativas congeladas por mueble; incluye líneas históricas de Diseño y Administración.",
     source: "Cotización aprobada (mueble × rubro).",
     params: "Ninguno.",
     period: "Total del proyecto.",
@@ -266,11 +282,11 @@ export const INDICATORS: Indicator[] = [
     id: "capacity",
     name: "Capacidad por rubro",
     meaning: "Horas de trabajo disponibles de cada rubro en el período.",
-    formula: "Personas del rubro × horas por día × días laborables del período.",
-    source: "Personal activo (cada persona cuenta una vez, en su rubro principal) o la capacidad configurada.",
-    params: "Rubros, cantidad de personas, jornada y días (Configuración).",
+    formula: "Por rubro: base manual en h/semana si está configurada; en otro caso, jornadas de Personal distribuidas sin duplicación. La base declarada es número de operarios × horas semanales por operario, vigente Desde/Hasta. Los períodos parciales prorratean por días calendario / 7. Se suman ajustes fechados una sola vez.",
+    source: "Base semanal manual por rubro o Personal productivo activo con sus habilitaciones explícitas; excepciones y ajustes puntuales confirmados.",
+    params: "Categorías, rubros, jornadas y días en Personal; base semanal manual y ajustes puntuales en Planta → Planificación. La base manual no aumenta la jornada asignable individual.",
     period: "Cada mes (o semana) del gráfico.",
-    limits: "No descuenta vacaciones ni feriados salvo las excepciones cargadas.",
+    limits: "Cuando se usa Personal y faltan rubros habilitados, el desglose queda pendiente de configuración. Una base manual explícita sí define la capacidad total del rubro. No descuenta vacaciones ni feriados salvo excepciones cargadas; no amplía jornadas individuales.",
     updates: "Al cambiar el personal o la configuración.",
   },
   {
@@ -329,5 +345,7 @@ export const INDICATORS: Indicator[] = [
     updates: "Cada día.",
   },
 ];
+
+export const INDICATORS:Indicator[]=[...BASE_INDICATORS.map(i=>DASHBOARD_INDICATORS.find(d=>d.id===i.id)??i),...DASHBOARD_INDICATORS.filter(d=>!BASE_INDICATORS.some(i=>i.id===d.id))];
 
 export const indicator = (id: string): Indicator | undefined => INDICATORS.find((i) => i.id === id);

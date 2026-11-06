@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { APP_NAME } from "@/lib/constants";
 import { createClient } from "@/lib/supabase/client";
 import { backfillClosures } from "@/lib/supabase/closures";
+import { DEMO_LOCAL_COOKIE, isLocalDemoAccessEnabled, isLocalDemoHost } from "@/lib/supabase/env";
 import { loadWorkspace, replaceWorkspace } from "@/lib/supabase/workspace";
 import { demoWorkspace, useAppStore } from "@/store/use-app-store";
 import { isDemoActive } from "@/store/demo-local";
@@ -21,8 +22,17 @@ export function HydrationGate({ children }: { children: React.ReactNode }) {
     setState({ status: "loading" });
     try {
       void useAppStore.persist.rehydrate();
-      // Modo demostración local: se usa lo guardado en este navegador y no se lee ni escribe la empresa real.
-      if (isDemoActive()) {
+
+      const isExplicitLocalDemo = typeof window !== "undefined" && new URLSearchParams(window.location.search).get("demo") === "1";
+      const demoCookieActive = typeof document !== "undefined" && document.cookie.split(";").map((part) => part.trim()).some((part) => part.startsWith(`${DEMO_LOCAL_COOKIE}=`) && part.slice(DEMO_LOCAL_COOKIE.length + 1) === "1");
+      const localDevDemoEnabled = typeof window !== "undefined" && isLocalDemoAccessEnabled && isLocalDemoHost(window.location.hostname);
+
+      if (localDevDemoEnabled && isExplicitLocalDemo && !demoCookieActive) {
+        document.cookie = `${DEMO_LOCAL_COOKIE}=1; path=/; SameSite=Lax`;
+      }
+
+      // Modo demostración local solo para desarrollo explícito desde localhost, sin tocar la auth real.
+      if (isDemoActive() || (localDevDemoEnabled && (isExplicitLocalDemo || demoCookieActive))) {
         useAppStore.getState().enterLocalDemo();
         setState({ status: "ready" });
         return;

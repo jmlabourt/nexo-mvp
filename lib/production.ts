@@ -20,6 +20,7 @@ export const PRODUCTION_STATUS_LABELS: Record<ProductionStatus, string> = {
 // ── Carga de un producto (Administrativo) ─────────────────────
 
 export interface ProductInput {
+  quotationKey?: string;
   name: string;
   description?: string;
   quantity: number;

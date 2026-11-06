@@ -9,11 +9,16 @@
 //   · Margen agregado = Σ ganancias / Σ contratos (nunca el promedio de porcentajes).
 //   · Un pago a proveedor no es ingreso ni costo nuevo; el gasto financiero estimado no es un costo pagado.
 // ─────────────────────────────────────────────────────────────
-import type { Ledger, MaterialDelivery, Opportunity, Project, PurchaseOrder, RubroCapacity } from "@/types";
+import type { RubroId, DayException, Operator, WorkAssignment, Ledger, MaterialDelivery, Opportunity, Project, PurchaseOrder, RubroCapacity } from "@/types";
+import { dailyHoursReviews } from "./hours-review";
+import type { Threshold } from "./plant";
+import { approvalDate, externalCost, pendingExternal, weeklyCapacity, configuredOperators } from "./frontend-work";
 import { inProduction } from "./plant-materials";
-import { actualCostToDate } from "./calculations";
-import { billingStatus, currentContract, handoverOf, staffHoursCost, termsOf } from "./ledger";
+import { actualCostToDate, projectEconomics, categoryVariance,staffCostRecords, type ProjectEconomics } from "./calculations";
+import { financialCost } from "./financial";
+import { accruedFinancialInput, billingStatus, currentContract, handoverOf, staffHoursCost, termsOf } from "./ledger";
 import { capacityHours, generalState, inPeriod, loadByRubro, monthsBetween } from "./gerencia";
+import { rubroLabel } from "./rubros";
 import { unresolvedMaterial } from "./material-flow";
 import type { StockState } from "./stock";
 
@@ -35,6 +40,19 @@ export interface BillingOtRow {
 }
 
 /** Facturación de cada OT (solo ventas: nunca una cotización). */
+/** Effective dates for money and work; audit dates for contract revisions. Never persisted. */
+export function ledgerAtDate(ledger: Ledger, to: string): Ledger {
+  return { ...ledger,
+    collections: ledger.collections.filter((r) => r.date <= to),
+    salesInvoices: ledger.salesInvoices.filter((r) => r.date <= to),
+    supplierPayments: ledger.supplierPayments.filter((r) => r.date <= to),
+    internalHours: ledger.internalHours.filter((r) => r.date <= to),
+    externalWork: ledger.externalWork?.filter((r) => (r.completedDate??r.date) <= to),
+    contractRevisions: ledger.contractRevisions.filter((r) => r.at.slice(0,10) <= to),
+    closures: ledger.closures.filter((r) => r.date <= to),
+  };
+}
+
 export function billingByOt(projects: Project[], ledger: Ledger): BillingOtRow[] {
   return projects
     .filter((p) => generalState(p) !== "quotation")
@@ -72,7 +90,7 @@ export function billingMonths(projects: Project[], ledger: Ledger, from: string,
     key: m.key,
     label: m.label,
     planned: sum(schedule.filter((s) => inPeriod(s.date, m)).map((s) => s.amount)),
-    invoiced: sum(ledger.salesInvoices.filter((i) => sales.has(i.projectId) && inPeriod(i.date, m)).map((i) => i.amount)),
+    invoiced: sum(ledger.salesInvoices.filter((i) => sales.has(i.projectId) && !i.cancelled && inPeriod(i.date, m)).map((i) => i.amount)),
     collected: sum(ledger.collections.filter((c) => sales.has(c.projectId) && inPeriod(c.date, m)).map((c) => c.amount)),
   }));
 }
@@ -113,7 +131,7 @@ export interface CloseCheck {
 }
 
 /** Gerencia cierra solo con todo terminado, la entrega real confirmada por el Jefe y sin materiales sin rendir. */
-export function closeCheck(project: Project, ledger: Ledger, stock: StockState, orders: PurchaseOrder[], deliveries: MaterialDelivery[] = []): CloseCheck {
+export function closeCheck(project: Project, ledger: Ledger, stock: StockState, orders: PurchaseOrder[], deliveries: MaterialDelivery[] = [], work?: { assignments: WorkAssignment[]; operators: Operator[]; today: string; threshold: Threshold; reviewed: string[] }): CloseCheck {
   const blockers: string[] = [];
   if (project.isClosed) blockers.push("El proyecto ya está cerrado.");
   if (generalState(project) === "quotation") blockers.push("Una cotización no se cierra: se aprueba o se rechaza.");
@@ -125,6 +143,8 @@ export function closeCheck(project: Project, ledger: Ledger, stock: StockState, 
   if (producing.length) blockers.push(`Hay material en producción sin rendir: ${producing.map((d) => d.materialName).join(", ")}. El Jefe lo rinde en el cierre del día.`);
   const open = unresolvedMaterial(stock, project.id);
   if (open.length) blockers.push(`Hay materiales sin rendir: ${open.map((h) => h.lot.materialName).join(", ")}.`);
+  if (work) blockers.push(...dailyHoursReviews([project],work.assignments,work.operators,work.today,work.threshold).filter((r) => !work.reviewed.includes(r.key)).map((r) => `Horas pendientes de revisión: ${r.worker} · ${r.date}.`));
+  blockers.push(...pendingExternal(ledger, project.id).map((e) => `Costo externo pendiente de confirmar por Gerencia: ${e.date} · ${e.description}.`));
   return { blockers, warnings: pendingCosts(project, orders) };
 }
 
@@ -145,17 +165,30 @@ export interface ProfitView {
   finalReason: string | null;
 }
 
-export function profitView(project: Project, ledger: Ledger): ProfitView {
+export function profitView(project: Project, ledger: Ledger, asOf?: string): ProfitView {
+  // A cutoff applies to every cost source, not only financing. This is a read-only projection.
+  if (asOf) {
+    project = { ...project, actualEntries: project.actualEntries.filter((e) => e.date <= asOf), materialUsages: project.materialUsages.filter((u) => u.date <= asOf), isClosed: project.isClosed && (!project.closedAt || project.closedAt.slice(0,10) <= asOf) };
+    ledger = ledgerAtDate(ledger, asOf);
+  }
   const b = project.baseline;
   const budgeted = b ? { price: b.salesPrice, cost: b.budgetTotal, profit: round2(b.salesPrice - b.budgetTotal), margin: pct(b.salesPrice - b.budgetTotal, b.salesPrice) } : null;
-  const contract = currentContract(project, ledger);
+  const contract = generalState(project) === "quotation" ? 0 : currentContract(project, ledger);
   // Costo cargado: el del proyecto más las horas propias de Administración, Compras y el Jefe imputadas a la OT.
-  const cost = round2(actualCostToDate(project) + staffHoursCost(ledger, project.id));
+  const finance = asOf ? financialCost(accruedFinancialInput(project,ledger,asOf)) : null;
+  const recordedFinance = project.actualEntries.filter((e) => e.category === "financial").reduce((s,e) => s+e.amount,0);
+  const additionalFinance = finance?.ok ? Math.max(0,finance.amount-recordedFinance) : 0;
+  const cost = round2(actualCostToDate(project) + staffHoursCost(ledger, project.id) + externalCost(ledger, project.id) + additionalFinance);
   const closure = closureOf(ledger, project.id);
-  const complete = project.isClosed && (!closure || closure.pendingCosts.length === 0);
-  const toDate = { contract, cost, profit: round2(contract - cost), margin: pct(contract - cost, contract), partial: !complete };
+  const missingStaffRate=staffCostRecords(project.id,ledger).some(h=>h.amount===null);
+  const complete = !missingStaffRate && project.isClosed && !!closure && closure.pendingCosts.length === 0 && pendingExternal(ledger, project.id).length === 0;
+  const toDate = { contract, cost, profit: round2(contract - cost), margin: pct(contract - cost, contract), partial: !complete || contract<=0 };
   const finalReason = !project.isClosed
     ? "No calculable: el proyecto sigue abierto."
+    : !closure
+      ? "No calculable: cierre histórico sin validación de costos registrada."
+    : missingStaffRate
+      ? "No calculable: faltan tarifas históricas en horas no operarias."
     : !complete
       ? "No calculable: se cerró con costos pendientes."
       : contract > 0
@@ -179,7 +212,7 @@ export function overdueSchedule(projects: Project[], ledger: Ledger, today: stri
     .filter((p) => generalState(p) !== "quotation")
     .map((project) => {
       const due = sum(termsOf(ledger, project.id).schedule.filter((s) => s.date < today).map((s) => s.amount));
-      const collected = sum(ledger.collections.filter((c) => c.projectId === project.id).map((c) => c.amount));
+      const collected = sum(ledger.collections.filter((c) => c.projectId === project.id && c.date<=today).map((c) => c.amount));
       return { project, amount: round2(due - collected) };
     })
     .filter((x) => x.amount > 0.5);
@@ -194,6 +227,8 @@ export interface CapacityBucket {
   capacity: number;
   confirmed: number;
   potential: number;
+  planned?: number;
+  pendingConfiguration?: boolean;
 }
 
 const addDaysIso = (iso: string, n: number) => new Date(Date.parse(`${iso}T12:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
@@ -209,6 +244,7 @@ export function capacityTimeline(
   today: string,
   granularity: "week" | "month",
   rubro?: string,
+  live?: { operators: Operator[]; exceptions: DayException[]; hoursPerDay: number; roleToRubro: Record<string,string>; assignments: WorkAssignment[]; ledger: Ledger },
 ): CapacityBucket[] {
   const buckets: Array<{ label: string; from: string; to: string }> =
     granularity === "week"
@@ -219,13 +255,64 @@ export function capacityTimeline(
         })
       : monthsBetween(today, addDaysIso(today, 92)).slice(0, 4).map((m) => ({ label: m.label, from: m.from < today ? today : m.from, to: m.to }));
   const pick = (rec: Record<string, number>) => (rubro ? (rec[rubro] ?? 0) : Object.values(rec).reduce((s, x) => s + x, 0));
+  const operators = live ? configuredOperators(live.operators, live.ledger) : [];
   return buckets.map((b) => {
-    const load = loadByRubro(projects, opps, b.from, b.to, today);
+    const days = live ? [...new Set(operators.filter((o) => o.active && o.productive !== false).flatMap((o) => o.workDays ?? [1,2,3,4,5]))] : undefined;
+    const load = loadByRubro(projects, opps, b.from, b.to, today,days?.length ? days : undefined);
+    const rubroId = rubro ? live?.ledger.rubroCatalog.find((r) => r.id===rubro || r.name === rubro || rubroLabel(r.id as RubroId) === rubro)?.id : undefined;
+    const shared = live ? weeklyCapacity(projects, live.operators, live.assignments, live.exceptions, b.from, b.to, today, live.hoursPerDay, rubroId as never, live.ledger) : undefined;
     return {
       ...b,
-      capacity: round2(capacities.filter((c) => !rubro || c.rubro === rubro).reduce((s, c) => s + capacityHours(c, b.from, b.to), 0)),
-      confirmed: round2(pick(load.confirmed)),
-      potential: round2(pick(load.potential)),
+      capacity: live ? (rubro && !rubroId ? 0 : shared!.available) : round2(capacities.filter((c) => !rubro || c.rubro === rubro).reduce((s, c) => s + capacityHours(c, b.from, b.to), 0)),
+      pendingConfiguration: live && rubro && !rubroId ? true : shared?.pendingConfiguration,
+      planned: live ? round2(live.assignments.filter((a) => a.date >= b.from && a.date <= b.to && (!rubro || (rubroId ? a.rubro===rubroId : rubroLabel(a.rubro)===rubro))).reduce((s,a) => s+a.plannedHours,0)) : undefined,
+      confirmed: round2(live&&rubroId ? load.confirmed[rubroLabel(rubroId as RubroId)]??0 : pick(load.confirmed)),
+      potential: round2(live&&rubroId ? load.potential[rubroLabel(rubroId as RubroId)]??0 : pick(load.potential)),
     };
   });
+}
+
+/** Cost of financing in the selected period, including real arrears; never add the recorded amount twice. */
+export function financialCostInPeriod(projects: Project[], ledger: Ledger, from: string, to: string): number {
+  if (to < from) return 0;
+  const before = addDaysIso(from,-1);
+  return sum(projects.map((p) => {
+    const end = financialCost(accruedFinancialInput(p,ledger,to));
+    const start = financialCost(accruedFinancialInput(p,ledger,before));
+    const accrued = Math.max(0,(end.ok ? end.amount : 0)-(start.ok ? start.amount : 0));
+    const registered = sum(p.actualEntries.filter((e) => e.category === "financial" && inPeriod(e.date,{ from,to })).map((e) => e.amount));
+    return Math.max(accrued,registered);
+  }));
+}
+
+/** El costo usado en el margen de la ficha y el mostrado en Proyectos tienen el mismo alcance. */
+export function economicView(project:Project,ledger:Ledger,asOf:string,originalEcon:ProjectEconomics=projectEconomics(project)) {
+ const result=profitView(project,ledger,asOf);
+ const cutoffProject={...project,purchaseEntries:project.purchaseEntries.filter(e=>e.date<=asOf),actualEntries:project.actualEntries.filter(e=>e.date<=asOf),materialUsages:project.materialUsages.filter(u=>u.date<=asOf)};
+ const cutoffLedger=ledgerAtDate(ledger,asOf),base=projectEconomics(cutoffProject,cutoffLedger);
+ const ownHours=staffHoursCost(cutoffLedger,project.id),external=externalCost(cutoffLedger,project.id);
+ const recordedFinance=cutoffProject.actualEntries.filter(e=>e.category==="financial").reduce((sum,e)=>sum+e.amount,0);
+ const financialCost=round2(recordedFinance+Math.max(0,result.toDate.cost-actualCostToDate(cutoffProject)-ownHours-external));
+ const categories=base.categories.map(c=>{if(c.category!=="financial")return c;const projected=project.isClosed?financialCost:Math.max(c.budget,financialCost);return {...c,actual:financialCost,projected,actualVariance:categoryVariance(financialCost,c.budget),projectedVariance:categoryVariance(projected,c.budget)};});
+ const projectedFinalCost=round2(categories.reduce((sum,c)=>sum+c.projected,0));
+ const projectedMargin=result.toDate.contract>0?(result.toDate.contract-projectedFinalCost)/result.toDate.contract*100:null;
+ const extra=result.toDate.cost-originalEcon.actualCostToDate;
+ const econ={...base,categories,salesPrice:result.toDate.contract,actualCostToDate:result.toDate.cost,projectedFinalCost,
+  currentMargin:projectedMargin,projectedProfit:result.toDate.contract>0?round2(result.toDate.contract-projectedFinalCost):null,projectedMargin,
+  finalActualCost:result.final?.cost??null,finalProfit:result.final?.profit??null,finalMargin:result.final?.margin??null,
+  costOverrun:round2(projectedFinalCost-base.budgetTotal),costOverrunPercent:base.budgetTotal?(projectedFinalCost-base.budgetTotal)/base.budgetTotal*100:null,
+  marginDeltaPp:projectedMargin===null||base.expectedMargin===null?null:projectedMargin-base.expectedMargin,
+ };
+ return {result,econ,extra,financialCost};
+}
+
+/** Cohorte de cobros efectivos independiente de la cohorte de aprobación: las filas siempre concilian con el KPI. */
+export function collectionsReport(projects:Project[],ledger:Ledger,from:string,to:string) {
+ const collections=ledger.collections.filter(c=>c.date>=from&&c.date<=to&&projects.some(p=>p.id===c.projectId&&p.status!=="quotation"));
+ const rows=projects.filter(p=>p.status!=="quotation"&&(!approvalDate(p)||approvalDate(p)!<=to||collections.some(c=>c.projectId===p.id))).map(project=>({
+  project,
+  collected:sum(collections.filter(c=>c.projectId===project.id).map(c=>c.amount)),
+  view:approvalDate(project)&&approvalDate(project)!>to?null:profitView(project,ledger,to),
+ }));
+ return {collections,rows,total:sum(collections.map(c=>c.amount))};
 }

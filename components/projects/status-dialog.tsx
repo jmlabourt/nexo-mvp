@@ -1,4 +1,5 @@
 "use client";
+import { useAppStore } from "@/store/use-app-store";
 import { useConfirmedAction } from "@/store/confirmed-action";
 import { useState } from "react";
 import type { Project, ProjectStatus } from "@/types";
@@ -18,8 +19,9 @@ export function StatusDialog({ project, open, onOpenChange }: { project: Project
   const changeProjectStatus = useConfirmedAction("changeProjectStatus");
   const [error, setError] = useState("");
   const [back, setBack] = useState<ProjectStatus | "">("");
-  const next = nextStatus(project.status);
-  const prev = previousStatuses(project.status);
+  const ledger=useAppStore(s=>s.ledger);const notified=!!project.procurementNotifiedAt || ledger.boms.some(b=>b.projectId===project.id&&b.status==="published") || ["purchasing","production","installation","completed"].includes(project.status);
+  const next = project.status==="approved"||notified ? null : nextStatus(project.status);
+  const prev = notified?[]:previousStatuses(project.status);
 
   const go = async (to: ProjectStatus, confirmBack = false) => {
     const r = await changeProjectStatus(project.id, to, { confirmBack });
@@ -42,7 +44,7 @@ export function StatusDialog({ project, open, onOpenChange }: { project: Project
               <Button className="mt-3" onClick={() => go(next)}>Pasar a {STATUS_LABELS[next]}</Button>
             </div>
           ) : (
-            <p className="text-sm text-slate-600">Es la última etapa de ejecución. Cuando termine, cerrá el proyecto.</p>
+            <p className="text-sm text-slate-600">{project.status==="approved"?"Para comunicar la necesidad a Compras, Administración debe publicar el BOM.":"Las etapas operativas se administran desde Planta con fecha y motivo. Para finalizar, usá el cierre de Gerencia."}</p>
           )}
           {prev.length > 0 && (
             <div className="rounded-lg border border-amber-200 bg-amber-50/50 p-4">

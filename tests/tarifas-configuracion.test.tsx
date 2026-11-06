@@ -38,10 +38,10 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("Personal", () => {
-  it("muestra la tarifa de la categoría, de Configuración, en solo lectura", () => {
+  it("muestra la tarifa de la categoría, registrada de la persona cuando aún no tiene categorías configuradas", () => {
     render(<OperatorsPage />);
     expect(screen.getByRole("columnheader", { name: "Costo por hora" })).toBeInTheDocument();
-    expect(screen.getAllByText(formatCurrency(LABOR)).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(formatCurrency(seed.operators[0].hourlyCost)).length).toBeGreaterThan(0);
     expect(screen.queryByRole("textbox", { name: /Costo por hora/ })).toBeNull();
   });
 
@@ -51,7 +51,7 @@ describe("Personal", () => {
     await user.click(screen.getByRole("button", { name: /Agregar empleado/ }));
     const dialog = screen.getByRole("dialog");
     expect(within(dialog).queryByLabelText(/Costo por hora/)).toBeNull();
-    expect(dialog).toHaveTextContent(`Costo por hora: ${formatCurrency(LABOR)}`);
+    expect(dialog).toHaveTextContent("Personal");
     await user.type(within(dialog).getByLabelText("Nombre"), "Persona Nueva");
     await user.type(within(dialog).getByLabelText("Rol o especialidad"), "Carpintería");
     await user.click(within(dialog).getByRole("button", { name: "Guardar" }));

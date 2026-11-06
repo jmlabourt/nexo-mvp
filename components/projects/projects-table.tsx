@@ -1,4 +1,7 @@
 "use client";
+import { useAppStore } from "@/store/use-app-store";
+import { economicView } from "@/lib/tablero";
+import { todayISO } from "@/lib/formatting";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { ProjectView } from "@/store/selectors";
@@ -22,23 +25,18 @@ export function GeneralStateBadge({ state }: { state: GeneralState }) {
  * cerrados). Sin `economic` (Administración): muebles y avance, ningún importe gerencial.
  */
 export function ProjectsTable({ views, economic }: { views: ProjectView[]; economic: boolean }) {
-  const router = useRouter();
+  const router = useRouter();const ledger=useAppStore(s=>s.ledger),cutoff=todayISO();
   return (
     <Table>
       <THead>
         <TR>
-          <TH>Código</TH>
-          <TH>Cliente</TH>
           <TH>Proyecto</TH>
-          <TH>Estado</TH>
-          <TH>Entrega</TH>
+          <TH>Estado y entrega</TH>
           {economic ? (
             <>
               <TH className="text-right">Precio de venta</TH>
-              <TH className="text-right">Costo presupuestado</TH>
-              <TH className="text-right">Costo proyectado</TH>
-              <TH className="text-right">Ganancia proyectada</TH>
-              <TH className="text-right">Rentabilidad proyectada</TH>
+              <TH className="text-right">Costos</TH>
+              <TH className="text-right">Resultado al {cutoff}</TH>
             </>
           ) : (
             <>
@@ -50,11 +48,11 @@ export function ProjectsTable({ views, economic }: { views: ProjectView[]; econo
         </TR>
       </THead>
       <TBody>
-        {views.map(({ project: p, econ }) => {
+        {views.map(({ project: p, econ: originalEcon }) => {
           const state = generalState(p);
-          const closed = state === "closed";
-          const profit = closed ? econ.finalProfit : econ.projectedProfit;
-          const margin = closed ? econ.finalMargin : econ.projectedMargin;
+          const {result,econ}=economicView(p,ledger,cutoff,originalEcon);
+          const profit=p.status==="quotation"?null:result.toDate.profit;
+          const margin=p.status==="quotation"?null:result.toDate.margin;
           const production = projectProduction(p);
           return (
             <TR key={p.id} className="cursor-pointer hover:bg-slate-50" onClick={() => router.push(`/projects/${p.id}`)}>
@@ -62,20 +60,17 @@ export function ProjectsTable({ views, economic }: { views: ProjectView[]; econo
                 <Link href={`/projects/${p.id}`} className="font-medium text-blue-700 hover:underline" onClick={(e) => e.stopPropagation()}>
                   {p.code}
                 </Link>
+                <span className="mt-1 block font-medium text-slate-900">{p.name}</span>
+                <span className="mt-1 block text-sm text-slate-600">{p.client}</span>
               </TD>
-              <TD className="whitespace-nowrap">{p.client}</TD>
-              <TD className="min-w-48 text-slate-900">{p.name}</TD>
-              <TD><GeneralStateBadge state={state} /></TD>
-              <TD className="whitespace-nowrap tabular">{formatDate(p.dueDate)}</TD>
+              <TD><GeneralStateBadge state={state} /><span className="mt-2 block tabular">Entrega: {formatDate(p.dueDate)}</span></TD>
               {economic ? (
                 <>
-                  <TD className="text-right tabular">{formatCurrencyOrDash(p.salesPrice > 0 ? p.salesPrice : null)}</TD>
-                  <TD className="text-right tabular">{formatCurrency(econ.budgetTotal)}</TD>
-                  <TD className={cn("text-right tabular", econ.costOverrun > 0 && "text-red-700")}>{formatCurrency(econ.projectedFinalCost)}</TD>
-                  <TD className={cn("text-right tabular", (profit ?? 0) < 0 ? "text-red-700" : "text-slate-900")}>{formatCurrencyOrDash(profit)}</TD>
-                  <TD className="text-right tabular">
-                    {formatPercent(margin)}
-                    {closed && <span className="block text-xs text-slate-500">real final</span>}
+                  <TD className="text-right tabular">{formatCurrencyOrDash((p.status==="quotation"?p.salesPrice:result.toDate.contract)>0?(p.status==="quotation"?p.salesPrice:result.toDate.contract):null)}</TD>
+                  <TD className="text-right tabular"><span className="block text-xs text-slate-600">Presupuestado</span>{formatCurrency(econ.budgetTotal)}<span className="mt-2 block text-xs text-slate-600">Proyectado</span><span className={cn(econ.costOverrun > 0 && "text-red-700")}>{formatCurrency(econ.projectedFinalCost)}</span></TD>
+                  <TD className={cn("text-right tabular", (profit ?? 0) < 0 ? "text-red-700" : "text-slate-900")}><span className="block text-xs text-slate-600">Ganancia acumulada</span>{formatCurrencyOrDash(profit)}{p.status!=="quotation"&&<span className="block text-xs">{result.toDate.partial?`Parcial al ${cutoff}`:"Final"}</span>}
+                    <span className="mt-2 block text-xs text-slate-600">Margen acumulado</span>{formatPercent(margin)}
+                    {p.status!=="quotation"&&<span className="block text-xs text-slate-500">{result.toDate.partial?`Parcial al ${cutoff}`:"real final"}</span>}
                   </TD>
                 </>
               ) : (

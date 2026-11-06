@@ -5,7 +5,7 @@
 //   COMPRA ≠ CONSUMO ≠ DESPERDICIO ≠ SOBRANTE REUTILIZABLE
 //   costo imputable de material = consumo + desperdicio (nunca la compra)
 // ─────────────────────────────────────────────────────────────
-import type { BudgetCategory, BudgetLine, MaterialUsageEntry, Project } from "@/types";
+import type { BudgetCategory, BudgetLine, MaterialUsageEntry, Project, Ledger, HourCategory } from "@/types";
 import { ACTIVE_STATUSES, CATEGORY_ORDER } from "./constants";
 
 export type CategoryAmounts = Record<BudgetCategory, number>;
@@ -117,10 +117,14 @@ export function actualCostToDate(project: Pick<Project, "actualEntries" | "mater
   return round2(materialActualCost(project.materialUsages) + nonMaterialActualCost(project));
 }
 
-export function actualByCategory(project: Pick<Project, "actualEntries" | "materialUsages">): CategoryAmounts {
+export function actualByCategory(project: Pick<Project, "actualEntries" | "materialUsages"> & Partial<Pick<Project,"id">>, ledger?:Ledger): CategoryAmounts {
   const acc = emptyCategoryAmounts();
   acc.materials = materialActualCost(project.materialUsages);
   for (const e of project.actualEntries) acc[e.category] += e.amount;
+  if(ledger&&project.id){
+    for(const row of staffCostRecords(project.id,ledger))acc[row.category]+=row.amount??0;
+    acc.labor+=(ledger.externalWork??[]).filter(e=>e.projectId===project.id&&e.status!=="commissioned").reduce((sum,e)=>sum+(e.confirmedCost??e.estimatedCost??0),0);
+  }
   return acc;
 }
 
@@ -147,9 +151,9 @@ export function projectedCategoryCost(budget: number, actual: number): number {
  * Si no hay cantidades identificables, mantiene el piso max(presupuesto, real).
  * No usa la factura como consumo ni interpreta plazo transcurrido como avance físico.
  */
-export function projectedAmounts(project: Pick<Project,"budgetLines"|"actualEntries"|"materialUsages"> & Partial<Pick<Project,"purchaseEntries">>): CategoryAmounts {
+export function projectedAmounts(project: Pick<Project,"budgetLines"|"actualEntries"|"materialUsages"> & Partial<Pick<Project,"purchaseEntries"|"id">>,ledger?:Ledger): CategoryAmounts {
   const budget = budgetByCategory(project.budgetLines);
-  const actual = actualByCategory(project);
+  const actual = actualByCategory(project,ledger);
   const out = emptyCategoryAmounts();
   for (const category of CATEGORY_ORDER) out[category] = Math.max(budget[category],actual[category]);
   const materialLines = project.budgetLines.filter(l=>l.category === "materials");
@@ -167,11 +171,7 @@ export function projectedAmounts(project: Pick<Project,"budgetLines"|"actualEntr
     out.materials = Math.max(out.materials,actual.materials+remaining);
   }
   for (const category of ["labor","design","admin"] as const) {
-    const lines = project.budgetLines.filter(l=>l.category === category);
-    if (!lines.length || !lines.every(l=>l.quantity !== null && l.quantity>0 && l.unit === "h")) continue;
-    const planned = lines.reduce((sum,l)=>sum+(l.quantity ?? 0),0);
-    const recorded = project.actualEntries.filter(e=>e.type === "labor" && e.category === category).reduce((sum,e)=>sum+(e.labor?.hours ?? 0),0);
-    out[category] = Math.max(out[category],actual[category]+Math.max(0,planned-recorded)*(budget[category]/planned));
+    out[category]=laborCostDetails(project,ledger).filter(r=>r.category===category).reduce((sum,r)=>sum+r.projected,0);
   }
   for (const category of CATEGORY_ORDER) out[category]=round2(out[category]);
   return out;
@@ -189,11 +189,11 @@ export interface CategoryRow {
 }
 
 /** Siempre las siete categorías de reporte, en el mismo orden (aunque estén en cero). */
-export function categoryBreakdown(project: Project): CategoryRow[] {
+export function categoryBreakdown(project: Project,ledger?:Ledger): CategoryRow[] {
   const b = budgetByCategory(project.budgetLines);
-  const a = actualByCategory(project);
+  const a = actualByCategory(project,ledger);
   const completed = project.status === "completed";
-  const projection = projectedAmounts(project);
+  const projection = projectedAmounts(project,ledger);
   return CATEGORY_ORDER.map((category) => {
     const projected = completed ? a[category] : projection[category];
     return {
@@ -209,8 +209,8 @@ export function categoryBreakdown(project: Project): CategoryRow[] {
 
 // ── Rentabilidad proyectada y final ─────────────────────────────────
 
-export function projectedFinalCost(project: Pick<Project, "budgetLines" | "actualEntries" | "materialUsages"> & Partial<Pick<Project,"purchaseEntries">>): number {
-  const projected = projectedAmounts(project);
+export function projectedFinalCost(project: Pick<Project, "budgetLines" | "actualEntries" | "materialUsages"> & Partial<Pick<Project,"purchaseEntries"|"id">>,ledger?:Ledger): number {
+  const projected = projectedAmounts(project,ledger);
   return round2(CATEGORY_ORDER.reduce((sum,category)=>sum+projected[category],0));
 }
 
@@ -236,6 +236,7 @@ export function marginDeltaPoints(expected: number | null, projected: number | n
 // ── Resumen económico del proyecto ────────────────────────────
 
 export interface ProjectEconomics {
+  laborDetails?: LaborCostDetail[];
   salesPrice: number;
   /** false = sin precio de venta: ganancias y márgenes son null y se muestran como "—". */
   hasSalesPrice: boolean;
@@ -265,27 +266,27 @@ export interface ProjectEconomics {
   mainDeviation: CategoryRow | null;
 }
 
-export function projectEconomics(project: Project): ProjectEconomics {
+export function projectEconomics(project: Project,ledger?:Ledger): ProjectEconomics {
   const bt = budgetTotal(project.budgetLines);
   const em = marginPercent(project.salesPrice - bt, project.salesPrice);
-  const actual = actualCostToDate(project);
+  const actual = round2(Object.values(actualByCategory(project,ledger)).reduce((s,n)=>s+n,0));
   const completed = project.status === "completed";
-  const projected = completed ? actual : projectedFinalCost(project);
+  const projected = completed ? actual : projectedFinalCost(project,ledger);
   const pm = marginPercent(project.salesPrice - projected, project.salesPrice);
-  const categories = categoryBreakdown(project);
+  const categories = categoryBreakdown(project,ledger);
   const fm = completed ? marginPercent(project.salesPrice - actual, project.salesPrice) : null;
   // La Diferencia es la suma de los desvíos por categoría: el total de la tabla de desvío siempre cierra exacto.
   const overrun = round2(categories.reduce((s, c) => s + c.projectedVariance.amount, 0));
   return {
     salesPrice: project.salesPrice,
     hasSalesPrice: hasSalesPrice(project.salesPrice),
-    hasExecutionData: project.materialUsages.length > 0 || project.actualEntries.length > 0,
+    hasExecutionData: project.materialUsages.length > 0 || project.actualEntries.length > 0 || !!ledger&&(staffCostRecords(project.id,ledger).length>0||(ledger.externalWork??[]).some(e=>e.projectId===project.id&&e.status!=="commissioned")),
     budgetTotal: bt,
     expectedProfit: profitOrNull(project.salesPrice, bt),
     expectedMargin: em,
     actualCostToDate: actual,
     materialActualCost: materialActualCost(project.materialUsages),
-    nonMaterialActualCost: nonMaterialActualCost(project),
+    nonMaterialActualCost: round2(actual-materialActualCost(project.materialUsages)),
     purchasesTotal: purchasesTotal(project),
     projectedFinalCost: projected,
     projectedProfit: profitOrNull(project.salesPrice, projected),
@@ -298,6 +299,7 @@ export function projectEconomics(project: Project): ProjectEconomics {
     costOverrun: overrun,
     costOverrunPercent: bt ? (overrun / bt) * 100 : null,
     categories,
+    laborDetails:laborCostDetails(project,ledger),
     mainDeviation: mainDeviation(categories),
   };
 }
@@ -354,4 +356,66 @@ export function lastRecordDate(project: Pick<Project, "actualEntries" | "materia
   const dates = [...project.actualEntries.map((e) => e.date), ...project.materialUsages.map((u) => u.date)];
   if (dates.length === 0) return null;
   return dates.sort().at(-1) ?? null;
+}
+
+export interface StaffCostRecord {
+ id:string;employeeId:string;date:string;categoryId?:string;name:string;category:HourCategory;
+ hours:number|null;amount:number|null;allocated:boolean;task:string;hourlyCost?:number;
+}
+/** Proyección de lectura de los registros originales: no crea entradas productivas ni persiste copias. */
+export function staffCostRecords(projectId:string,ledger:Ledger):StaffCostRecord[]{
+ return ledger.internalHours.flatMap(h=>{
+  const allocated=h.projectId!==projectId;
+  if(allocated&&!h.allocations?.some(a=>a.projectId===projectId))return [];
+  const category=ledger.staffCategories?.find(c=>c.id===h.categoryId);
+  const costCategory=h.costCategory??(category?.category!=="labor"?category?.category:undefined)??"admin";
+  return [{id:h.id,employeeId:h.employeeId,date:h.date,categoryId:h.categoryId,name:allocated?"Trabajo interno general distribuido":h.categoryName??category?.name??"Personal sin categoría histórica",category:allocated?"admin":costCategory,
+   hours:allocated?null:h.hours,amount:allocated?round2((h.allocations??[]).filter(a=>a.projectId===projectId).reduce((s,a)=>s+a.amount,0)):h.hourlyCost===undefined?null:round2(h.hours*h.hourlyCost),allocated,task:h.task,hourlyCost:h.hourlyCost}];
+ });
+}
+export interface LaborCostDetail {
+ key:string;category:HourCategory;categoryId?:string;name:string;rubro?:BudgetLine["rubro"];budget:number;actual:number;estimatedHours:number;actualHours:number;remaining:number;projected:number;
+ sources:Array<{id:string;date:string;hours:number|null;amount:number;description:string;employeeId?:string;itemId?:string}>;
+}
+/** Sustitución por categoría identificable y rubro; no reparte costos ni horas entre muebles históricos. */
+export function laborCostDetails(project:Pick<Project,"budgetLines"|"actualEntries">&Partial<Pick<Project,"id">>,ledger?:Ledger):LaborCostDetail[]{
+ const rows=new Map<string,LaborCostDetail>();
+ const categoryOf=(l:BudgetLine)=>l.staffCategoryId??(ledger?.staffCategories?.some(c=>c.id===l.hourRateId)?l.hourRateId:undefined);
+ const ensure=(category:HourCategory,id:string|undefined,rubro:BudgetLine["rubro"],name:string,suffix="")=>{
+  const key=`${category}|${id??"legacy"}|${category==="labor"?rubro??"":""}|${suffix}`;
+  if(!rows.has(key))rows.set(key,{key,category,categoryId:id,name,rubro,budget:0,actual:0,estimatedHours:0,actualHours:0,remaining:0,projected:0,sources:[]});
+  return rows.get(key)!;
+ };
+ for(const l of project.budgetLines){
+  if(!["labor","design","admin"].includes(l.category))continue;
+  const id=categoryOf(l),name=l.staffCategoryName??ledger?.staffCategories?.find(c=>c.id===id)?.name??(l.category==="labor"?"Trabajo productivo":"Agrupación histórica sin categoría identificada");
+  const row=ensure(l.category as HourCategory,id,l.rubro,name,l.unit==="h"&&l.quantity!==null?"":"importe");row.budget+=l.total;if(l.unit==="h"&&l.quantity!==null)row.estimatedHours+=l.quantity;
+ }
+ const add=(category:HourCategory,id:string|undefined,rubro:BudgetLine["rubro"],name:string,source:LaborCostDetail["sources"][number],separate=false)=>{
+  let row:LaborCostDetail|undefined;
+  if(!separate&&category==="labor"&&source.itemId){
+    const ids=new Set(project.budgetLines.filter(l=>l.category==="labor"&&l.rubro===rubro&&l.quotationItemId===source.itemId).map(categoryOf));
+    if(ids.size===1)row=[...rows.values()].find(r=>r.category==="labor"&&r.rubro===rubro&&ids.has(r.categoryId)&&r.estimatedHours>0);
+  }
+  if(!separate&&!row){
+    const aggregate=[...rows.values()].filter(r=>r.category===category&&(category!=="labor"||r.rubro===rubro||!r.rubro)&&r.budget>0);
+    if(aggregate.length===1&&!aggregate[0].categoryId&&aggregate[0].key.endsWith("importe"))row=aggregate[0];
+  }
+  if(!separate&&!row){row=[...rows.values()].find(r=>r.category===category&&r.categoryId===id&&(category!=="labor"||r.rubro===rubro)&&!r.key.endsWith("importe"));
+   if(!row){const legacy=[...rows.values()].filter(r=>r.category===category&&!r.categoryId&&(category!=="labor"||r.rubro===rubro)&&!r.key.endsWith("importe"));if(legacy.length===1)row=legacy[0];}
+  }
+  if(!row&&!separate&&category==="labor"){
+    let candidates=[...rows.values()].filter(r=>r.category===category&&r.rubro===rubro&&r.estimatedHours>0);
+    if(source.itemId){const ids=new Set(project.budgetLines.filter(l=>l.category==="labor"&&l.rubro===rubro&&l.quotationItemId===source.itemId).map(categoryOf));if(ids.size)candidates=candidates.filter(r=>ids.has(r.categoryId));}
+    if(candidates.length===1)row=candidates[0];
+  }
+  row??=ensure(category,id,rubro,name,separate?`indirecto:${source.id}`:source.hours===null?"importe":"");
+  row.actual+=source.amount;row.actualHours+=source.hours??0;row.sources.push(source);
+ };
+ for(const e of project.actualEntries){if(!["labor","design","admin"].includes(e.category))continue;add(e.category as HourCategory,e.categoryId,e.rubro,ledger?.staffCategories?.find(c=>c.id===e.categoryId)?.name??e.description,{id:e.id,date:e.date,hours:e.labor?.hours??null,amount:e.amount,description:e.description,employeeId:e.operatorId,itemId:e.itemId});}
+ if(ledger&&project.id){
+  for(const h of staffCostRecords(project.id,ledger))add(h.category,h.categoryId,undefined,h.name,{id:h.id,date:h.date,hours:h.hours,amount:h.amount??0,description:h.task,employeeId:h.employeeId},h.allocated);
+  for(const e of (ledger.externalWork??[]).filter(e=>e.projectId===project.id&&e.status!=="commissioned"))add("labor",undefined,e.rubro,"Trabajo externo",{id:e.id,date:e.completedDate??e.date,hours:e.kind==="hourly"?e.hours??null:null,amount:e.confirmedCost??e.estimatedCost??0,description:e.description},true);
+ }
+ return [...rows.values()].map(r=>{const remaining=Math.max(0,r.estimatedHours-r.actualHours)*(r.estimatedHours>0?r.budget/r.estimatedHours:0);return {...r,budget:round2(r.budget),actual:round2(r.actual),remaining:round2(remaining),projected:round2(Math.max(r.budget,r.actual+remaining))};});
 }

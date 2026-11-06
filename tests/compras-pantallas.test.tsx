@@ -8,7 +8,7 @@ import userEvent from "@testing-library/user-event";
 import { buildSeed } from "@/lib/seed-data";
 import { DEFAULT_SETTINGS } from "@/lib/constants";
 import { todayISO } from "@/lib/formatting";
-import { materialCosts, materialNeeds, materialsState } from "@/lib/purchasing";
+import { materialNeeds, materialsState } from "@/lib/purchasing";
 import { useAppStore } from "@/store/use-app-store";
 
 vi.mock("next/navigation", () => ({
@@ -43,7 +43,7 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("de la necesidad a la orden de compra, la factura y la recepción", () => {
-  it("P-1051: elegir sus materiales, generar la OC, enviarla, facturarla y recibirla", async () => {
+  it("P-1051: elegir sus materiales, generar la OC, enviarla y recibirla sin cargar factura", async () => {
     const user = userEvent.setup();
     const p = seed.projects.find((x) => x.code === "P-1051")!;
     const view = render(<PurchasingProjectsPage projectId={p.id} />);
@@ -66,19 +66,13 @@ describe("de la necesidad a la orden de compra, la factura y la recepción", () 
 
     render(<OrdersPage />);
     const card = () => screen.getByRole("region", { name: "Orden OC-0004" });
-    await user.click(within(card()).getByRole("button", { name: /Marcar como enviada/ }));
+    await user.click(within(card()).getByRole("button", { name: /Registrar envío al proveedor/ }));
     expect(useAppStore.getState().orders.find((o) => o.id === oc.id)?.status).toBe("sent");
 
-    await user.click(within(card()).getByRole("button", { name: /Registrar factura/ }));
-    await user.type(within(screen.getByRole("dialog")).getByLabelText("N° de factura"), "A-0001-00000077");
-    await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Registrar factura" }));
-    s = useAppStore.getState();
-    const invoiced = s.orders.find((o) => o.id === oc.id)!;
-    expect(invoiced).toMatchObject({ status: "invoiced", invoiceNumber: "A-0001-00000077", paid: false });
-    const project = s.projects.find((x) => x.id === p.id)!;
-    expect(project.purchaseEntries).toHaveLength(oc.lines.length);
-    expect(project.purchaseEntries[0]).toMatchObject({ supplier: "Placas del Plata", createdBy: "Martín Ruiz" });
-    expect(materialCosts(project, s.orders).real).toBeGreaterThan(0);
+    expect(within(card()).queryByRole("button", { name: /Registrar factura/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("tab", { name: "Precios por proveedor" })).not.toBeInTheDocument();
+    expect(useAppStore.getState().invoiceOrder(oc.id, { invoiceNumber:"A-0001-00000077",invoiceAmount:100,invoiceDate:todayISO() }).ok).toBe(false);
+    expect(useAppStore.getState().projects.find((x) => x.id === p.id)!.purchaseEntries).toHaveLength(0);
 
     await user.click(within(card()).getByRole("button", { name: /Recibir/ }));
     await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Registrar recepción" }));

@@ -3,11 +3,13 @@ import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Search } from "lucide-react";
 import { buildSearchIndex, searchAll, SEARCH_KIND_LABELS } from "@/lib/search";
+import { useIdentity } from "@/store/selectors";
 import { useAppStore } from "@/store/use-app-store";
 
 /** Buscador global tipado: cada resultado abre el elemento exacto. */
 export function GlobalSearch() {
   const router = useRouter();
+  const {session}=useIdentity();
   const projects = useAppStore((s) => s.projects);
   const stock = useAppStore((s) => s.stock);
   const operators = useAppStore((s) => s.operators);
@@ -17,7 +19,7 @@ export function GlobalSearch() {
   const box = useRef<HTMLDivElement>(null);
   const listId = useId();
 
-  const index = useMemo(() => buildSearchIndex({ projects, stock, operators }), [projects, stock, operators]);
+  const index = useMemo(() => buildSearchIndex({ projects, stock, operators, session }), [projects, stock, operators, session]);
   const results = useMemo(() => searchAll(index, q), [index, q]);
 
   useEffect(() => {

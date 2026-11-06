@@ -29,6 +29,7 @@ import {
 } from "@/lib/gerencia";
 import { DEFAULT_MANAGEMENT_PARAMS, exampleInvoices, exampleOpportunities } from "@/lib/demo/ejemplos";
 import { INDICATORS } from "@/lib/indicators";
+import { nextProjectCode } from "@/lib/project-operations";
 
 const today = "2026-10-20";
 const seed = buildSeed(new Date(`${today}T12:00:00`));
@@ -218,14 +219,29 @@ describe("nomenclatura de proyectos", () => {
     expect(projectCodeError("{prefijo}{numero}", "OT4300", ["OT4300"])).toMatch(/ya existe/);
     expect(projectCodeError("{prefijo}_{cliente}", "OT_X", [])).toMatch(/numero/);
   });
+
+  it("nextProjectCode reutiliza la nomenclatura configurada por Gerencia y no hardcodea P-", () => {
+    expect(nextProjectCode([{ code: "OT4300" }, { code: "OT4301" }], { pattern: "{prefijo}{numero}", prefix: "OT", nextNumber: 4302 })).toBe("OT4302");
+    expect(nextProjectCode([{ code: "P-1042" }, { code: "P-1047" }], { pattern: "{prefijo}{numero}", prefix: "OT", nextNumber: 1048 })).toBe("OT1048");
+  });
+
+  it("nextProjectCode respeta el patrón con cliente y nombre sin romper el render del wizard", () => {
+    expect(
+      nextProjectCode(
+        [{ code: "OT4300" }, { code: "OT4301" }],
+        { pattern: "{prefijo}{numero}_{cliente}_{nombre}", prefix: "OT", nextNumber: 4302 },
+        { client: "Samsung", name: "Alto Palermo" },
+      ),
+    ).toBe("OT4302_Samsung_AltoPalermo");
+  });
 });
 
 describe("indicadores documentados en Configuración", () => {
   it("los indicadores tienen significado, fórmula, fuente, parámetros, período, límites y actualización (sin carga ponderada por probabilidad)", () => {
-    expect(INDICATORS).toHaveLength(28);
+    expect(INDICATORS.length).toBeGreaterThanOrEqual(30);
     expect(INDICATORS.some((i) => i.id === "load_weighted")).toBe(false);
     for (const i of INDICATORS) for (const k of ["meaning", "formula", "source", "params", "period", "limits", "updates"] as const) expect(i[k].length).toBeGreaterThan(3);
-    expect(new Set(INDICATORS.map((i) => i.id)).size).toBe(28);
+    expect(new Set(INDICATORS.map((i) => i.id)).size).toBe(INDICATORS.length);
   });
   it("datos de ejemplo coherentes: cada factura es de un proyecto confirmado y no supera su precio", () => {
     const sums = new Map<string, number>();

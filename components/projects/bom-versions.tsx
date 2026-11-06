@@ -7,21 +7,27 @@ import type { BomVersionLine, Project, ProjectItem } from "@/types";
 import { bomChanges, draftBom, publishBom, publishedBom, saveBomDraft, startBomDraft } from "@/lib/ledger";
 import { formatDate, formatNumber } from "@/lib/formatting";
 import { createId } from "@/lib/activity";
+import { useIdentity } from "@/store/selectors";
+import { useMaterialCatalog } from "@/store/selectors";
 import { useAppStore } from "@/store/use-app-store";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Input, Select } from "@/components/ui/input";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 
 const SESSIONS = ["administracion", "gerencia"] as const;
 
-export function BomVersions({ project, item, canEdit }: { project: Project; item: ProjectItem; canEdit: boolean }) {
+export function BomVersions({ project, item, canEdit: editable }: { project: Project; item: ProjectItem; canEdit: boolean }) {
+  const allowed = useIdentity().session === "administracion";
+  const canEdit = editable && allowed;
+  const catalog = useMaterialCatalog().filter((m) => m.active !== false);
   const ledger = useAppStore((s) => s.ledger);
   const record = useAppStore((s) => s.recordLedger);
   const published = publishedBom(ledger, project.id, item.id);
   const draft = draftBom(ledger, project.id, item.id);
   const [lines, setLines] = useState<BomVersionLine[] | null>(null);
   const [error, setError] = useState("");
+  const [cancelled, setCancelled] = useState(false);
   const editing = lines ?? draft?.lines ?? [];
   const changes = bomChanges(ledger, project.id, item.id);
   const run = (fn: Parameters<typeof record>[1]) => {
@@ -38,7 +44,7 @@ export function BomVersions({ project, item, canEdit }: { project: Project; item
         {published ? <Badge tone="green">v{published.version} · Finalizado y enviado</Badge> : <Badge tone="gray">Sin publicar</Badge>}
         {draft && <Badge tone="yellow">Borrador v{draft.version}</Badge>}
       </h4>
-      {published && !draft && (
+      {published && (!draft || cancelled) && (
         <>
           <Table>
             <THead>
@@ -66,7 +72,7 @@ export function BomVersions({ project, item, canEdit }: { project: Project; item
           )}
         </>
       )}
-      {draft && (
+      {draft && !cancelled && (
         <div className="space-y-2 rounded-md border border-amber-200 bg-amber-50/40 p-3">
           <p className="text-xs text-slate-600">Borrador: Compras y Planta todavía no lo ven{published ? ` (siguen con la v${published.version})` : ""}.</p>
           <Table>
@@ -82,13 +88,13 @@ export function BomVersions({ project, item, canEdit }: { project: Project; item
               {editing.map((l, i) => (
                 <TR key={l.id}>
                   <TD>
-                    <Input aria-label={`Material ${i + 1}`} value={l.material} disabled={!canEdit} onChange={(e) => setLine(i, { material: e.target.value })} />
+                    <Select aria-label={`Material ${i + 1}`} value={l.materialId ?? ""} disabled={!canEdit} onChange={(e)=>{const m=catalog.find((m)=>m.id===e.target.value);if(m) setLine(i,{material:m.name,materialId:m.id,unit:m.unit});}}><option value="">{l.material ? `${l.material} · Histórico sin catálogo` : "Seleccioná material…"}</option>{l.materialId && !catalog.some((m)=>m.id===l.materialId) && <option value={l.materialId} disabled>{l.material} · Histórico</option>}{catalog.map((m)=><option key={m.id} value={m.id}>{m.name}</option>)}</Select>
                   </TD>
                   <TD>
                     <Input aria-label={`Cantidad de ${l.material || `material ${i + 1}`}`} inputMode="decimal" className="w-24 text-right" disabled={!canEdit} value={String(l.quantity)} onChange={(e) => setLine(i, { quantity: Number(e.target.value.replace(",", ".")) })} />
                   </TD>
                   <TD>
-                    <Input aria-label={`Unidad de ${l.material || `material ${i + 1}`}`} className="w-20" disabled={!canEdit} value={l.unit} onChange={(e) => setLine(i, { unit: e.target.value })} />
+                    <Input aria-label={`Unidad de ${l.material || `material ${i + 1}`}`} className="w-20" readOnly value={l.unit} />
                   </TD>
                   <TD>
                     {canEdit && (
@@ -101,13 +107,13 @@ export function BomVersions({ project, item, canEdit }: { project: Project; item
           </Table>
           {canEdit && (
             <div className="flex flex-wrap gap-2">
+              <Button size="sm" variant="outline" onClick={() => { setLines(null); setError(""); setCancelled(true); }}>Cancelar</Button>
               <Button size="sm" variant="ghost" onClick={() => setLines([...editing, { id: createId("bomL"), material: "", quantity: 1, unit: "u" }])}>Agregar material</Button>
               <Button size="sm" variant="outline" disabled={!lines} onClick={() => run((l) => saveBomDraft(l, draft.id, editing)) && setLines(null)}>Guardar borrador</Button>
               <Button
                 size="sm"
                 onClick={() => {
-                  if (lines && !run((l) => saveBomDraft(l, draft.id, editing))) return;
-                  if (run((l, ctx) => publishBom(l, draft.id, ctx))) setLines(null);
+                  if (run((l, ctx) => publishBom(lines ? saveBomDraft(l, draft.id, editing) : l, draft.id, ctx))) setLines(null);
                 }}
               >
                 Finalizar y enviar BOM
@@ -116,8 +122,9 @@ export function BomVersions({ project, item, canEdit }: { project: Project; item
           )}
         </div>
       )}
+      {draft && cancelled && canEdit && <Button size="sm" variant="outline" onClick={() => setCancelled(false)}>Retomar borrador del BOM</Button>}
       {!draft && canEdit && !project.isClosed && (
-        <Button size="sm" variant="outline" onClick={() => run((l, ctx) => startBomDraft(l, project, item.id, ctx))}>
+        <Button size="sm" variant="outline" onClick={() => { if (run((l, ctx) => startBomDraft(l, project, item.id, ctx))) setCancelled(false); }}>
           {published ? "Nueva versión del BOM" : "Armar BOM desde lo cotizado"}
         </Button>
       )}

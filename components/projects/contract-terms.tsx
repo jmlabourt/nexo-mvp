@@ -1,7 +1,7 @@
 "use client";
 // Administración → proyecto → Contrato y pagos (modo demostración). La aprobación congela el presupuesto y el contrato
 // original; el contrato vigente cambia solo con motivo y queda auditado. Las condiciones de pago (seña, cuotas, días
-// para pagar después de la entrega) alimentan lo previsto de facturar y el gasto financiero.
+// para pagar después de la entrega) alimentan lo previsto de facturar y el costo financiero.
 import { useState } from "react";
 import type { Project, ScheduledPayment } from "@/types";
 import { currentContract, originalContract, reviseContract, setPaymentTerms, termsOf } from "@/lib/ledger";
@@ -63,7 +63,7 @@ export function ContractTerms({ project }: { project: Project }) {
               <dd className="mt-1 text-base font-semibold tabular">{formatCurrency(originalContract(project))}</dd>
             </div>
             <div className="rounded-md border border-slate-200 p-3">
-              <dt className="text-xs text-slate-500">Contrato vigente</dt>
+              <dt className="text-xs text-slate-500">Total acordado con el cliente</dt>
               <dd className="mt-1 text-base font-semibold tabular">{formatCurrency(contract)}</dd>
             </div>
           </dl>

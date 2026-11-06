@@ -123,21 +123,22 @@ const NAV: Record<SessionKey, NavItem[]> = {
     { href: "/administracion", label: "Dashboard", icon: "dashboard" },
     { href: "/projects", label: "Proyectos", icon: "projects" },
     { href: "/quotes", label: "Cotizador", icon: "quotes" },
+    { href: "/administracion/facturacion", label: "Facturación y pagos", icon: "orders" },
     { href: "/stock", label: "Stock", icon: "stock" },
     { href: "/clientes", label: "Clientes", icon: "clients" },
-    { href: "/proveedores", label: "Proveedores", icon: "suppliers" },
     { href: "/settings", label: "Configuración", icon: "settings" },
   ],
   compras: [
     { href: "/compras", label: "Dashboard", icon: "dashboard" },
-    { href: "/compras/proyectos", label: "Necesidades", icon: "needs" },
+    { href: "/compras/proyectos", label: "Por comprar", icon: "needs" },
     { href: "/compras/ordenes", label: "Órdenes de compra", icon: "orders" },
     { href: "/compras/stock", label: "Stock", icon: "stock" },
     { href: "/compras/alertas", label: "Alertas", icon: "alerts" },
     { href: "/compras/proveedores", label: "Proveedores", icon: "suppliers" },
   ],
   jefe_planta: [
-    { href: "/planta", label: "Dashboard", icon: "dashboard" },
+    { href: "/planta", label: "Hoy", icon: "day" },
+    { href: "/planta/asignaciones", label: "Planificación", icon: "assign" },
     { href: "/planta/proyectos", label: "Proyectos", icon: "projects" },
     { href: "/planta/operarios", label: "Operarios", icon: "operators" },
     { href: "/planta/alertas", label: "Alertas", icon: "alerts" },
@@ -217,3 +218,10 @@ const ACTIONS: Record<SessionKey, Action[]> = {
 export function can(who: SessionKey | RoleKey, action: Action): boolean {
   return ACTIONS[sessionOfWho(who)].includes(action);
 }
+
+/** Un solo alcance de pestañas para la ficha y los enlaces del buscador. */
+export const PROJECT_TABS:Record<SessionKey,readonly string[]>={
+ gerencia:["summary","items","budget","materials","hours","costs","billing","activity"],
+ administracion:["items","contract","billing","costs","stages"],
+ compras:[],jefe_planta:[],operario:[],
+};

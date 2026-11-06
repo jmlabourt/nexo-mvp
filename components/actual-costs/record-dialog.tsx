@@ -10,7 +10,7 @@ import { canExecute } from "@/lib/project-rules";
 import { STATUS_LABELS } from "@/lib/constants";
 import { OtherCostForm } from "./other-cost-form";
 
-/** Diseño, Administración y Gasto financiero se registran como tipo "other" con su categoría. */
+/** Diseño, Administración y Costo financiero se registran como tipo "other" con su categoría. */
 type Kind = "material" | "labor" | Exclude<ActualEntryType, "finishing" | "labor" | "other"> | OtherCostCategory;
 
 /** Una tarjeta por tipo de registro; cubren las siete categorías de reporte. El uso de máquina va dentro de las horas. */
@@ -64,7 +64,7 @@ export function RecordDialog({ project, open, onOpenChange }: { project: Project
           <div>
             <p className="mb-3 font-medium text-slate-800">¿Qué querés registrar?</p>
             <div className="grid grid-cols-2 gap-3">
-              {CARDS.map((c) => (
+              {CARDS.filter(c=>c.kind!=="material"&&c.kind!=="labor").map((c) => (
                 <button
                   key={c.kind}
                   type="button"

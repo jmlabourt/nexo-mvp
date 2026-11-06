@@ -20,14 +20,14 @@ export function dailyHoursReviews(projects: Project[], assignments: WorkAssignme
   const groups = new Map<string, WorkAssignment[]>();
   const from = addDays(today, -REVIEW_WINDOW_DAYS);
   for (const a of assignments) {
-    if (a.date > today || a.date < from || !projects.some((p) => p.id === a.projectId && !p.isClosed)) continue;
+    if (a.date > today || a.date < from || !projects.some((p) => p.id === a.projectId && !p.isClosed && p.status!=="completed")) continue;
     const key = `${a.operatorId}|${a.date}`;
     groups.set(key, [...(groups.get(key) ?? []), a]);
   }
   for (const [group, rows] of groups) {
     rows.sort((a,b) => a.id.localeCompare(b.id));
     const { operatorId, date } = rows[0];
-    const entries = projects.flatMap((p) => p.actualEntries).filter((e) => e.type === "labor" && e.operatorId === operatorId && e.date === date).sort((a,b) => a.id.localeCompare(b.id));
+    const entries = projects.filter(p=>!p.isClosed&&p.status!=="completed").flatMap((p) => p.actualEntries).filter((e) => e.type === "labor" && e.operatorId === operatorId && e.date === date).sort((a,b) => a.id.localeCompare(b.id));
     const logged = (a: WorkAssignment) => entries.filter((e) => e.assignmentId === a.id).reduce((s,e) => s+(e.labor?.hours ?? 0),0);
     const total = entries.reduce((s,e) => s+(e.labor?.hours ?? 0),0);
     const planned = rows.reduce((s,a) => s+a.plannedHours,0);
@@ -45,6 +45,7 @@ export function dailyHoursReviews(projects: Project[], assignments: WorkAssignme
 }
 
 export interface HoursCorrectionInput {
+  requestId?: string;
   entryId: string;
   reason: string;
   /** Cómo se reparten las horas del registro entre las asignaciones del día (el total se mantiene). */
@@ -65,29 +66,41 @@ export function correctHours(
   const source = projects.find((p) => p.actualEntries.some((e) => e.id === input.entryId));
   const entry = source?.actualEntries.find((e) => e.id === input.entryId);
   if (!source || !entry?.labor) throw new Error("Registro de horas no encontrado.");
+  if (source.isClosed || source.status === "completed") throw new Error("No se redistribuyen horas de un proyecto cerrado.");
+  const prior=input.requestId?projects.flatMap(p=>p.actualEntries).flatMap(e=>e.corrections??[]).find(c=>c.id===input.requestId):undefined;
+  if(prior){
+    const requested=input.allocations.filter(a=>a.hours>0).map(a=>[a.assignmentId,a.hours]);
+    if(prior.sourceEntryId!==input.entryId||prior.reason!==input.reason.trim()||JSON.stringify(requested)!==JSON.stringify(prior.allocations?.map(a=>[a.assignmentId,a.hours])))throw new Error("La identidad de corrección ya corresponde a otro reparto.");
+    return projects;
+  }
   if (input.reason.trim().length < 3) throw new Error("Escribí el motivo de la corrección.");
   const total = entry.labor.hours;
+  if (!Number.isFinite(total) || total<=0 || !Number.isFinite(entry.amount) || entry.amount<0 || !Number.isFinite(entry.labor.hourlyCost)) throw new Error("El registro histórico requiere revisión de su cantidad y costo de origen.");
+  if(input.allocations.some(a=>!Number.isFinite(a.hours)||a.hours<0))throw new Error("Repartí horas válidas, sin cantidades negativas.");
   const parts = input.allocations.filter((a) => a.hours > 0);
   const sum = parts.reduce((s, a) => s + a.hours, 0);
   if (parts.length === 0 || Math.abs(sum - total) > 1e-6) throw new Error(`El reparto tiene que sumar ${total} h (suma ${Math.round(sum * 100) / 100} h).`);
+  if(new Set(parts.map(a=>a.assignmentId)).size!==parts.length)throw new Error("No repitas una asignación en el reparto.");
   const note = `Corregido por ${ctx.actor}: ${input.reason.trim()}`;
-  const added = new Map<string, Project["actualEntries"]>();
-  for (const a of parts) {
+  let allocatedCost = 0;
+  const allocations=parts.map((a,index)=>{
     const asg = assignments.find((x) => x.id === a.assignmentId);
     if (!asg) throw new Error("Asignación no encontrada.");
-    const share = a.hours / total;
-    const next = {
-      ...entry,
-      id: ctx.id(),
-      projectId: asg.projectId,
-      itemId: asg.itemId ?? entry.itemId,
-      rubro: asg.rubro,
-      assignmentId: asg.id,
-      amount: Math.round(entry.amount * share * 100) / 100,
-      labor: { ...entry.labor, hours: a.hours },
-      notes: [entry.notes, note].filter(Boolean).join(" · "),
-    };
-    added.set(asg.projectId, [...(added.get(asg.projectId) ?? []), next]);
+    if (asg.operatorId !== entry.operatorId || asg.date !== entry.date) throw new Error("El reparto debe conservar la persona y fecha; usá la corrección individual para cambiar fecha.");
+    const target = projects.find((p) => p.id === asg.projectId);
+    if (!target || target.isClosed || target.status === "completed" || target.status === "quotation") throw new Error("El destino debe ser un proyecto aprobado y abierto, no cerrado.");
+    if(asg.itemId&&!target.items.some(i=>i.id===asg.itemId))throw new Error("El mueble de destino no existe.");
+    const amount=index===parts.length-1?Math.round((entry.amount-allocatedCost)*100)/100:Math.round(entry.amount*a.hours/total*100)/100;
+    allocatedCost=Math.round((allocatedCost+amount)*100)/100;
+    return {entryId:index===0?entry.id:ctx.id(),projectId:asg.projectId,assignmentId:asg.id,itemId:asg.itemId,rubro:asg.rubro,date:entry.date,hours:a.hours,amount};
+  });
+  const eventId=input.requestId??ctx.id();
+  const previous={date:entry.date,projectId:entry.projectId,itemId:entry.itemId,rubro:entry.rubro,hours:total,amount:entry.amount,assignmentId:entry.assignmentId};
+  const added = new Map<string, Project["actualEntries"]>();
+  for(const allocation of allocations){
+    const {entryId,hours,...point}=allocation;
+    const next={...entry,...point,id:entryId,labor:{...entry.labor,hours},notes:[entry.notes,note].filter(Boolean).join(" · "),corrections:[...(entry.corrections??[]),{id:eventId,sourceEntryId:entry.id,hourlyCost:entry.labor.hourlyCost,previous,next:{...point,hours},allocations,reason:input.reason.trim(),by:ctx.actor,at:ctx.now}]};
+    added.set(allocation.projectId,[...(added.get(allocation.projectId)??[]),next]);
   }
   return projects.map((p) => {
     const keep = p.id === source.id ? p.actualEntries.filter((e) => e.id !== entry.id) : p.actualEntries;

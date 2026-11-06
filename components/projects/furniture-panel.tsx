@@ -1,8 +1,14 @@
 "use client";
+import { RenameFurniture } from "./operational-actions";
 // Muebles del proyecto (Administración / Comercial / Diseño): cada mueble con su cantidad, estado de Diseño, etapas
 // (pueden estar varias activas a la vez), lista de materiales (BOM), archivos, horas y observaciones.
 // "Mueble" es el mismo registro que "producto" (project_items): no hay un modelo nuevo. Diseño, etapas y BOM todavía
 // no tienen guardado en la base: en la demo se muestran datos de ejemplo y las acciones quedan deshabilitadas.
+import { bomProjectWarnings } from "@/lib/bom-commitments";
+import { useAppStore } from "@/store/use-app-store";
+import { todayISO } from "@/lib/formatting";
+import { QuoteWorkspace } from "@/components/budget/quote-workspace";
+import { useIdentity } from "@/store/selectors";
 import type { DesignStatus, FurnitureDesign, FurnitureStage, Project } from "@/types";
 import { formatNumber } from "@/lib/formatting";
 import { itemHours } from "@/lib/production";
@@ -38,9 +44,17 @@ export const FURNITURE_STAGES: Array<{ id: FurnitureStage; label: string }> = [
 ];
 
 export function FurniturePanel({ project, canEdit }: { project: Project; canEdit: boolean }) {
+  const stock=useAppStore((s)=>s.stock),ledger=useAppStore((s)=>s.ledger);
+  const warnings=bomProjectWarnings(project,ledger,stock,todayISO());
   const design = useFurnitureDesign(project);
+  const session = useIdentity().session;
   const ledgerBacked = useLedgerBacked();
   const [editing, setEditing] = useState(false);
+  if (project.baseline) return <div className="space-y-5">
+    <QuoteWorkspace readOnly project={project} />
+    <h2 className="font-semibold">BOM de producción</h2>{warnings.length>0 && <div role="status" className="text-sm text-amber-800">{warnings.map((w)=><p key={w}>{w}</p>)}</div>}
+    {project.items.map((item) => <Card key={item.id}><CardHeader><CardTitle>{item.name} × {item.quantity}</CardTitle></CardHeader><CardContent><RenameFurniture project={project} item={item}/><BomVersions project={project} item={item} canEdit={canEdit && session === "administracion" && !project.isClosed} /></CardContent></Card>)}
+  </div>;
   if (editing) {
     return (
       <div className="space-y-3">
@@ -51,7 +65,7 @@ export function FurniturePanel({ project, canEdit }: { project: Project; canEdit
   }
   const of = (itemId: string): FurnitureDesign | undefined => design.data.find((d) => d.itemId === itemId);
   // Materiales reales del proyecto (cotizado → real, con el motivo de Diseño): datos guardados, no de ejemplo.
-  const realMaterials = <MaterialChangesCard project={project} amounts canCorrect={canEdit} />;
+  const realMaterials = <MaterialChangesCard project={project} amounts canCorrect={false} />;
 
   if (project.items.length === 0) {
     return (
@@ -92,7 +106,7 @@ export function FurniturePanel({ project, canEdit }: { project: Project; canEdit
                 </p>
               </div>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-4"><RenameFurniture project={project} item={item}/>
               <div>
                 <h4 className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Etapas (pueden ir a la vez)</h4>
                 <ul className="flex flex-wrap gap-1.5" aria-label={`Etapas de ${item.name}`}>
@@ -109,7 +123,7 @@ export function FurniturePanel({ project, canEdit }: { project: Project; canEdit
                 </ul>
               </div>
               {ledgerBacked ? (
-                <BomVersions project={project} item={item} canEdit={canEdit && !project.isClosed} />
+                <BomVersions project={project} item={item} canEdit={canEdit && session === "administracion" && !project.isClosed} />
               ) : (
               <div>
                 <h4 className="mb-1 flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">

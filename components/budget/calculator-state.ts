@@ -1,6 +1,6 @@
 // Estado de la cotización por rubros (campos como texto para permitir vacíos) y su conversión a números.
 // Lo usan el Cotizador y Nuevo proyecto: los dos muestran la misma calculadora con el mismo resultado.
-import type { BudgetCategory, HourRate, Project, RubroId } from "@/types";
+import type { BudgetCategory, HourRate, Project, RubroId, Ledger } from "@/types";
 import {
   adjustmentLines,
   financialLine,
@@ -24,12 +24,15 @@ import { delayAnalysis, type DelayResult } from "@/lib/delay";
 import { benchmarksForType, learningInsights, type LearningInsight } from "@/lib/historical-benchmarks";
 import type { BudgetLineInput } from "@/lib/project-operations";
 import { productInputError, type ProductInput } from "@/lib/production";
-import { CATEGORY_LABELS, DEFAULT_FINANCIAL_PCT, HOUR_CATEGORIES, MATERIAL_CATALOG } from "@/lib/constants";
+import { CATEGORY_LABELS, DEFAULT_FINANCIAL_PCT, HOUR_CATEGORIES } from "@/lib/constants";
 import { formatCurrency, formatNumber, formatWorkingDays } from "@/lib/formatting";
 import { rubroDef } from "@/lib/rubros";
+import { categoryCostAt } from "@/lib/personnel";
+import { todayISO } from "@/lib/formatting";
 import { parseDecimal } from "@/lib/schemas";
 
 export interface MaterialRow {
+  materialId?: string;
   key: string;
   name: string;
   unit: string;
@@ -58,6 +61,8 @@ export interface RubroRow {
  * y horas de diseño y de administración de ese rubro en ese mueble.
  */
 export interface ProductRubroRow {
+  staffCategoryId?: string;
+  staffHours?: Array<{ rateId: string; name: string; category: "design" | "admin"; hours: string; hourlyCost: number }>;
   key: string;
   rubro: RubroId;
   hours: string;
@@ -76,6 +81,7 @@ export interface ProductRow {
 }
 
 export interface CalcState {
+  staffHours?: Array<{categoryId:string;hours:string}>;
   /** Muebles: cada uno con sus rubros (horas, operarios, materiales, diseño y administración). */
   products: ProductRow[];
   /** Rubros del proyecto que no son de un mueble (Transporte / Fletes, Imprevistos). */
@@ -139,13 +145,14 @@ export const newProductRubroRow = (rubro: RubroId): ProductRubroRow => ({
 
 export const newProductRow = (name = ""): ProductRow => ({ key: rowKey(), name, quantity: "1", rubros: [newProductRubroRow("carpinteria_madera")] });
 
-export function initialCalcState(financialPct = DEFAULT_FINANCIAL_PCT): CalcState {
+export function initialCalcState(financialPct = DEFAULT_FINANCIAL_PCT, defaults?: {materialsTargetPct:number;laborTargetPct:number}): CalcState {
   return {
     products: [newProductRow()],
+    staffHours: [],
     rubros: [],
     deadlineDays: "",
-    materialsTargetPct: "30",
-    laborTargetPct: "30",
+    materialsTargetPct: String(defaults?.materialsTargetPct ?? 30),
+    laborTargetPct: String(defaults?.laborTargetPct ?? 30),
     financialPct: String(financialPct).replace(".", ","),
     safetyMargins: [],
     delayPenalty: "",
@@ -162,6 +169,8 @@ const n = (s: string) => {
 
 /** Lo que la calculadora necesita además de lo que se tipea. */
 export interface CalculatorContext {
+  staffCategories?: Ledger["staffCategories"];
+  quoteDate?: string;
   projects: Project[];
   rates: HourRate[];
   overtimeMultiplier: number;
@@ -173,10 +182,10 @@ export interface CalculatorContext {
   isDemo: boolean;
 }
 
-/** Una fila de material en edición → material de la cotización (con su id de catálogo si coincide el nombre). */
+/** Una fila de material en edición → material de la cotización (con el ID seleccionado explícitamente en el catálogo). */
 export function materialRowToQuote(m: MaterialRow): QuoteMaterial {
   return {
-    materialId: MATERIAL_CATALOG.find((c) => c.name.toLowerCase() === m.name.trim().toLowerCase())?.id,
+    materialId: m.materialId,
     name: m.name,
     unit: m.unit,
     quantity: n(m.quantity),
@@ -190,7 +199,7 @@ export const productLabel = (p: Pick<ProductRow, "name">, index: number) => p.na
 
 /** ¿El rubro del mueble tiene algo cargado además de las horas? (materiales, diseño o administración) */
 const rubroHasExtras = (r: ProductRubroRow) =>
-  (r.materials ?? []).some((m) => m.name.trim() && n(m.quantity) > 0) || n(r.designHours ?? "") > 0 || n(r.adminHours ?? "") > 0;
+  (r.materials ?? []).some((m) => m.name.trim() && n(m.quantity) > 0) || n(r.designHours ?? "") > 0 || n(r.adminHours ?? "") > 0 || (r.staffHours ?? []).some((h) => n(h.hours) > 0);
 
 /** Rubro con horas de operarios escritas: es mano de obra del mueble (y lo que el Jefe de planta asigna). */
 const hasLaborHours = (r: ProductRubroRow) => r.hours.trim() !== "";
@@ -203,6 +212,7 @@ const isBlankProduct = (p: ProductRow) => !p.name.trim() && p.rubros.every((r) =
  * con solo materiales (o diseño / administración) no lleva horas de planta. Cantidad y operarios vacíos quedan en NaN.
  */
 const toProductInput = (p: ProductRow, index: number): ProductInput => ({
+  quotationKey:p.key,
   name: productLabel(p, index),
   quantity: p.quantity.trim() ? Number(p.quantity.trim().replace(",", ".")) : NaN,
   rubros: p.rubros.filter(hasLaborHours).map((r) => ({ rubro: r.rubro, hours: n(r.hours), workers: r.workers.trim() ? Number(r.workers.trim()) : NaN })),
@@ -261,14 +271,17 @@ function productQuoteRubros(s: Pick<CalcState, "products">): Array<{ productKey:
       .map((r) => {
         const [labor] = hasLaborHours(r) ? productLaborRubros([{ ...input, rubros: input.rubros.filter((x) => x.rubro === r.rubro) }]) : [];
         const quote: QuoteRubro = {
+          staffCategoryId:r.staffCategoryId,
           rubro: r.rubro,
           product,
+          productKey:row.key,
           materials: (r.materials ?? []).map(materialRowToQuote),
           workers: labor?.workers ?? 0,
           hoursPerWorker: labor?.hoursPerWorker ?? 0,
           ...(labor ? { totalHours: labor.totalHours } : {}),
           designHours: n(r.designHours ?? ""),
           adminHours: n(r.adminHours ?? ""),
+          staffHours: (r.staffHours ?? []).map((h) => ({ ...h,hours:n(h.hours) })),
           amount: 0,
         };
         return { productKey: row.key, rubroKey: r.key, quote };
@@ -276,7 +289,7 @@ function productQuoteRubros(s: Pick<CalcState, "products">): Array<{ productKey:
   });
 }
 
-function calcStateToInput(s: CalcState, ctx: Pick<CalculatorContext, "rates" | "overtimeMultiplier" | "hoursPerDay">): QuoteInput {
+function calcStateToInput(s: CalcState, ctx: CalculatorContext): QuoteInput {
   return {
     rubros: [...s.rubros.map(rubroRowToQuote), ...productQuoteRubros(s).map((x) => x.quote)],
     hoursPerDay: ctx.hoursPerDay,
@@ -314,7 +327,7 @@ export interface ProductResult {
   name: string;
   quantity: number;
   /** key = ProductRubroRow.key */
-  rubros: Array<{ key: string; rubro: RubroId; labor: RubroLabor; lines: BudgetLineInput[]; total: number }>;
+  rubros: Array<{ key: string; rubro: RubroId; labor: RubroLabor | null; lines: BudgetLineInput[]; total: number }>;
   total: number;
 }
 
@@ -325,6 +338,8 @@ export interface CalculatorResult {
   products: ProductResult[];
   /** Primer problema de los productos cargados (null = bien). */
   productsError: string | null;
+  errors: string[];
+  staffCategories?: Ledger["staffCategories"];
   schedule: WorkSchedule;
   /** Horas extra de mano de obra de todos los rubros (0 si los días de trabajo entran). */
   overtimeHours: number;
@@ -347,21 +362,27 @@ export interface CalculatorResult {
 /** Todo lo derivado de la cotización en un solo lugar (el Cotizador y Nuevo proyecto usan el mismo resultado). */
 export function computeCalculator(state: CalcState, projectType: string, ctx: CalculatorContext): CalculatorResult {
   const input = calcStateToInput(state, ctx);
+  const errors=quotationHoursErrors(state,ctx);
+  const date=ctx.quoteDate??todayISO();
+  const configured=ctx.staffCategories?.filter(c=>c.active!==false&&c.category==="labor"&&categoryCostAt(c,date)!==undefined)??[];
   const rates = ratesByCategory(ctx.rates);
   const schedule = workSchedule(input.rubros, input.hoursPerDay, input.deadlineDays);
   const quoted = input.rubros.map((r) => {
+    const selected=ctx.staffCategories===undefined?undefined:configured.find(c=>c.id===(r.staffCategoryId??(configured.length===1?configured[0].id:undefined)));
+    const ownRates=ctx.staffCategories===undefined?rates:{...rates,labor:selected?{id:selected.id,name:selected.name,category:"labor" as const,hourlyRate:categoryCostAt(selected,date)!}:undefined};
     const labor =
-      rubroDef(r.rubro).kind === "full"
+      rubroDef(r.rubro).kind === "full" && !(ctx.staffCategories!==undefined&&!selected&&(r.totalHours??0)>0)
         ? rubroLabor(r, {
             normalShare: schedule.normalShare,
-            laborRate: rates.labor?.hourlyRate ?? 0,
+            laborRate: ownRates.labor?.hourlyRate ?? 0,
             designRate: rates.design?.hourlyRate ?? 0,
             adminRate: rates.admin?.hourlyRate ?? 0,
             overtimeMultiplier: input.overtimeMultiplier,
           })
         : null;
-    const lines = rubroLines(r, labor, { rates, overtimeMultiplier: input.overtimeMultiplier, hoursPerDay: input.hoursPerDay });
-    return { rubro: r.rubro, labor, lines, total: totalOfLines(lines) };
+    const lines = rubroLines(r, labor, { rates:ownRates, overtimeMultiplier: input.overtimeMultiplier, hoursPerDay: input.hoursPerDay });
+    const captured=selected?lines.map(l=>l.category==="labor"?{...l,staffCategoryId:selected.id,staffCategoryName:selected.name,rateQuotedOn:date,rateValidFrom:selected.rates?.filter(r=>r.validFrom<=date).sort((a,b)=>a.validFrom.localeCompare(b.validFrom)||a.at.localeCompare(b.at)).at(-1)?.validFrom}:l):lines;
+    return { rubro: r.rubro, labor, lines:captured, total: totalOfLines(captured) };
   });
   // Primero los rubros del proyecto (importes); después cada rubro de cada mueble, en el mismo orden que la cotización.
   const rubros: RubroResult[] = state.rubros.map((row, i) => ({ key: row.key, ...quoted[i] }));
@@ -370,12 +391,17 @@ export function computeCalculator(state: CalcState, projectType: string, ctx: Ca
     const mine = parts.flatMap((x, j) => {
       if (x.productKey !== row.key) return [];
       const q = quoted[state.rubros.length + j];
-      return [{ key: x.rubroKey, rubro: x.quote.rubro, labor: q.labor as RubroLabor, lines: q.lines, total: q.total }];
+      return [{ key: x.rubroKey, rubro: x.quote.rubro, labor: q.labor, lines: q.lines, total: q.total }];
     });
     const input = toProductInput(row, index);
     return { key: row.key, name: input.name, quantity: input.quantity, rubros: mine, total: round2(mine.reduce((s, r) => s + r.total, 0)) };
   });
-  const rubroLinesAll = quoted.flatMap((r) => r.lines);
+  const staffLines:BudgetLineInput[]=(state.staffHours??[]).flatMap(row=>{
+    const category=ctx.staffCategories?.find(c=>c.id===row.categoryId&&c.active!==false&&c.category!=="labor"),cost=category?categoryCostAt(category,date):undefined;
+    if(!category||cost===undefined||!(n(row.hours)>0))return [];
+    return [{category:category.category,staffCategoryId:category.id,staffCategoryName:category.name,hourRateId:category.id,rateQuotedOn:date,rateValidFrom:category.rates?.filter(r=>r.validFrom<=date).sort((a,b)=>a.validFrom.localeCompare(b.validFrom)||a.at.localeCompare(b.at)).at(-1)?.validFrom,description:category.name,quantity:n(row.hours),unit:"h",unitCost:cost,hourType:"normal",notes:"Trabajo no operario del proyecto completo. Tarifa vigente congelada al cotizar."}];
+  });
+  const rubroLinesAll = [...quoted.flatMap((r) => r.lines),...staffLines];
   const withAdjustments = [...rubroLinesAll, ...adjustmentLines(rubroLinesAll, toAdjustments(state.safetyMargins))];
   const financial = financialLine(input.financialPct, ctx.salesPrice);
   const lines = financial ? [...withAdjustments, financial] : withAdjustments;
@@ -384,18 +410,21 @@ export function computeCalculator(state: CalcState, projectType: string, ctx: Ca
   const suggestedMargin = breakdown.suggestedPrice !== null ? quoteBreakdown(lines, input, breakdown.suggestedPrice).margin : null;
   const crewSize = Math.max(0, ...input.rubros.map((r) => r.workers));
   const floor = state.delayFloorPct.trim() ? parseDecimal(state.delayFloorPct) : NaN; // vacío = rentabilidad del precio sugerido
-  const delay = delayAnalysis({
+  const quotedRates=[...new Set(quoted.flatMap(q=>q.labor&&q.labor.normalHours+q.labor.overtimeHours>0?[q.labor.rate]:[]))];
+  const delayRate=ctx.staffCategories===undefined?rates.labor?.hourlyRate:quotedRates.length===1?quotedRates[0]:undefined;
+  const delay = errors.length||delayRate===undefined?null:delayAnalysis({
     price: ctx.salesPrice,
     cost: total,
     workers: crewSize,
     hoursPerDay: input.hoursPerDay,
-    laborRate: rates.labor?.hourlyRate ?? 0,
+    laborRate: delayRate,
     dailyPenalty: n(state.delayPenalty),
     floorPct: Number.isFinite(floor) ? floor : (suggestedMargin ?? 0),
     workDays: schedule.workDays,
   });
   return {
     input,
+    errors,staffCategories:ctx.staffCategories,
     rubros,
     products,
     productsError: productsError(state),
@@ -460,12 +489,16 @@ export function ratesText(rates: RatesByCategory): string {
 }
 
 /** Avisos del paso de revisión, en un solo lugar. */
+function missingQuotedRates(calc:CalculatorResult) {
+ if(calc.staffCategories!==undefined)return [];
+ return HOUR_CATEGORIES.filter(c=>calc.input.rubros.some(r=>c==="labor"?(r.totalHours??r.workers*r.hoursPerWorker)>0:c==="design"?r.designHours>0:r.adminHours>0)&&(!calc.rates[c]||!Number.isFinite(calc.rates[c]!.hourlyRate)||calc.rates[c]!.hourlyRate<0));
+}
 export function reviewWarnings(calc: CalculatorResult, salesPrice: number): string[] {
   const out: string[] = [];
-  const { schedule, breakdown, rates } = calc;
+  const { schedule, breakdown } = calc;
   if (!calc.hasContent) out.push("Falta cargar el costo: no hay materiales, horas ni importes.");
   if (!(salesPrice > 0)) out.push("Falta el precio de venta.");
-  const missingRates = HOUR_CATEGORIES.filter((c) => !rates[c]?.hourlyRate);
+  const missingRates = missingQuotedRates(calc);
   if (missingRates.length > 0) out.push("Falta la tarifa de algún tipo de hora: cargala en Configuración para que esas horas sumen al costo.");
   if (schedule.fits === false) {
     out.push(
@@ -484,9 +517,25 @@ export function reviewWarnings(calc: CalculatorResult, salesPrice: number): stri
  * Nuevo proyecto pide al menos un producto: de ahí salen la mano de obra y lo que el Jefe de planta asigna.
  */
 export function quoteActionBlocker(calc: CalculatorResult, salesPrice: number, opts: { requireProducts?: boolean } = {}): string | null {
+  if (calc.errors.length)return calc.errors[0];
   if (calc.productsError) return calc.productsError;
   if (opts.requireProducts && calc.products.length === 0) return "Cargá al menos un mueble con sus horas por rubro.";
+  if (missingQuotedRates(calc).length) return "Falta la tarifa de presupuesto para horas cargadas: revisá la configuración antes de cotizar.";
   if (!calc.hasContent) return "Cargá al menos un costo.";
   if (!(salesPrice > 0)) return "Definí el precio de venta (podés usar el sugerido).";
   return null;
+}
+
+/** Validación previa al total: texto inválido nunca se convierte silenciosamente en horas cero. */
+export function quotationHoursErrors(state:CalcState,ctx:CalculatorContext):string[]{
+ const errors:string[]=[],date=ctx.quoteDate??todayISO();
+ const valid=(text:string,label:string)=>{if(text.trim()&&(!Number.isFinite(parseDecimal(text))||parseDecimal(text)<0||parseDecimal(text)>1000000))errors.push(`${label}: ingresá horas numéricas entre 0 y 1.000.000, con coma o punto decimal.`);};
+ const productive=ctx.staffCategories?.filter(c=>c.active!==false&&c.category==="labor"&&categoryCostAt(c,date)!==undefined)??[];
+ for(const product of state.products)for(const row of product.rubros){
+  valid(row.hours,"Horas productivas");valid(row.designHours??"","Horas de diseño históricas");valid(row.adminHours??"","Horas administrativas históricas");for(const h of row.staffHours??[])valid(h.hours,h.name);
+  if(n(row.hours)>0&&ctx.staffCategories!==undefined){const id=row.staffCategoryId??(productive.length===1?productive[0].id:undefined);if(!productive.some(c=>c.id===id))errors.push("Elegí una categoría productiva con tarifa vigente para cada rubro con horas.");}
+ }
+ const seen=new Set<string>();
+ for(const row of state.staffHours??[]){if(!row.hours.trim())errors.push("Completá las horas estimadas no operarias; indicá 0 si no se requieren.");valid(row.hours,"Horas no operarias");if(seen.has(row.categoryId))errors.push("Cada categoría no operaria se presupuesta una sola vez por proyecto.");seen.add(row.categoryId);const c=ctx.staffCategories?.find(c=>c.id===row.categoryId&&c.active!==false&&c.category!=="labor");if(!c||categoryCostAt(c,date)===undefined)errors.push("Seleccioná una categoría no operaria con tarifa vigente.");}
+ return errors;
 }

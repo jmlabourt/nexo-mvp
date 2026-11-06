@@ -1,4 +1,20 @@
 "use client";
+import { validateBomPublication } from "@/lib/bom-commitments";
+import { adjustOtherCost, type OtherCostChange } from "@/lib/other-costs";
+import { validateInternalHoursChange } from "@/lib/internal-work";
+import { correctSentOrder, reverseLocalReceipt } from "@/lib/purchasing";
+import { reverseAssignment } from "@/lib/stock";
+import { employeeCost, employeeForSession, personnelViews, savePersonnel, demoOperatorEligible, type EmployeeEdit } from "@/lib/personnel";
+import { materialCatalog } from "@/lib/material-options";
+
+// ─────────────────────────────────────────────────────────────
+// Store global (Zustand). Los datos viven en Supabase: el store los carga
+// al entrar (WorkspaceGate), aplica las operaciones puras de lib/ en memoria
+// y encola la escritura de lo que cambió. Las acciones confirmadas esperan
+// la persistencia y reconcilian el estado antes de permitir otra operación.
+// Todas las pantallas leen SIEMPRE de este mismo estado.
+// Sólo el rol elegido en la demo (y el operario simulado) se guarda en localStorage.
+// ─────────────────────────────────────────────────────────────
 // ─────────────────────────────────────────────────────────────
 // Store global (Zustand). Los datos viven en Supabase: el store los carga
 // al entrar (WorkspaceGate), aplica las operaciones puras de lib/ en memoria
@@ -9,35 +25,18 @@
 // ─────────────────────────────────────────────────────────────
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
-import type {
-  AlertSettings,
-  CostSettings,
-  DayException,
-  HourRate,
-  AppRole,
-  Attachment,
-  MaterialDelivery,
-  MaterialRequest,
-  Operator,
-  PriceRecord,
-  Project,
-  PurchaseOrder,
-  ProjectStatus,
-  RubroId,
-  StockLot,
-  ValueCorrection,
-  WorkAssignment,
-  Ledger,
-} from "@/types";
+import type { AlertSettings, CostSettings, DayException, HourRate, AppRole, Attachment, MaterialDelivery, MaterialRequest, Operator, PriceRecord, Project, PurchaseOrder, ProjectStatus, RubroId, StockLot, ValueCorrection, WorkAssignment, Ledger } from "@/types";
 import { DEFAULT_HOUR_RATES, DEFAULT_SETTINGS, DEMO_USERS } from "@/lib/constants";
 import { resolveSession, roleKeyOf, sessionRole, type RoleKey, type SessionKey } from "@/lib/permissions";
 import { costSettingsError, hourRatesError } from "@/lib/cost-settings";
 import { buildSeed } from "@/lib/seed-data";
 import * as ops from "@/lib/project-operations";
 import * as circuit from "@/lib/circuit";
-import { EMPTY_LEDGER, normalizeLedger, type LedgerCtx } from "@/lib/ledger";
+import { EMPTY_LEDGER, normalizeLedger, addRate as addEmployeeRate, type LedgerCtx } from "@/lib/ledger";
 import { closeCheck } from "@/lib/tablero";
 import { setRubroNames } from "@/lib/rubros";
+import { afterPublishedBom, afterMaterialArrival, configuredOperators } from "@/lib/frontend-work";
+import { executeWork, correctExecution, type ExecutionInput, type ExecutionCorrection } from "@/lib/work-execution";
 import { correctHours, type HoursCorrectionInput } from "@/lib/hours-review";
 import { demoScenario } from "@/lib/demo/escenario";
 import { demoDataChanged, pickDemoData, readDemo, setDemoActive, writeDemo } from "./demo-local";
@@ -55,24 +54,35 @@ import { recordClosure } from "@/lib/supabase/closures";
 import { commitLedger, ledgerDelta, loadLedger } from "@/lib/supabase/ledger";
 import { buildClosureSnapshot } from "@/lib/closure-snapshot";
 import { DEFAULT_COST_SETTINGS, type ScheduleChange, type Workspace, type WorkspaceData } from "@/lib/supabase/workspace";
-import { exceptionError, workDaysError } from "@/lib/schedule";
+import { dayCapacity, exceptionError, workDaysError } from "@/lib/schedule";
 import { tallerCalls } from "@/lib/supabase/taller";
-import {
-  invoiceActivity,
-  invoiceEntries,
-  invoiceError,
-  nextOrderNumber,
-  orderDraftError,
-  receiveOrder as receiveOrderLines,
-  type InvoiceInput,
-  type OrderDraft,
-  type ReceiptInput,
-} from "@/lib/purchasing";
+import { invoiceActivity, invoiceEntries, invoiceError, nextOrderNumber, orderDraftError, isWarehouseLine, receiveOrder as receiveOrderLines, type InvoiceInput, type OrderDraft, type ReceiptInput } from "@/lib/purchasing";
 import { todayISO } from "@/lib/formatting";
-import { hourRatesAt, laborCostAt, OVERTIME_SUBJECT, priceChange, priceChangeError, valueAt } from "@/lib/price-history";
+import { hourRatesAt, OVERTIME_SUBJECT, priceChange, priceChangeError, valueAt } from "@/lib/price-history";
 import { applyCorrection, correctionError, type CorrectionInput, type CorrectionReceipt } from "@/lib/corrections";
 import { assignmentError, type AssignmentInput } from "@/lib/plant";
-import { closeDay, closeDayPayload, deliverMaterial, deliveryPayload, type CloseDayInput, type DeliveryInput } from "@/lib/plant-materials";
+import { registerMaterialsLocal, closeDay, closeDayPayload, deliverMaterial, deliveryPayload, directMaterialUsage, type CloseDayInput, type DeliveryInput, type DirectMaterialUsageInput } from "@/lib/plant-materials";
+
+const memoryStorage: Storage = {
+  length: 0,
+  clear: () => undefined,
+  getItem: () => null,
+  key: () => null,
+  removeItem: () => undefined,
+  setItem: () => undefined,
+};
+
+function safeLocalStorage(): Storage {
+  try {
+    if (typeof window === "undefined" || !window.localStorage) return memoryStorage;
+    const probe = "blerp-storage-probe";
+    window.localStorage.setItem(probe, "1");
+    window.localStorage.removeItem(probe);
+    return window.localStorage;
+  } catch {
+    return memoryStorage;
+  }
+}
 
 export type Result<T = undefined> = { ok: true; value: T } | { ok: false; error: string };
 
@@ -147,6 +157,8 @@ interface AppState {
     id: string,
     patch: Partial<Pick<Project, "name" | "client" | "projectType" | "description" | "dueDate" | "owner" | "salesPrice">>,
   ) => Result;
+  operationalStageLocal:(id:string,status:"purchasing"|"production",date:string,reason:string)=>Result;
+  renameItemLocal:(id:string,itemId:string,name:string)=>Result;
   changeProjectStatus: (id: string, status: ProjectStatus, opts?: { confirmBack?: boolean }) => Result;
   /** Circuito: el cliente no aprobó (queda el motivo). */
   rejectQuote: (id: string, reason: string) => Result;
@@ -169,6 +181,7 @@ interface AppState {
    */
   logHoursManual: (id: string, input: ManualHoursInput) => Result;
   addActualEntry: (id: string, input: ops.ActualInput) => Result;
+  adjustOtherCostLocal:(id:string,entryId:string,input:OtherCostChange)=>Result;
 
   assignOperators: (id: string, operatorIds: string[]) => Result;
   addItem: (id: string, input: ProductInput) => Result;
@@ -177,6 +190,8 @@ interface AppState {
   setCompletedUnits: (projectId: string, itemId: string, units: number) => Result;
   /** Entrega de material del Jefe de planta a un producto (del depósito o de lo asignado al proyecto). */
   deliverMaterial: (input: DeliveryInput) => Result;
+  /** Registro directo de consumo/desperdicio/sobrante sin entrega previa: reutiliza la entrega + cierre del día mismo. */
+  directMaterialUsage: (input: DirectMaterialUsageInput) => Result;
   /** Cierre del día del Jefe de planta: unidades terminadas y consumo / desperdicio / sobrante de lo entregado. */
   closeDay: (input: CloseDayInput) => Result;
   removeItem: (id: string, itemId: string) => Result;
@@ -185,6 +200,7 @@ interface AppState {
   removeAttachment: (id: string, attachmentId: string) => Result;
 
   assignStock: (input: Parameters<typeof ops.assignStockToProject>[2]) => Result;
+  reverseAssignmentLocal: (movementId:string,reason:string) => Result;
   releaseStock: (input: Parameters<typeof ops.releaseProjectStock>[2]) => Result;
   transferStock: (input: Parameters<typeof ops.transferProjectStock>[2]) => Result;
   returnStockToSupplier: (input: Parameters<typeof ops.returnProjectStockToSupplier>[2]) => Result;
@@ -203,6 +219,8 @@ interface AppState {
   }) => Result<StockLot>;
   updateLotLocation: (lotId: string, location: string) => Result;
 
+  saveEmployeeLocal: (input: EmployeeEdit) => Result<string>;
+  createEmployeeLocal: (input:people.OperatorInput, profile:Omit<import("@/types").FrontendPersonnel,"employeeId">) => Result<string>;
   createOperator: (input: people.OperatorInput) => Result<string>;
   /** Un cambio de costo por hora vale desde `validFrom` (hoy por defecto): las horas anteriores no cambian. */
   updateOperator: (id: string, input: people.OperatorInput, validFrom?: string) => Result;
@@ -236,8 +254,10 @@ interface AppState {
    */
   saveHourRates: (rates: HourRate[], validFrom?: string) => Result;
   /** Precios de catálogo de materiales con "vigente desde". Solo afectan cotizaciones nuevas. */
+  saveCatalogMaterialLocal: (input:{ id?:string;name:string;unit:string;rubro?:string;price:number;validFrom:string }) => Result;
   setMaterialPrices: (prices: Array<{ materialId: string; value: number; previousValue: number }>, validFrom: string) => Result;
   /** Crea (sin id) o modifica una asignación. La hacen el Jefe de planta y Administrativo. */
+  saveAssignmentsBatch: (requestId: string, inputs: AssignmentInput[]) => Result<string[]>;
   saveAssignment: (input: AssignmentInput & { id?: string }) => Result<string>;
   /** Quita una asignación. */
   removeAssignment: (id: string) => Result;
@@ -246,6 +266,8 @@ interface AppState {
   /** Crea (sin id) o modifica una orden en Borrador. Devuelve el id. Compras o Administrativo. */
   saveOrder: (draft: OrderDraft & { id?: string }) => Result<string>;
   sendOrder: (id: string) => Result;
+  correctSentOrderLocal: (id: string, reason: string) => Result;
+  reverseReceiptLocal: (id: string, movementId: string, reason: string) => Result;
   /** Facturada: crea las compras reales (desde acá cambia el costo real de materiales del proyecto). */
   invoiceOrder: (id: string, invoice: InvoiceInput) => Result;
   /** Pagada sí/no: información financiera, no cambia costos. */
@@ -273,6 +295,8 @@ interface AppState {
   confirmHoursLocal: (key: string) => Result;
   /** Demo: el Jefe redistribuye horas con motivo (en una empresa real, planta_correct_hours). */
   correctHoursLocal: (input: HoursCorrectionInput) => Result;
+  executeWorkLocal: (input: ExecutionInput) => Result;
+  correctExecutionLocal: (input: ExecutionCorrection) => Result;
   /** Borra todos los datos de la empresa para empezar de cero. */
   clearData: () => Promise<Result>;
   dismissSyncError: () => void;
@@ -299,6 +323,7 @@ function localCorrectionReceipt(project: Project, input: CorrectionInput, actor:
 }
 
 export interface ManualHoursInput {
+  categoryId?: string;
   requestId?: string;
   operatorId: string;
   itemId: string;
@@ -325,6 +350,7 @@ export function demoWorkspace(): WorkspaceData & { ledger: Ledger } {
 
 export function demoFixture(): Record<string, unknown> {
   const { ledger, ...data } = demoWorkspace();
+  const nextNumber = Math.max(0, ...data.projects.map((p) => Number(/(\d+)/.exec(p.code)?.[1] ?? 0))) + 1;
   return {
     ...data,
     dayExceptions: data.dayExceptions ?? [],
@@ -334,7 +360,7 @@ export function demoFixture(): Record<string, unknown> {
     hourRates: DEFAULT_HOUR_RATES.map((r) => ({ ...r })),
     priceHistory: [],
     corrections: [],
-    ledger,
+    ledger: { ...ledger, projectNomenclature: ledger.projectNomenclature ?? { pattern: "{prefijo}{numero}", prefix: "OT", nextNumber } },
   };
 }
 
@@ -370,7 +396,7 @@ const EMPTY_DATA: WorkspaceData = {
  * (con su usuario de ejemplo; como Operario, el operario elegido).
  */
 export function effectiveIdentity(
-  s: Pick<AppState, "role" | "currentMode" | "isDemo" | "operators" | "userId" | "userEmail" | "actingOperatorId" | "userName">,
+  s: Pick<AppState, "role" | "currentMode" | "isDemo" | "operators" | "userId" | "userEmail" | "actingOperatorId" | "userName"> & Partial<Pick<AppState,"ledger" | "demoLocal">>,
 ): {
   role: AppRole;
   /** Rol de la base con el que se escribe. */
@@ -389,9 +415,12 @@ export function effectiveIdentity(
   if (real === "comercial") return { role: s.role, roleKey: "comercial", session: "administracion", operator: undefined, actor: s.userName };
   // Demo: un Administrativo mira cualquiera de las cinco sesiones. Empresa real: las de su rol (Gerencia / Administración).
   const view: SessionKey = real === "admin" && s.isDemo && s.currentMode ? s.currentMode : resolveSession(real, s.currentMode);
+  const selected = s.demoLocal ? s.operators.find((o) => o.id === s.actingOperatorId && o.active && s.ledger?.personnel?.some((p) => p.employeeId === o.id && p.enabled && personnelViews(p).includes(view))) : undefined;
+  if (selected && view !== "operario") return { role:view === "gerencia" || view === "administracion" ? s.role : view,roleKey:sessionRole(view),session:view,operator:selected,actor:selected.name };
   if (view === "operario") {
     // En la demo siempre hay un operario elegido: el que se eligió o, si no, el primero activo.
-    const operator = s.operators.find((o) => o.id === s.actingOperatorId && o.active) ?? s.operators.find((o) => o.active);
+    const eligible = s.demoLocal ? s.operators.filter((o)=>demoOperatorEligible(s.ledger ?? {},o)) : s.operators.filter((o)=>o.active);
+    const operator = eligible.find((o) => o.id === s.actingOperatorId) ?? eligible[0];
     return { role: "operator", roleKey: "operario", session: "operario", operator, actor: operator?.name ?? s.userName };
   }
   if (view === "compras" || view === "jefe_planta") {
@@ -402,7 +431,21 @@ export function effectiveIdentity(
 
 export const useAppStore = create<AppState>()(
   persist(
-    (set, get) => {
+    (rawSet, rawGet) => {
+      let transaction: AppState | undefined;
+      const get = () => transaction ?? rawGet();
+      // Persist the candidate before publishing it to any of the five views. A rejected write leaves
+      // both the last durable snapshot and the shared state intact; the form keeps its unsaved input.
+      const set = (patch: Partial<AppState>) => {
+        if (transaction) { transaction = { ...transaction, ...patch }; return; }
+        const previous = get();
+        const next = { ...previous, ...patch };
+        if (typeof window !== "undefined" && previous.demoLocal && next.demoLocal && demoDataChanged(next as unknown as Record<string, unknown>, previous as unknown as Record<string, unknown>)
+          && !writeDemo(pickDemoData(next as unknown as Record<string, unknown>))) {
+          throw new ops.DomainError("El cambio no quedó guardado: falló el almacenamiento local. Conservamos los datos anteriores; reintentá cuando haya espacio o el almacenamiento esté habilitado.");
+        }
+        rawSet(patch);
+      };
       const ctx = (): ops.Ctx => {
         const id = effectiveIdentity(get());
         return { actor: id.actor, now: new Date().toISOString(), role: id.role, operatorId: id.operator?.id };
@@ -448,10 +491,23 @@ export const useAppStore = create<AppState>()(
         return queue;
       };
 
+      const requirePhysicalWriter = () => {
+        if (get().demoLocal && ["gerencia","administracion"].includes(effectiveIdentity(get()).session)) throw new ops.DomainError("Gerencia y Administración solo consultan materiales. Compras o Planta deben conciliar los movimientos antes del cierre.");
+      };
+      const requireBuyer = () => {
+        if (get().demoLocal && effectiveIdentity(get()).session !== "compras") throw new ops.DomainError("Las órdenes, recepciones y asignaciones corresponden a Compras.");
+      };
+
       /** Guarda en memoria lo que cambió y encola su escritura. Todas las vistas leen de acá. */
       const commit = (next: { projects?: Project[]; stock?: StockState; operators?: Operator[]; requests?: MaterialRequest[] }) => {
         const prev = get();
-        const projects = next.projects ?? prev.projects;
+        if (next.stock && next.stock !== prev.stock) requirePhysicalWriter();
+        let projects = next.projects ?? prev.projects;
+        if (prev.demoLocal && next.stock) {
+          const old = new Set(prev.stock.movements.map((m) => m.id));
+          const arrived = next.stock.movements.filter((m) => !old.has(m.id) && m.to.type === "project").map((m) => m.to.type === "project" ? m.to.projectId : "");
+          projects = afterMaterialArrival(projects,arrived,ctx());
+        }
         const stock = next.stock ?? prev.stock;
         const operators = next.operators ?? prev.operators;
         const requests = next.requests ?? prev.requests;
@@ -470,12 +526,28 @@ export const useAppStore = create<AppState>()(
         void persistRemote((db, org) => writer(db, org, prev, { projects, stock, operators, requests }));
       };
 
-      /** Corre una operación y devuelve Result (nunca lanza). */
-      const run = <T,>(fn: () => T): Result<T> => {
+      /** A demo operation publishes and persists one complete candidate, including multi-step legacy actions. */
+      const guardResult = <T,>(fn: () => Result<T>): Result<T> => {
+        const ownsTransaction = get().demoLocal && !transaction;
+        if (ownsTransaction) transaction = rawGet();
         try {
-          return { ok: true, value: fn() };
+          const result = fn();
+          if (ownsTransaction) {
+            const next = transaction!;
+            transaction = undefined;
+            if (result.ok) set(next);
+          }
+          return result;
         } catch (e) {
           return { ok: false, error: errorMessage(e) };
+        } finally { if (ownsTransaction) transaction = undefined; }
+      };
+      /** Corre una operación y devuelve Result (nunca lanza). */
+      const run = <T,>(fn: () => T): Result<T> => guardResult(() => ({ ok: true, value: fn() }));
+      const guardVoid = (fn: () => void) => {
+        try { fn(); } catch (e) {
+          // The rejected data never entered state. Keep the existing global error visible for void actions.
+          try { rawSet({ syncStatus: "error", syncError: errorMessage(e) }); } catch { /* UI storage may also be full. */ }
         }
       };
 
@@ -661,7 +733,27 @@ export const useAppStore = create<AppState>()(
             return { ...p, ...patch, updatedAt: new Date().toISOString() };
           }),
 
-        changeProjectStatus: (id, status, opts) => mutate(id, (p) => ops.changeStatus(p, status, ctx(), opts)),
+        operationalStageLocal:(id,status,date,reason)=>mutate(id,(p)=>{
+          const st=get();if(!st.demoLocal || effectiveIdentity(st).session!=="jefe_planta") throw new ops.DomainError("Solo Planta administra el paso operativo entre Compras y Producción en demo local.");
+          if(p.isClosed || !["purchasing","production"].includes(p.status) || !st.ledger.boms.some(b=>b.projectId===id && b.status==="published"))throw new ops.DomainError("Se requiere un proyecto abierto con BOM publicado.");
+          if(status===p.status && (status!=="production" || p.productionDecision))return p;
+          const normalStart=status==="production"&&!p.productionDecision;
+          if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||Number.isNaN(Date.parse(date+"T12:00:00Z"))||date>todayISO()||(!normalStart&&reason.trim().length<3))throw new ops.DomainError("Indicá fecha efectiva no futura; los cambios excepcionales requieren motivo.");
+          const who=ctx();return {...p,status,procurementNotifiedAt:p.procurementNotifiedAt??who.now,productionDecision:status==="production" ? p.productionDecision??{date,reason:reason.trim(),by:who.actor,at:who.now}:p.productionDecision,updatedAt:who.now,activity:[...p.activity,{id:createId("stage"),kind:"status",at:who.now,actor:who.actor,message:`Planta: ${status==="production"?"inicio decidido de Producción":"materiales adicionales: vuelve a Compras"} (${date})${reason.trim()?`. ${reason.trim()}`:""}`}]};
+        }),
+        renameItemLocal:(id,itemId,name)=>mutate(id,(p)=>{
+          if(!get().demoLocal || effectiveIdentity(get()).session!=="administracion" || p.isClosed)throw new ops.DomainError("Administración renombra muebles de proyectos abiertos en demo local.");
+          if(name.trim().length<2 || !p.items.some(i=>i.id===itemId))throw new ops.DomainError("Mueble o nombre inválido.");
+          const who=ctx();return {...p,items:p.items.map(i=>i.id===itemId?{...i,quotationName:i.quotationName??i.name,name:name.trim()}:i),updatedAt:who.now,activity:[...p.activity,{id:createId("rename"),kind:"budget",at:who.now,actor:who.actor,message:`Nombre operativo del mueble ${itemId}: ${name.trim()}. Cotización original conservada.`}]};
+        }),
+        changeProjectStatus: (id, status, opts) => mutate(id, (p) => {
+          const st=get();if(st.demoLocal){const session=effectiveIdentity(st).session;const notified=p.procurementNotifiedAt || st.ledger.boms.some(b=>b.projectId===id&&b.status==="published") || ["purchasing","production","installation","completed"].includes(p.status);
+          if(!notified && p.status==="approved" && ["purchasing","production"].includes(status))throw new ops.DomainError("Publicá el BOM para comunicar la necesidad a Compras antes de avanzar.");
+          if(notified && ["approved","quotation"].includes(status) && status!==p.status)throw new ops.DomainError("La necesidad ya llegó a Compras: retroceso bloqueado.");
+          if(notified && status!==p.status && session==="administracion")throw new ops.DomainError("Después de publicar el BOM, Planta administra las etapas operativas.");
+          if(["purchasing","production"].includes(p.status)&&["purchasing","production"].includes(status)&&p.status!==status)throw new ops.DomainError("Usá la acción de Planta con fecha y motivo.");}
+          return ops.changeStatus(p,status,ctx(),opts);
+        }),
         rejectQuote: (id, reason) =>
           isQuoter(effectiveIdentity(get()).role)
             ? mutate(id, (p) => circuit.recordRejection(p, reason, ctx()))
@@ -681,16 +773,19 @@ export const useAppStore = create<AppState>()(
 
         addBudgetLine: (id, input) =>
           mutate(id, (p) => {
+            if (get().demoLocal && (p.baseline || p.status !== "quotation")) throw new ops.DomainError("La cotización aprobada es inmutable; editá el BOM.");
             requireQuoter("Editar el costo presupuestado", p);
             return ops.addBudgetLine(p, input, ctx());
           }),
         updateBudgetLine: (id, lineId, input) =>
           mutate(id, (p) => {
+            if (get().demoLocal && (p.baseline || p.status !== "quotation")) throw new ops.DomainError("La cotización aprobada es inmutable; editá el BOM.");
             requireQuoter("Editar el costo presupuestado", p);
             return ops.updateBudgetLine(p, lineId, input, ctx());
           }),
         removeBudgetLine: (id, lineId) =>
           mutate(id, (p) => {
+            if (get().demoLocal && (p.baseline || p.status !== "quotation")) throw new ops.DomainError("La cotización aprobada es inmutable; editá el BOM.");
             requireQuoter("Editar el costo presupuestado", p);
             return ops.removeBudgetLine(p, lineId, ctx());
           }),
@@ -701,7 +796,7 @@ export const useAppStore = create<AppState>()(
             if (get().demoLocal || get().ledgerReady) {
               // Cierra solo Gerencia, con todo terminado, la entrega real y sin materiales sin rendir.
               if (effectiveIdentity(get()).session !== "gerencia") throw new ops.DomainError("El cierre lo hace Gerencia.");
-              const check = closeCheck(project, get().ledger, get().stock, get().orders, get().deliveries);
+              const check = closeCheck(project, get().ledger, get().stock, get().orders, get().deliveries, { assignments:get().assignments,operators:get().operators,today:todayISO(),threshold:{ pct:get().settings.hoursDeviationPct,hours:get().settings.hoursDeviationHours },reviewed:get().reviewedHoursKeys });
               if (check.blockers.length) throw new ops.DomainError(check.blockers.join(" "));
               const closed = ops.closeProject(project, get().stock, ctx());
               const closure = { projectId: id, date: ctx().now.slice(0, 10), by: ctx().actor, pendingCosts: check.warnings };
@@ -737,37 +832,50 @@ export const useAppStore = create<AppState>()(
 
         addPurchaseEntry: (id, input) =>
           run(() => {
+            requireBuyer();
             const project = find(id);
-            const res = ops.addPurchase(project, get().stock, input, ctx());
+            const res = ops.addPurchase(project, get().stock, input, get().demoLocal?{...ctx(),role:"owner"}:ctx());
             commit({ projects: get().projects.map((p) => (p.id === id ? res.project : p)), stock: res.stock });
             return undefined;
           }),
 
         registerUsage: (id, input) =>
           run(() => {
+            if (effectiveIdentity(get()).session === "administracion") throw new ops.DomainError("El consumo lo registra Planta.");
+            if (get().demoLocal && effectiveIdentity(get()).session !== "jefe_planta") throw new ops.DomainError("El consumo lo registra exclusivamente Planta.");
+            if(get().demoLocal&&input.leftover?.destination&&input.leftover.destination!=="warehouse")throw new ops.DomainError("Planta devuelve el sobrante al depósito; Compras lo asigna al destino.");
             const project = find(id);
-            const res = ops.registerUsage(project, get().stock, input, get().settings, ctx());
+            // El dominio legado exige el rol de escritura general. En demo la sesión se valida arriba;
+            // este adaptador reutiliza su valoración y movimientos sin ampliar permisos de otras rutas.
+            const localContext = ctx();
+            const res = ops.registerUsage(project, get().stock, input, get().settings, get().demoLocal ? { ...localContext, role: "owner" } : localContext);
             commit({ projects: get().projects.map((p) => (p.id === id ? res.project : p)), stock: res.stock });
             return undefined;
           }),
 
         logHours: (id, input) =>
           mutate(id, (p) => {
+            if (effectiveIdentity(get()).session === "administracion") throw new ops.DomainError("Administración solo registra sus propias horas.");
+            if (get().demoLocal && input.requestId && p.actualEntries.some((e) => e.id === input.requestId)) return p;
             const assignment = get().assignments.find((a) => a.id === input.assignmentId);
             if (assignment) {
               const check = checkHours(get().projects.flatMap((p) => p.actualEntries), assignment.operatorId, assignment.date, input.hours, todayISO(), get().costSettings.hoursPerDay);
               if (check.level === "block") throw new ops.DomainError(check.message);
             }
-            const { priceHistory, costSettings, hourRates } = get();
-            const laborRate = hourRates.find((r) => r.id === "labor")?.hourlyRate;
-            // La hora se valúa con el costo vigente ESE día (precios con vigencia).
-            const costAt = (op: Operator, date: string) => assignment?.hourKind && assignment.hourKind !== "labor"
-              ? hourRatesAt(hourRates, priceHistory, date).find(r=>r.id === assignment.hourKind)?.hourlyRate ?? 0
-              : laborCostAt({ valuation: costSettings.laborValuation, operator: op, laborRate, history: priceHistory, date });
-            return ops.logHours(p, get().operators, get().assignments, { ...input, workdayHours: costSettings.hoursPerDay }, get().settings, ctx(), costAt);
+            const { costSettings, ledger } = get();
+            let categoryId = input.categoryId;
+            const costAt = (op: Operator, date: string) => {
+              const valued = employeeCost(ledger, op, date, input.categoryId, get().priceHistory);
+              if (valued.category && (assignment?.hourKind ?? "labor") !== valued.category) throw new ops.DomainError("La categoría laboral no corresponde al trabajo de la asignación.");
+              categoryId = valued.categoryId;
+              return valued.hourlyCost;
+            };
+            const next = ops.logHours(p, get().operators, get().assignments, { ...input, workdayHours: costSettings.hoursPerDay }, get().settings, ctx(), costAt);
+            return { ...next, actualEntries: next.actualEntries.map((e) => e === next.actualEntries.at(-1) ? { ...e, categoryId } : e) };
           }),
 
         logHoursManual: (id, input) => {
+          if (effectiveIdentity(get()).session === "administracion") return { ok:false,error:"Administración solo registra sus propias horas no operativas." };
           if (!isManager(effectiveIdentity(get()).role)) return { ok: false, error: "La carga manual de horas la hace un usuario Administrativo." };
           const check = checkHours(get().projects.flatMap((p) => p.actualEntries), input.operatorId, input.date, input.hours, todayISO(), get().costSettings.hoursPerDay);
           if (check.level === "block") return { ok: false, error: check.message ?? "Horas inválidas." };
@@ -785,21 +893,46 @@ export const useAppStore = create<AppState>()(
             });
             return { ok: true, value: undefined };
           }
-          const saved = get().saveAssignment({ projectId: id, itemId: input.itemId, rubro: input.rubro, operatorId: input.operatorId, date: input.date, plannedHours: input.hours });
-          if (!saved.ok) return saved;
-          return get().logHours(id, { assignmentId: saved.value, hours: input.hours, comment: input.comment, confirmHighHours: input.confirmHighHours });
+          return run(() => {
+            const state = get();
+            const p = find(id);
+            if (input.requestId && p.actualEntries.some((e) => e.id === input.requestId)) return undefined;
+            const op = state.operators.find((o) => o.id === input.operatorId);
+            if (!op) throw new ops.DomainError("Operario no encontrado.");
+            const valued = employeeCost(state.ledger, op, input.date, input.categoryId, state.priceHistory);
+            if (valued.category && valued.category !== "labor") throw new ops.DomainError("La ejecución productiva requiere una categoría laboral productiva.");
+            const draft = { projectId: id, itemId: input.itemId, rubro: input.rubro, operatorId: input.operatorId, date: input.date, plannedHours: input.hours };
+            const error = assignmentError(draft, { projects: state.projects, operators: configuredOperators(state.operators, state.ledger) });
+            if (error) throw new ops.DomainError(error);
+            const a: WorkAssignment = { ...draft, id: createId("asg"), hourKind: "labor", createdBy: ctx().actor, createdAt: ctx().now };
+            const assignments = [...state.assignments, a];
+            const next = ops.logHours(p, state.operators, assignments, { ...input, assignmentId: a.id, categoryId: valued.categoryId, workdayHours: state.costSettings.hoursPerDay }, state.settings, ctx(), () => valued.hourlyCost);
+            set({ assignments, projects: state.projects.map((project) => project.id === id ? { ...next, assignedOperatorIds: [...new Set([...next.assignedOperatorIds, op.id])] } : project) });
+            return undefined;
+          });
         },
 
-        addActualEntry: (id, input) => mutate(id, (p) => ops.addActual(p, input, get().settings, ctx())),
+        addActualEntry: (id, input) => mutate(id, (p) => {
+          const st=get(),who=effectiveIdentity(st);
+          if(st.demoLocal&&!['gerencia','administracion'].includes(who.session))throw new ops.DomainError("Otros costos se registran desde Administración o Gerencia.");
+          return ops.addActual(p,input,st.settings,st.demoLocal?{...ctx(),role:"owner"}:ctx());
+        }),
+        adjustOtherCostLocal:(id,entryId,input)=>mutate(id,p=>{
+          if(!get().demoLocal)throw new ops.DomainError("Rectificación disponible en demo local; requiere persistencia habilitada para la empresa.");
+          const who=effectiveIdentity(get());return adjustOtherCost(p,entryId,input,{session:who.session,actor:who.actor,now:ctx().now});
+        }),
 
         assignOperators: (id, operatorIds) => mutate(id, (p) => ops.assignOperators(p, operatorIds, get().operators, ctx())),
-        addItem: (id, input) => mutate(id, (p) => ops.addItem(p, input, ctx())),
-        updateItem: (id, itemId, input) => mutate(id, (p) => ops.updateItem(p, itemId, input, ctx())),
+        addItem: (id, input) => mutate(id, (p) => { if (get().demoLocal && (p.baseline || p.status !== "quotation")) throw new ops.DomainError("La cotización aprobada es inmutable; editá el BOM de producción."); return ops.addItem(p, input, ctx()); }),
+        updateItem: (id, itemId, input) => mutate(id, (p) => { if (get().demoLocal && (p.baseline || p.status !== "quotation")) throw new ops.DomainError("La cotización aprobada es inmutable; editá el BOM de producción."); return ops.updateItem(p, itemId, input, ctx()); }),
         setCompletedUnits: (projectId, itemId, units) =>
           run(() => {
+            requirePhysicalWriter();
+            if (effectiveIdentity(get()).session === "administracion") throw new ops.DomainError("Esta operación corresponde a Planta.");
             const who = effectiveIdentity(get()).roleKey;
             if (who !== "admin" && who !== "jefe_planta") throw new ops.DomainError("Las unidades terminadas las carga el Jefe de planta.");
             const project = find(projectId);
+            if (project.isClosed) throw new ops.DomainError("El proyecto está cerrado: no se puede modificar su avance.");
             const item = project.items.find((i) => i.id === itemId);
             if (!item) throw new ops.DomainError("Producto no encontrado.");
             const unitsError = completedUnitsError(item, units);
@@ -808,7 +941,7 @@ export const useAppStore = create<AppState>()(
             // Ya se guarda con la función de planta: se actualiza la memoria sin volver a escribir el proyecto.
             set({
               projects: get().projects.map((p) =>
-                p.id === projectId ? { ...p, updatedAt: now, items: p.items.map((i) => (i.id === itemId ? { ...i, completedUnits: units } : i)) } : p,
+                p.id === projectId ? { ...p, updatedAt: now, items: p.items.map((i) => (i.id === itemId ? { ...i, completedUnits: units, ...(get().demoLocal && units !== i.completedUnits ? { unitsHistory:[...(i.unitsHistory ?? []),{ date:todayISO(),previous:i.completedUnits,next:units,by:effectiveIdentity(get()).actor,at:now }] } : {}) } : i)) } : p,
               ),
             });
             void persistRemote((db) => remote.setCompletedUnits(db, projectId, itemId, units));
@@ -816,6 +949,9 @@ export const useAppStore = create<AppState>()(
           }),
         deliverMaterial: (input) =>
           run(() => {
+            if(input.source==="warehouse")throw new ops.DomainError("Compras debe asignar el stock libre al proyecto antes del registro de Planta.");
+            requirePhysicalWriter();
+            if (effectiveIdentity(get()).session === "administracion") throw new ops.DomainError("Esta operación corresponde a Planta.");
             const who = effectiveIdentity(get()).roleKey;
             if (who !== "admin" && who !== "jefe_planta") throw new ops.DomainError("La entrega de material la registra el Jefe de planta.");
             const r = deliverMaterial(find(input.projectId), get().stock, get().deliveries, input, { ...ctx(), today: todayISO() });
@@ -828,8 +964,34 @@ export const useAppStore = create<AppState>()(
             });
             return undefined;
           }),
+        directMaterialUsage: (input) =>
+          run(() => {
+            if(input.source==="warehouse")throw new ops.DomainError("Compras debe asignar el stock libre al proyecto antes del consumo de Planta.");
+            requirePhysicalWriter();
+            if (effectiveIdentity(get()).session === "administracion") throw new ops.DomainError("Esta operación corresponde a Planta.");
+            const who = effectiveIdentity(get()).roleKey;
+            if (who !== "admin" && who !== "jefe_planta") throw new ops.DomainError("El registro directo de material lo hace el Jefe de planta.");
+            if (get().demoLocal) {
+              const r = registerMaterialsLocal(find(input.projectId),get().stock,get().deliveries,input,{ ...ctx(),today:todayISO() });
+              set({ projects:get().projects.map((p) => p.id === input.projectId ? r.project : p),stock:r.stock });
+              return undefined;
+            }
+            const r = directMaterialUsage(find(input.projectId), get().stock, get().deliveries, input, { ...ctx(), today: todayISO(), carryOver: get().demoLocal });
+            set({ projects: get().projects.map((p) => (p.id === input.projectId ? r.project : p)), stock: r.stock, deliveries: r.deliveries });
+            const delivery = deliveryPayload(r.deliveryResult);
+            const close = closeDayPayload(r.closeInput, r);
+            void persistRemote(async (db) => {
+              const deliveryResult = await db.rpc("planta_deliver_material", { p: delivery });
+              if (deliveryResult.error) throw new Error(deliveryResult.error.message);
+              const closeResult = await db.rpc("planta_close_day", { p: close });
+              if (closeResult.error) throw new Error(closeResult.error.message);
+            });
+            return undefined;
+          }),
         closeDay: (input) =>
           run(() => {
+            requirePhysicalWriter();
+            if (effectiveIdentity(get()).session === "administracion") throw new ops.DomainError("Esta operación corresponde a Planta.");
             const who = effectiveIdentity(get()).roleKey;
             if (who !== "admin" && who !== "jefe_planta") throw new ops.DomainError("El cierre del día lo hace el Jefe de planta.");
             const r = closeDay(find(input.projectId), get().stock, get().deliveries, input, { ...ctx(), today: todayISO(), carryOver: get().demoLocal });
@@ -842,20 +1004,42 @@ export const useAppStore = create<AppState>()(
             });
             return undefined;
           }),
-        removeItem: (id, itemId) => mutate(id, (p) => ops.removeItem(p, itemId, ctx())),
+        removeItem: (id, itemId) => mutate(id, (p) => { if (get().demoLocal && (p.baseline || p.status !== "quotation")) throw new ops.DomainError("La cotización aprobada es inmutable; editá el BOM de producción."); return ops.removeItem(p, itemId, ctx()); }),
         addStageLog: (id, input) => mutate(id, (p) => ops.addStageLog(p, input, ctx()).project),
         addAttachment: (id, attachment) => mutate(id, (p) => ops.addAttachment(p, attachment, ctx())),
         removeAttachment: (id, attachmentId) => mutate(id, (p) => ops.removeAttachment(p, attachmentId, ctx())),
 
-        assignStock: (input) => mutateStock((s) => ops.assignStockToProject(s.projects, s.stock, input, ctx())),
+        assignStock: (input) => mutateStock((s) => {
+          const session = effectiveIdentity(s).session;
+          if (s.demoLocal && session !== "compras") throw new ops.DomainError("Las asignaciones de stock corresponden exclusivamente a Compras.");
+          if (session === "compras" && !s.demoLocal) throw new ops.DomainError("La asignación desde Compras está preparada en frontend local; requiere integración backend.");
+          return ops.assignStockToProject(s.projects,s.stock,input,ctx());
+        }),
+        reverseAssignmentLocal: (movementId,reason) => run(() => {
+          const state = get();
+          if (!state.demoLocal || effectiveIdentity(state).session !== "compras") throw new ops.DomainError("La reversión local corresponde exclusivamente a Compras.");
+          const movement = state.stock.movements.find((m) => m.id === movementId);
+          const projectId = movement?.to.type === "project" ? movement.to.projectId : undefined;
+          if (!projectId || state.projects.find((p) => p.id === projectId)?.isClosed) throw new ops.DomainError("No se revierte una asignación de un proyecto cerrado.");
+          const lot = state.stock.lots.find((l) => l.id === movement?.lotId);
+          const committed = state.deliveries.some((d) => d.projectId === projectId && d.materialId === lot?.materialId && !d.closedAt);
+          set({ stock:reverseAssignment(state.stock,movementId,reason,ctx(),committed) });
+          return undefined;
+        }),
         releaseStock: (input) => mutateStock((s) => ops.releaseProjectStock(s.projects, s.stock, input, ctx())),
-        transferStock: (input) => mutateStock((s) => ops.transferProjectStock(s.projects, s.stock, input, ctx())),
-        returnStockToSupplier: (input) => mutateStock((s) => ops.returnProjectStockToSupplier(s.projects, s.stock, input, ctx())),
-        markLeftover: (input) => mutateStock((s) => ops.leftoverFromProject(s.projects, s.stock, input, ctx())),
+        transferStock: (input) => mutateStock((s) => {
+          const session = effectiveIdentity(s).session;
+          if (s.demoLocal && session !== "compras") throw new ops.DomainError("Solo Compras transfiere stock entre proyectos.");
+          if (session === "compras" && !s.demoLocal) throw new ops.DomainError("La transferencia desde Compras está preparada en frontend local; requiere integración backend.");
+          return ops.transferProjectStock(s.projects,s.stock,input,ctx());
+        }),
+        returnStockToSupplier: (input) => mutateStock((s) => {requireBuyer();return ops.returnProjectStockToSupplier(s.projects,s.stock,input,s.demoLocal?{...ctx(),role:"owner"}:ctx());}),
+        markLeftover: (input) => mutateStock((s) => {if(s.demoLocal&&(effectiveIdentity(s).session!=="jefe_planta"||input.destination&&input.destination!=="warehouse"))throw new ops.DomainError("Planta registra sobrantes hacia depósito; Compras los asigna después.");return ops.leftoverFromProject(s.projects,s.stock,input,s.demoLocal?{...ctx(),role:"owner"}:ctx());}),
 
         addStockLot: (input) =>
           run(() => {
-            requireManager("Registrar compras de stock");
+            requireBuyer();
+            if(!get().demoLocal)requireManager("Registrar compras de stock");
             const c = ctx();
             const received = receiveStock(
               {
@@ -893,8 +1077,41 @@ export const useAppStore = create<AppState>()(
             return undefined;
           }),
 
+        saveEmployeeLocal: (input) => run(() => {
+          const state = get();
+          if (!state.demoLocal || effectiveIdentity(state).session !== "gerencia") throw new ops.DomainError("Los empleados se editan desde Gerencia → Personal.");
+          if (input.name.trim().length < 2 || !input.profile.categoryIds?.length) throw new ops.DomainError("Completá nombre y categorías laborales.");
+          const productive=state.ledger.staffCategories?.some(c=>input.profile.categoryIds?.includes(c.id)&&c.category==="labor")??false;
+          input={...input,profile:{...input.profile,productive,enabledRubros:productive?input.profile.enabledRubros:[]}};
+          const previous = state.operators.find((o) => o.id === input.id);
+          if (input.id && !previous) throw new ops.DomainError("Persona inexistente.");
+          if (previous?.active && !input.active) {
+            const error = people.reassignmentPlanError(state.operators,state.projects,previous.id,input.reassignmentPlan ?? {});
+            if (error) throw new ops.DomainError(error);
+          }
+          const now = new Date().toISOString();
+          // Keep the legacy field for compatibility; all new hours use employeeCost and explicit category.
+          const category = state.ledger.staffCategories?.find((c) => c.id === input.profile.categoryIds![0]);
+          if (!category) throw new ops.DomainError("Categoría inexistente.");
+          const op: Operator = { ...(previous ?? { id:createId("op"),createdAt:now,role:category.name,hourlyCost:category.hourlyCost }),name:input.name.trim(),email:input.email?.trim().toLowerCase() || undefined,hoursPerDay:input.profile.hoursPerDay,workDays:input.profile.workDays,productive:input.profile.productive,enabledRubros:input.profile.productive ? input.profile.enabledRubros : [],active:input.active,deactivatedAt:input.active ? undefined : previous?.deactivatedAt ?? now };
+          const operators = previous ? state.operators.map((o) => o.id === op.id ? op : o) : [...state.operators,op];
+          let ledger = savePersonnel(state.ledger,operators,{ ...input.profile,employeeId:op.id,enabledRubros:input.profile.productive ? input.profile.enabledRubros : [] });
+          if (input.individualRate) ledger = addEmployeeRate(ledger,{ scope:"employee",subjectId:op.id,hourlyRate:input.individualRate.hourlyCost,validFrom:input.individualRate.validFrom },{ actor:effectiveIdentity(state).actor,now });
+          const open = previous?.active && !input.active ? new Set(people.openProjectsOf(state.projects,op.id).map((p)=>p.id)) : new Set<string>();
+          const projects = state.projects.map((p)=>open.has(p.id) ? ops.reassignForDeactivation(p,op.id,input.reassignmentPlan?.[p.id] ?? null,state.operators,ctx()) : p);
+          set({ operators,ledger,projects }); return op.id;
+        }),
+        createEmployeeLocal: (input,profile) => run(() => {
+          const st = get();
+          if (!st.demoLocal || effectiveIdentity(st).session !== "gerencia") throw new ops.DomainError("El alta local se realiza en Gerencia → Personal.");
+          const op = people.createOperator(input,new Date().toISOString());
+          const operators = [...st.operators,op];
+          const ledger = savePersonnel(st.ledger,operators,{ ...profile,employeeId:op.id });
+          set({ operators,ledger });return op.id;
+        }),
         createOperator: (input) =>
           run(() => {
+            if (get().demoLocal && effectiveIdentity(get()).session !== "gerencia") throw new ops.DomainError("Personal se administra exclusivamente desde Gerencia.");
             requireManager("Cargar operarios");
             const operator = people.createOperator(input, new Date().toISOString());
             commit({ operators: [...get().operators, operator] });
@@ -903,6 +1120,7 @@ export const useAppStore = create<AppState>()(
 
         updateOperator: (id, input, validFrom = todayISO()) =>
           run(() => {
+            if (get().demoLocal && effectiveIdentity(get()).session !== "gerencia") throw new ops.DomainError("Personal se administra exclusivamente desde Gerencia.");
             requireManager("Editar operarios");
             const current = get().operators.find((o) => o.id === id);
             if (!current) throw new ops.DomainError("Operario no encontrado.");
@@ -917,6 +1135,7 @@ export const useAppStore = create<AppState>()(
 
         deactivateOperator: (id, plan = {}) =>
           run(() => {
+            if (get().demoLocal && effectiveIdentity(get()).session !== "gerencia") throw new ops.DomainError("Personal se administra exclusivamente desde Gerencia.");
             requireManager("Dar de baja operarios");
             const { operators, projects } = get();
             const planError = people.reassignmentPlanError(operators, projects, id, plan);
@@ -933,6 +1152,7 @@ export const useAppStore = create<AppState>()(
 
         reactivateOperator: (id) =>
           run(() => {
+            if (get().demoLocal && effectiveIdentity(get()).session !== "gerencia") throw new ops.DomainError("Personal se administra exclusivamente desde Gerencia.");
             requireManager("Reactivar operarios");
             commit({ operators: people.reactivateOperator(get().operators, id) });
             return undefined;
@@ -940,6 +1160,7 @@ export const useAppStore = create<AppState>()(
 
         deleteOperator: (id) =>
           run(() => {
+            if (get().demoLocal && effectiveIdentity(get()).session !== "gerencia") throw new ops.DomainError("Personal se administra exclusivamente desde Gerencia.");
             requireManager("Eliminar operarios");
             const next = people.deleteOperator(get().operators, get().projects, id);
             commit(next);
@@ -982,25 +1203,26 @@ export const useAppStore = create<AppState>()(
             return undefined;
           }),
 
-        resolveAlert: (alertId) => {
+        resolveAlert: (alertId) => guardVoid(() => {
           if (get().resolvedAlertIds.includes(alertId)) return;
           set({ resolvedAlertIds: [...get().resolvedAlertIds, alertId] });
           void persistRemote((db, org) => remote.setAlertResolved(db, org, alertId, true));
-        },
-        reopenAlert: (alertId) => {
+        }),
+        reopenAlert: (alertId) => guardVoid(() => {
           set({ resolvedAlertIds: get().resolvedAlertIds.filter((a) => a !== alertId) });
           void persistRemote((db, org) => remote.setAlertResolved(db, org, alertId, false));
-        },
+        }),
 
-        updateSettings: (patch) => {
+        updateSettings: (patch) => guardResult(() => {
+          if(effectiveIdentity(get()).session!=="gerencia")return {ok:false,error:"Los parámetros se administran exclusivamente en Gerencia."};
           const settings = { ...get().settings, ...patch };
           set({ settings });
           void persistRemote((db, org) => remote.saveSettings(db, org, settings));
           return { ok: true, value: undefined };
-        },
+        }),
 
-        updateCostSettings: (patch, validFrom = todayISO()) => {
-          if (!isManager(effectiveIdentity(get()).role)) return { ok: false, error: "Configuración la cambia un usuario Administrativo." };
+        updateCostSettings: (patch, validFrom = todayISO()) => guardResult(() => {
+          if (effectiveIdentity(get()).session!=="gerencia") return { ok: false, error: "Configuración la cambia Gerencia." };
           const prev = get().costSettings;
           const next = { ...prev, ...patch };
           const error = costSettingsError(next) ?? (patch.overtimeMultiplier !== undefined ? priceChangeError({ value: next.overtimeMultiplier, validFrom }) : null);
@@ -1013,9 +1235,9 @@ export const useAppStore = create<AppState>()(
           set({ costSettings });
           void persistRemote((db, org) => remote.saveCostSettings(db, org, costSettings));
           return { ok: true, value: undefined };
-        },
-        saveHourRates: (rates, validFrom = todayISO()) => {
-          if (!isManager(effectiveIdentity(get()).role)) return { ok: false, error: "Las tarifas las cambia un usuario Administrativo." };
+        }),
+        saveHourRates: (rates, validFrom = todayISO()) => guardResult(() => {
+          if (effectiveIdentity(get()).session!=="gerencia") return { ok: false, error: "Las tarifas las cambia Gerencia." };
           const error = hourRatesError(rates) ?? priceChangeError({ value: 1, validFrom });
           if (error) return { ok: false, error };
           const prev = get().hourRates;
@@ -1025,24 +1247,47 @@ export const useAppStore = create<AppState>()(
           set({ hourRates });
           void persistRemote((db, org) => remote.saveHourRates(db, org, hourRates));
           return { ok: true, value: undefined };
-        },
-        setMaterialPrices: (prices, validFrom) => {
+        }),
+        saveCatalogMaterialLocal: (input) => run(() => {
+          const st = get(); const who = effectiveIdentity(st);
+          if (!st.demoLocal || who.session !== "administracion") throw new ops.DomainError("El catálogo se edita en Administración de la demo local.");
+          if (input.name.trim().length < 2 || !input.unit.trim() || !Number.isFinite(input.price) || input.price < 0 || !/^\d{4}-\d{2}-\d{2}$/.test(input.validFrom)) throw new ops.DomainError("Completá material, unidad, rubro, precio y vigencia válidos.");
+          const all = materialCatalog(st.ledger);
+          if (all.some((m) => m.id !== input.id && m.name.toLowerCase() === input.name.trim().toLowerCase())) throw new ops.DomainError("Ese material ya existe.");
+          const previous = all.find((m) => m.id === input.id); const id = previous?.id ?? createId("mat");
+          const now = new Date().toISOString();
+          set({ projects:st.projects.map((p)=>input.validFrom <= todayISO() && p.status === "quotation" && !p.baseline ? { ...p,budgetLines:p.budgetLines.map((l)=>l.category === "materials" && l.materialId === id && l.unit === input.unit.trim() && l.quantity !== null ? { ...l,unitCost:input.price,total:Math.round(l.quantity*input.price*100)/100 } : l) } : p),ledger:{ ...st.ledger,materialCatalog:[...(st.ledger.materialCatalog ?? []).filter((m) => m.id !== id),{ id,name:input.name.trim(),unit:input.unit.trim(),rubro:previous?.rubro,referenceCost:previous?.referenceCost ?? input.price,active:previous?.active ?? true,validFrom:previous?.validFrom ?? input.validFrom }] },priceHistory:[...st.priceHistory,{ id:createId("price"),kind:"material_price",subjectId:id,value:input.price,validFrom:input.validFrom,createdBy:who.actor,createdAt:now }] });
+          return undefined;
+        }),
+        setMaterialPrices: (prices, validFrom) => guardResult(() => {
+          if (get().demoLocal && effectiveIdentity(get()).session !== "administracion") return { ok:false,error:"Los precios de referencia se editan exclusivamente en Administración." };
           if (!isManager(effectiveIdentity(get()).role)) return { ok: false, error: "Los precios los cambia un usuario Administrativo." };
           const bad = prices.map((p) => priceChangeError({ value: p.value, validFrom })).find(Boolean);
           if (bad) return { ok: false, error: bad };
           addHistory(prices.flatMap((p) => changeOf("material_price", p.materialId, p.value, p.previousValue, validFrom)));
           return { ok: true, value: undefined };
-        },
+        }),
         saveAssignment: (input) =>
           run(() => {
+            if (get().demoLocal && effectiveIdentity(get()).session !== "jefe_planta") throw new ops.DomainError("La planificación de operarios corresponde a Planta.");
+            if (effectiveIdentity(get()).session === "administracion") throw new ops.DomainError("Administración no asigna trabajo de operarios.");
             const who = effectiveIdentity(get()).roleKey;
             if (who !== "admin" && who !== "jefe_planta") throw new ops.DomainError("Las asignaciones las hace el Jefe de planta.");
             const { projects, operators, assignments } = get();
-            const error = assignmentError(input, { projects, operators });
+            if (!get().demoLocal && get().organizationId && !input.itemId) throw new ops.DomainError("La planificación sin mueble está preparada en frontend; el backend actual todavía exige producto. No se guardó la asignación.");
+            if (get().ledger.rubroCatalog.some((r) => r.id === input.rubro && !r.active)) throw new ops.DomainError("El rubro está desactivado para nuevas asignaciones.");
+            if (get().demoLocal && !configuredOperators(operators,get().ledger).find((o)=>o.id===input.operatorId)?.enabledRubros?.includes(input.rubro)) throw new ops.DomainError("Rubro pendiente de habilitar en Personal para esta persona.");
+            const error = assignmentError(input, { projects, operators: configuredOperators(operators,get().ledger) });
             if (error) throw new ops.DomainError(error);
+            const employee=configuredOperators(operators,get().ledger).find(o=>o.id===input.operatorId)!;
+            const capacity=dayCapacity(employee,input.date,get().dayExceptions,get().costSettings.hoursPerDay).hours;
+            const planned=assignments.filter(a=>a.id!==input.id&&a.operatorId===input.operatorId&&a.date===input.date).reduce((sum,a)=>sum+a.plannedHours,0)+input.plannedHours;
+            if(planned>capacity+1e-6&&(input.overloadReason?.trim().length??0)<3)throw new ops.DomainError(`La persona quedaría con ${planned} h sobre ${capacity} h disponibles. Indicá el motivo de la sobreasignación.`);
             const previous = input.id ? assignments.find((a) => a.id === input.id) : undefined;
             const a: WorkAssignment = {
               id: input.id ?? createId("asg"),
+              batchId: previous?.batchId,
+              overloadReason:input.overloadReason?.trim()||undefined,
               projectId: input.projectId,
               hourKind: input.hourKind ?? "labor",
               itemId: input.itemId,
@@ -1063,8 +1308,34 @@ export const useAppStore = create<AppState>()(
             void persistRemote((db) => remote.saveAssignment(db, a));
             return a.id;
           }),
+        saveAssignmentsBatch: (requestId,inputs) => run(() => {
+          const state=get();
+          if(!state.demoLocal)throw new ops.DomainError("El alta múltiple atómica está disponible en frontend local; falta integración backend. No se guardaron asignaciones.");
+          if(effectiveIdentity(state).session!=="jefe_planta")throw new ops.DomainError("La planificación corresponde a Planta.");
+          if(!requestId.trim()||!inputs.length)throw new ops.DomainError("El lote requiere identidad y al menos una asignación.");
+          const signature=(a:AssignmentInput)=>JSON.stringify([a.projectId,a.itemId??null,a.operatorId,a.rubro,a.date,a.plannedHours,a.hourKind??"labor"]);
+          const previous=state.assignments.filter(a=>a.batchId===requestId);
+          if(previous.length){
+            if(previous.length!==inputs.length||inputs.some((a,i)=>signature(a)!==signature(previous.find(p=>p.id===`${requestId}-${i}`)??{} as AssignmentInput)))throw new ops.DomainError("El identificador del lote ya fue utilizado con otros datos; revisá las asignaciones existentes.");
+            return inputs.map((_,i)=>`${requestId}-${i}`);
+          }
+          if(new Set(inputs.map(signature)).size!==inputs.length)throw new ops.DomainError("El lote contiene asignaciones repetidas.");
+          const operators=configuredOperators(state.operators,state.ledger);
+          for(const a of inputs){
+            const error=assignmentError(a,{projects:state.projects,operators});if(error)throw new ops.DomainError(error);
+            if(!state.ledger.rubroCatalog.some(r=>r.id===a.rubro&&r.active)||!operators.find(o=>o.id===a.operatorId)?.enabledRubros?.includes(a.rubro))throw new ops.DomainError("Rubro no habilitado para una de las personas del lote.");
+          }
+          const ids=inputs.map((_,i)=>`${requestId}-${i}`);
+          if(ids.some(id=>state.assignments.some(a=>a.id===id)))throw new ops.DomainError("Hay una identidad de asignación ya utilizada.");
+          for(const [i,input] of inputs.entries()){
+            const result=get().saveAssignment({...input,id:ids[i]});if(!result.ok)throw new ops.DomainError(result.error);
+          }
+          set({assignments:get().assignments.map(a=>ids.includes(a.id)?{...a,batchId:requestId}:a)});
+          return ids;
+        }),
         removeAssignment: (id) =>
           run(() => {
+            if (get().demoLocal && effectiveIdentity(get()).session !== "jefe_planta") throw new ops.DomainError("La planificación de operarios corresponde a Planta.");
             const who = effectiveIdentity(get()).roleKey;
             if (who !== "admin" && who !== "jefe_planta") throw new ops.DomainError("Las asignaciones las hace el Jefe de planta.");
             set({ assignments: get().assignments.filter((a) => a.id !== id) });
@@ -1075,6 +1346,8 @@ export const useAppStore = create<AppState>()(
           run(() => {
             const who = effectiveIdentity(get()).roleKey;
             if (who !== "admin" && who !== "jefe_planta") throw new ops.DomainError("Los días laborales los define el Jefe de planta.");
+            if(get().demoLocal && ((change.add?.length??0)>0 || (change.remove?.length??0)>0) && effectiveIdentity(get()).session!=="jefe_planta")throw new ops.DomainError("Las ausencias y excepciones se administran en Jefe de Planta.");
+            if (change.workDays && effectiveIdentity(get()).session !== "gerencia") throw new ops.DomainError("Los días habituales se configuran en Gerencia; Planta registra excepciones.");
             const operator = get().operators.find((o) => o.id === operatorId);
             if (!operator) throw new ops.DomainError("Operario no encontrado.");
             const error = (change.workDays ? workDaysError(change.workDays) : null) ?? (change.add ?? []).map(exceptionError).find(Boolean) ?? null;
@@ -1088,6 +1361,7 @@ export const useAppStore = create<AppState>()(
               operators: change.workDays
                 ? get().operators.map((o) => (o.id === operatorId ? { ...o, workDays: [...new Set(change.workDays)].sort((a, b) => a - b) } : o))
                 : get().operators,
+              ledger: get().demoLocal && change.workDays ? { ...get().ledger,personnel:get().ledger.personnel?.map((p)=>p.employeeId===operatorId ? {...p,workDays:[...new Set(change.workDays)].sort((a,b)=>a-b)} : p) } : get().ledger,
               dayExceptions: [...get().dayExceptions.filter((x) => !(x.operatorId === operatorId && touched.has(x.date))), ...added].sort((a, b) => a.date.localeCompare(b.date)),
             });
             void persistRemote((db) => remote.saveSchedule(db, operatorId, change));
@@ -1095,9 +1369,17 @@ export const useAppStore = create<AppState>()(
           }),
         saveOrder: (draft) =>
           run(() => {
+            requireBuyer();
             if (!isBuyer(effectiveIdentity(get()).role)) throw new ops.DomainError("Las órdenes de compra las maneja Compras o un usuario Administrativo.");
             const error = orderDraftError(draft);
             if (error) throw new ops.DomainError(error);
+            if(draft.lines.some(isWarehouseLine)){
+              if(!get().demoLocal)throw new ops.DomainError("Las OC de depósito requieren habilitación de persistencia; disponibles en demo local.");
+              for(const line of draft.lines.filter(isWarehouseLine)){
+                const m=materialCatalog(get().ledger).find(m=>m.id===line.materialId&&m.active!==false);
+                if(!m||m.unit!==line.unit||m.name!==line.materialName)throw new ops.DomainError("Seleccioná material activo del catálogo y conservá su unidad.");
+              }
+            }
             const previous = draft.id ? findOrder(draft.id) : undefined;
             if (previous && previous.status !== "draft") throw new ops.DomainError("Solo se modifica una orden en Borrador.");
             const order: PurchaseOrder = {
@@ -1111,7 +1393,7 @@ export const useAppStore = create<AppState>()(
               notes: draft.notes?.trim() || undefined,
               lines: draft.lines.map((l) => ({
                 ...l,
-                id: previous?.lines.find((x) => x.projectId === l.projectId && x.budgetLineId === l.budgetLineId)?.id ?? createId("ocl"),
+                id: previous?.lines.find((x) => x.projectId === l.projectId && x.budgetLineId === l.budgetLineId && x.destination===l.destination && x.materialId===l.materialId && x.unit===l.unit)?.id ?? createId("ocl"),
                 receivedQuantity: 0,
               })),
               createdBy: previous?.createdBy ?? effectiveIdentity(get()).actor,
@@ -1123,14 +1405,30 @@ export const useAppStore = create<AppState>()(
           }),
         sendOrder: (id) =>
           run(() => {
+            requireBuyer();
             const o = findOrder(id);
             if (o.status !== "draft") throw new ops.DomainError("Solo se envía una orden en Borrador.");
-            replaceOrder({ ...o, status: "sent" });
+            replaceOrder({ ...o, status: "sent",...(get().demoLocal?{statusHistory:[...(o.statusHistory??[]),{previous:"draft" as const,next:"sent" as const,at:ctx().now,by:ctx().actor,reason:"Envío al proveedor registrado por Compras."}]}:{}) });
             void persistRemote((db) => remote.orderStatus(db, { id, action: "send" }));
             return undefined;
           }),
+        correctSentOrderLocal: (id, reason) => run(() => {
+          requireBuyer();
+          if (!get().demoLocal) throw new ops.DomainError("Corrección disponible en demo local; requiere integración backend para empresas reales.");
+          replaceOrder(correctSentOrder(findOrder(id),reason,ctx()));
+          return undefined;
+        }),
+        reverseReceiptLocal: (id, movementId, reason) => run(() => {
+          requireBuyer();
+          if (!get().demoLocal) throw new ops.DomainError("Reversión disponible en demo local; requiere integración backend para empresas reales.");
+          const result = reverseLocalReceipt(findOrder(id),get().stock,get().deliveries,movementId,reason,ctx());
+          set({ stock:result.stock,orders:get().orders.map((o) => o.id === id ? result.order : o) });
+          return undefined;
+        }),
         invoiceOrder: (id, invoice) =>
           run(() => {
+            if (get().demoLocal && effectiveIdentity(get()).session !== "administracion") throw new ops.DomainError("La carga de facturas corresponde a Administración.");
+            if (effectiveIdentity(get()).session === "compras") throw new ops.DomainError("La carga de facturas no está habilitada en Compras.");
             const o = findOrder(id);
             const error = invoiceError(o, invoice);
             if (error) throw new ops.DomainError(error);
@@ -1154,6 +1452,8 @@ export const useAppStore = create<AppState>()(
           }),
         setOrderPaid: (id, paid) =>
           run(() => {
+            if(get().demoLocal)throw new ops.DomainError("Registrá el débito efectivo desde Administración → Facturación y pagos, sobre una solicitud de Compras.");
+            if (effectiveIdentity(get()).session !== "gerencia") throw new ops.DomainError("Solo Gerencia registra pagos efectivos.");
             const o = findOrder(id);
             if (o.status !== "invoiced") throw new ops.DomainError("Solo se marca como pagada una orden Facturada.");
             replaceOrder({ ...o, paid });
@@ -1162,19 +1462,24 @@ export const useAppStore = create<AppState>()(
           }),
         receiveOrder: (id, receipts) =>
           run(() => {
+            requireBuyer();
+            requirePhysicalWriter();
+            if (effectiveIdentity(get()).session === "administracion") throw new ops.DomainError("Las recepciones corresponden a Compras.");
             const o = findOrder(id);
             const { actor } = effectiveIdentity(get());
             const res = receiveOrderLines(o, receipts, get().projects, { actor, now: new Date().toISOString(), today: todayISO() });
             if (res.sent.length === 0) throw new ops.DomainError("Indicá cuánto llegó de cada material.");
             // La base crea el mismo lote y movimiento: se actualiza la memoria sin volver a escribir el stock.
-            set({ stock: applyChange(get().stock, res.change) });
-            replaceOrder(res.order);
+            set({ stock: applyChange(get().stock, res.change), ...(get().demoLocal ? { projects: afterMaterialArrival(get().projects,res.change.movements.filter((m) => m.to.type === "project").map((m) => m.to.type === "project" ? m.to.projectId : ""),ctx()) } : {}) });
+            replaceOrder(get().demoLocal ? { ...res.order,localReceipts:[...(o.localReceipts ?? []),...res.sent.map((r) => ({ movementId:r.movement_id,lineId:r.line_id,lotId:r.lot_id,quantity:r.quantity,date:todayISO(),by:actor }))] } : res.order);
             void persistRemote((db) => remote.orderStatus(db, { id, action: "receive", receipts: res.sent }));
             return undefined;
           }),
         correctValue: async (projectId, input) => {
+          if (effectiveIdentity(get()).session === "administracion") return { ok:false,error:"La cotización aprobada es inmutable. Publicá una nueva versión del BOM." };
           const project = get().projects.find((p) => p.id === projectId);
           if (!project) return { ok: false, error: "Proyecto no encontrado." };
+          if (get().demoLocal && project.baseline && input.target === "budget_line") return { ok:false,error:"La cotización aprobada es inmutable para todas las vistas." };
           if (!isManager(effectiveIdentity(get()).role)) return { ok: false, error: "Las correcciones las hace un usuario Administrativo." };
           const error = correctionError(project, input);
           if (error) return { ok: false, error };
@@ -1192,12 +1497,16 @@ export const useAppStore = create<AppState>()(
           }
         },
 
-        resetDemo: () => (get().demoLocal ? (get().restoreLocalDemo(), Promise.resolve({ ok: true, value: undefined })) : replaceAll(demoWorkspace(), true)),
+        resetDemo: () => get().demoLocal ? Promise.resolve(run(() => {
+          set({ ...(demoFixture() as Partial<AppState>), currentMode: "gerencia", actingOperatorId: null });
+          return undefined;
+        })) : replaceAll(demoWorkspace(), true),
         clearData: () => replaceAll({ ...EMPTY_DATA, settings: { ...DEFAULT_SETTINGS } }, false),
-        enterLocalDemo: () => {
+        enterLocalDemo: () => guardVoid(() => {
           const saved = readDemo();
           const fixture = demoFixture();
           const data = saved ? { ...fixture, ...saved, ledger: normalizeLedger(saved.ledger as Ledger | undefined) } : fixture;
+          if (!saved && typeof window !== "undefined" && !writeDemo(data)) throw new ops.DomainError("La demo no quedó guardada: el almacenamiento local no está disponible. No se reemplazaron los datos anteriores.");
           set({
             ...(data as Partial<AppState>),
             demoLocal: true,
@@ -1212,13 +1521,11 @@ export const useAppStore = create<AppState>()(
             syncError: null,
           });
           setDemoActive(true);
-          if (!saved) writeDemo(pickDemoData(get() as unknown as Record<string, unknown>));
-        },
-        restoreLocalDemo: () => {
+        }),
+        restoreLocalDemo: () => guardVoid(() => {
           if (!get().demoLocal) return;
           set({ ...(demoFixture() as Partial<AppState>), currentMode: "gerencia", actingOperatorId: null });
-          writeDemo(pickDemoData(get() as unknown as Record<string, unknown>));
-        },
+        }),
         exitLocalDemo: () => {
           setDemoActive(false);
           set({ demoLocal: false });
@@ -1230,10 +1537,38 @@ export const useAppStore = create<AppState>()(
             if (!get().reviewedHoursKeys.includes(key)) set({ reviewedHoursKeys: [...get().reviewedHoursKeys, key] });
             return undefined;
           }),
+        executeWorkLocal: (input) => run(() => {
+          const state = get();
+          const who = effectiveIdentity(state);
+          if (!state.demoLocal || who.session !== "operario" || who.operator?.id !== input.operatorId) throw new ops.DomainError("Esta carga flexible está disponible para el operario en el frontend local; falta integración backend.");
+          const op = state.operators.find((o) => o.id === input.operatorId);
+          if (!op) throw new ops.DomainError("Operario no encontrado.");
+          const internal = state.ledger.internalHours.filter((h) => h.employeeId === op.id && h.date === input.date).reduce((s,h) => s+h.hours,0);
+          const combined = checkHours(state.projects.flatMap((p) => p.actualEntries),op.id,input.date,input.hours+internal,todayISO(),state.costSettings.hoursPerDay);
+          if (combined.level === "block") throw new ops.DomainError(combined.message);
+          const valued = employeeCost(state.ledger,op,input.date,input.categoryId,state.priceHistory);
+          if (valued.category && valued.category !== "labor") throw new ops.DomainError("La ejecución productiva requiere una categoría laboral productiva.");
+          const cost = valued.hourlyCost;
+          set({ projects: executeWork(state.projects,configuredOperators(state.operators,state.ledger),state.assignments,{ ...input,categoryId:valued.categoryId },{ actor: who.actor, now: new Date().toISOString(), today: todayISO(), cost, hoursPerDay: state.costSettings.hoursPerDay }) });
+          return undefined;
+        }),
+        correctExecutionLocal: (input) => run(() => {
+          const state = get(); const who = effectiveIdentity(state);
+          if (!state.demoLocal || !["gerencia","jefe_planta"].includes(who.session)) throw new ops.DomainError("Esta corrección está disponible en el frontend local; falta integración backend.");
+          const old = state.projects.flatMap((p) => p.actualEntries).find((e) => e.id === input.entryId);
+          const internal = state.ledger.internalHours.filter((h) => h.employeeId === old?.operatorId && h.date === input.date).reduce((s,h) => s+h.hours,0);
+          const productive = state.projects.flatMap((p) => p.actualEntries).filter((e) => e.id !== input.entryId && e.operatorId === old?.operatorId && e.date === input.date).reduce((s,e) => s+(e.labor?.hours ?? 0),0);
+          if (internal + productive + input.hours > 24) throw new ops.DomainError("La suma de horas reales de la persona supera las 24 h del día.");
+          set({ projects: correctExecution(state.projects,configuredOperators(state.operators,state.ledger),input,{ actor: who.actor, now: new Date().toISOString(), today: todayISO(), hoursPerDay: state.costSettings.hoursPerDay }) });
+          return undefined;
+        }),
         correctHoursLocal: (input) =>
           run(() => {
             if (!get().demoLocal) throw new ops.DomainError("Solo en el modo demostración.");
             if (!["jefe_planta", "gerencia"].includes(effectiveIdentity(get()).session)) throw new ops.DomainError("La corrección de horas la hace el Jefe de planta.");
+            const source=get().projects.find(p=>p.actualEntries.some(e=>e.id===input.entryId));
+            if(source?.isClosed||source?.status==="completed")throw new ops.DomainError("No se redistribuyen horas de un proyecto cerrado.");
+            for(const allocation of input.allocations.filter(a=>a.hours>0)){const asg=get().assignments.find(a=>a.id===allocation.assignmentId);const target=get().projects.find(p=>p.id===asg?.projectId);if(target?.isClosed||target?.status==="completed")throw new ops.DomainError("No se envían horas a un proyecto cerrado.");}
             const { actor } = effectiveIdentity(get());
             set({ projects: correctHours(get().projects, get().assignments, input, { actor, now: new Date().toISOString(), id: () => createId("hc") }) });
             return undefined;
@@ -1245,9 +1580,69 @@ export const useAppStore = create<AppState>()(
             const who = effectiveIdentity(state);
             if (!sessions.includes(who.session)) throw new ops.DomainError("Esta acción no corresponde a tu sesión.");
             // Las reglas son las de lib/ledger.ts (puras): si algo no corresponde, lanza acá y no se guarda nada.
-            const ledger = fn(state.ledger, { actor: who.actor, now: new Date().toISOString() }, state);
+            const employee=employeeForSession(state.operators,state.ledger,who,state.userId,state.demoLocal);
+            const context=Object.freeze({actor:who.actor,now:new Date().toISOString(),employeeId:employee?.id});
+            // Una función rechazada tampoco puede mutar por referencia los registros compartidos.
+            const candidate=structuredClone(state.ledger);
+            const isolatedData=structuredClone(pickDemoData(state as unknown as Record<string,unknown>));
+            const returned=fn(candidate,context,{...state,...isolatedData,ledger:candidate});
+            const ledger=Object.fromEntries(Object.entries(returned).map(([key,value])=>[key,JSON.stringify(value)===JSON.stringify(state.ledger[key as keyof Ledger])?state.ledger[key as keyof Ledger]:value])) as unknown as Ledger;
+            validateInternalHoursChange(state.ledger,ledger,state.projects,employee,who.session,context,state.priceHistory);
+            if(ledger.internalHours!==state.ledger.internalHours)ledger.internalHours=ledger.internalHours.map(h=>{if(state.ledger.internalHours.some(old=>old.id===h.id))return h;const valued=employee?employeeCost(ledger,employee,h.date,h.categoryId,state.priceHistory):undefined;const category=ledger.staffCategories?.find(c=>c.id===valued?.categoryId);return category?{...h,categoryId:category.id,categoryName:category.name,costCategory:category.category}:h;});
+            if (state.demoLocal) {
+              if(ledger.personnel!==state.ledger.personnel)for(const person of ledger.personnel??[])if(JSON.stringify(state.ledger.personnel?.find(p=>p.employeeId===person.employeeId))!==JSON.stringify(person))savePersonnel({...ledger,personnel:state.ledger.personnel},state.operators,person);
+              if(ledger.staffCategories!==state.ledger.staffCategories && (state.ledger.staffCategories??[]).some(c=>{const next=ledger.staffCategories?.find(x=>x.id===c.id);return !next || next.category!==c.category || next.kind!==c.kind;}))throw new ops.DomainError("Conservá la identidad y clasificación histórica de las categorías; desactivá en lugar de borrar.");
+              const financeChanged=ledger.salesInvoices!==state.ledger.salesInvoices || ledger.collections!==state.ledger.collections || ledger.supplierPayments!==state.ledger.supplierPayments || ledger.financialCorrections!==state.ledger.financialCorrections;
+              if(financeChanged && who.session!=="administracion")throw new ops.DomainError("Facturas, cobros y pagos efectivos se registran exclusivamente en Administración; Gerencia solo consulta.");
+              if(financeChanged){
+                const corrections=ledger.financialCorrections??[],oldCorrections=state.ledger.financialCorrections??[];
+                if(oldCorrections.some(c=>JSON.stringify(corrections.find(x=>x.id===c.id))!==JSON.stringify(c)))throw new ops.DomainError("El historial financiero es inmutable.");
+                for(const [field,entity] of [["salesInvoices","invoice"],["collections","collection"],["supplierPayments","payment"]] as const){
+                  const old=state.ledger[field],next=ledger[field];
+                  if(new Set(next.map(x=>x.id)).size!==next.length)throw new ops.DomainError("No se duplican identidades de registros financieros.");
+                  for(const row of old){const after=next.find(x=>x.id===row.id);if(!after)throw new ops.DomainError("No se borran registros financieros; corregí o anulá con historial.");
+                  if(JSON.stringify(after)!==JSON.stringify(row)&&!corrections.some(c=>c.entity===entity&&c.targetId===row.id&&!oldCorrections.some(o=>o.id===c.id)&&JSON.stringify(c.before)===JSON.stringify(row)&&JSON.stringify(c.after)===JSON.stringify(after)))throw new ops.DomainError("La corrección financiera requiere antes/después, autor y motivo.");}
+                }
+              }
+              if(ledger.paymentRequests!==state.ledger.paymentRequests && !["compras","administracion"].includes(who.session))throw new ops.DomainError("Compras solicita pagos y Administración gestiona el banco.");
+              if(ledger.paymentRequests!==state.ledger.paymentRequests && who.session==="administracion" && ((ledger.paymentRequests??[]).length!==(state.ledger.paymentRequests??[]).length || (ledger.paymentRequests??[]).some(r=>{const old=state.ledger.paymentRequests?.find(x=>x.id===r.id);return !old || r.amount!==old.amount || r.orderId!==old.orderId || r.reason!==old.reason || r.date!==old.date;})))throw new ops.DomainError("Administración gestiona la solicitud existente; no crea ni modifica su obligación.");
+              if(ledger.paymentRequests!==state.ledger.paymentRequests){
+                const next=ledger.paymentRequests??[],old=state.ledger.paymentRequests??[];
+                if(new Set(next.map(r=>r.id)).size!==next.length)throw new ops.DomainError("Las solicitudes conservan identidades únicas.");
+                if(who.session==="administracion"&&old.some(row=>{const after=next.find(r=>r.id===row.id);return after&&JSON.stringify(after)!==JSON.stringify(row)&&!(ledger.financialCorrections??[]).some(h=>h.entity==="banking"&&h.targetId===row.id&&!(state.ledger.financialCorrections??[]).some(o=>o.id===h.id)&&JSON.stringify(h.before)===JSON.stringify(row)&&JSON.stringify(h.after)===JSON.stringify(after));}))throw new ops.DomainError("La gestión o cancelación requiere historial con antes y después.");
+              }
+              if(ledger.paymentRequests!==state.ledger.paymentRequests && who.session==="compras" && (state.ledger.paymentRequests??[]).some(r=>JSON.stringify(ledger.paymentRequests?.find(x=>x.id===r.id))!==JSON.stringify(r)))throw new ops.DomainError("Compras no altera solicitudes previas ni su gestión bancaria.");
+              if(ledger.paymentRequests!==state.ledger.paymentRequests && who.session==="compras" && (ledger.paymentRequests??[]).some(r=>!state.ledger.paymentRequests?.some(old=>old.id===r.id)&&r.banking))throw new ops.DomainError("Compras solicita pagos; la gestión bancaria corresponde a Administración.");
+              if(ledger.externalWork!==state.ledger.externalWork){
+                if(!["jefe_planta","gerencia"].includes(who.session))throw new ops.DomainError("Planta registra trabajos externos y Gerencia confirma su costo.");
+                const old=state.ledger.externalWork??[],next=ledger.externalWork??[];
+                if(old.some(row=>!next.some(x=>x.id===row.id)))throw new ops.DomainError("Los trabajos externos conservan su historial; no se borran.");
+                if(who.session==="gerencia"&&(old.length!==next.length||next.some(row=>{const previous=old.find(x=>x.id===row.id);return !previous||JSON.stringify({...row,confirmedCost:undefined,confirmedBy:undefined,confirmedAt:undefined,costHistory:undefined})!==JSON.stringify({...previous,confirmedCost:undefined,confirmedBy:undefined,confirmedAt:undefined,costHistory:undefined});})))throw new ops.DomainError("Gerencia confirma costos; Planta registra y completa el trabajo externo.");
+                if(who.session==="jefe_planta"&&next.some(row=>{const previous=old.find(x=>x.id===row.id);return row.confirmedCost!==previous?.confirmedCost||row.confirmedBy!==previous?.confirmedBy||row.confirmedAt!==previous?.confirmedAt||JSON.stringify(row.costHistory)!==JSON.stringify(previous?.costHistory);}))throw new ops.DomainError("Solo Gerencia confirma o corrige el costo definitivo del trabajo externo.");
+              }
+              const capacityChanged=ledger.capacityBase!==state.ledger.capacityBase || ledger.capacityAdjustments!==state.ledger.capacityAdjustments || ledger.capacityPlans!==state.ledger.capacityPlans;
+              if(capacityChanged && who.session!=="jefe_planta")throw new ops.DomainError("La capacidad se administra exclusivamente en Jefe de Planta.");
+              if(ledger.financialMonthlyRatePct!==state.ledger.financialMonthlyRatePct && who.session!=="gerencia")throw new ops.DomainError("La tasa financiera se configura exclusivamente en Gerencia.");
+              if (who.session !== "administracion" && ledger.materialCatalog !== state.ledger.materialCatalog) throw new ops.DomainError("El catálogo se administra exclusivamente desde Administración.");
+              if (who.session !== "gerencia" && (ledger.personnel !== state.ledger.personnel || ledger.staffCategories !== state.ledger.staffCategories || ledger.rubroCatalog !== state.ledger.rubroCatalog || ledger.rates !== state.ledger.rates || ledger.quoteDefaults !== state.ledger.quoteDefaults || ledger.externalRates !== state.ledger.externalRates)) throw new ops.DomainError("Personal, categorías, tarifas y rubros se administran desde Gerencia → Personal.");
+            }
+            if (state.demoLocal && ledger.boms !== state.ledger.boms) {
+              if (who.session !== "administracion") throw new ops.DomainError("El BOM de producción se edita exclusivamente desde Administración.");
+              if (state.ledger.boms.some((b)=>b.status === "published" && JSON.stringify(ledger.boms.find((next)=>next.id===b.id))!==JSON.stringify(b))) throw new ops.DomainError("Las versiones publicadas de BOM son inmutables; creá un borrador nuevo.");
+              for(const bom of ledger.boms.filter((b)=>!state.ledger.boms.includes(b))) for(const line of bom.lines) {
+                const catalog=materialCatalog(ledger).find((m)=>m.id===line.materialId && m.active!==false);
+                const prior=state.ledger.boms.filter((b)=>b.projectId===bom.projectId && b.itemId===bom.itemId).flatMap((b)=>b.lines).find((l)=>l.id===line.id);
+                const quoted=state.projects.find((p)=>p.id===bom.projectId)?.budgetLines.find((l)=>l.id===line.budgetLineId);
+                const historical=(prior && prior.materialId===line.materialId && prior.unit===line.unit) || (quoted && quoted.materialId===line.materialId && quoted.unit===line.unit);
+                if(!historical && (!catalog || catalog.unit!==line.unit)) throw new ops.DomainError("Seleccioná un material activo del catálogo y conservá su unidad.");
+              }
+              validateBomPublication(state.projects,state.ledger,ledger,state.orders,state.stock,todayISO());
+            }
+            if (ledger.capacityBase !== state.ledger.capacityBase && Object.entries(ledger.capacityBase ?? {}).some(([id,hours])=>!ledger.rubroCatalog.some((r)=>r.id===id) || !Number.isFinite(hours) || hours<0)) throw new ops.DomainError("Capacidad base inválida: elegí rubro y horas semanales no negativas.");
+            if (ledger.quoteDefaults && Object.values(ledger.quoteDefaults).some((v)=>!Number.isFinite(v) || v<0 || v>=100)) throw new ops.DomainError("Los objetivos de rentabilidad deben estar entre 0 y menos de 100%.");
             if (ledger === state.ledger) return undefined;
-            set({ ledger });
+            if (!state.demoLocal && (ledger.paymentRequests !== state.ledger.paymentRequests || ledger.financialCorrections !== state.ledger.financialCorrections || ledger.capacityPlans !== state.ledger.capacityPlans || ledger.materialCatalog !== state.ledger.materialCatalog || ledger.externalWork !== state.ledger.externalWork || ledger.personnel !== state.ledger.personnel || ledger.quoteDefaults !== state.ledger.quoteDefaults || ledger.capacityBase !== state.ledger.capacityBase || ledger.capacityAdjustments !== state.ledger.capacityAdjustments || ledger.externalRates !== state.ledger.externalRates || ledger.staffCategories !== state.ledger.staffCategories || ledger.projectNomenclature !== state.ledger.projectNomenclature)) throw new ops.DomainError("Esta configuración está preparada en frontend; su persistencia requiere integración backend.");
+            set({ ledger, ...(state.demoLocal ? { projects: afterPublishedBom(state.projects,state.ledger,ledger,{ actor:who.actor, now:new Date().toISOString() }) } : {}) });
             // Demo local: queda en el navegador. Empresa real: se guarda en la base lo que cambió (la base valida de nuevo
             // el permiso y las reglas) y, si fue lo último pendiente, se relee para tomar lo que puso el servidor.
             if (!state.demoLocal) {
@@ -1264,13 +1659,16 @@ export const useAppStore = create<AppState>()(
             }
             return undefined;
           }),
-        dismissSyncError: () => { void refreshWorkspace().catch(() => undefined); },
+        dismissSyncError: () => {
+          if (get().demoLocal) { guardVoid(() => set({ syncStatus: "idle", syncError: null })); return; }
+          void refreshWorkspace().catch(() => undefined);
+        },
       };
     },
     {
       name: "nexo-ui-v2",
       version: 5,
-      storage: createJSONStorage(() => localStorage),
+      storage: createJSONStorage(() => safeLocalStorage()),
       // v3 guardaba "management" / "workshop" (Gestión / Taller).
       migrate: (persisted, version) => {
         const s = (persisted ?? {}) as { currentMode?: string; actingOperatorId?: string | null };
@@ -1288,10 +1686,6 @@ export const useAppStore = create<AppState>()(
 if (typeof window !== "undefined") {
   useAppStore.subscribe((next, prev) => {
     if (next.ledger.rubroCatalog !== prev.ledger.rubroCatalog || next.demoLocal !== prev.demoLocal || next.ledgerReady !== prev.ledgerReady) setRubroNames(next.demoLocal || next.ledgerReady ? next.ledger.rubroCatalog : []);
-    if (!next.demoLocal || !prev.demoLocal) return;
-    if (demoDataChanged(next as unknown as Record<string, unknown>, prev as unknown as Record<string, unknown>)) {
-      writeDemo(pickDemoData(next as unknown as Record<string, unknown>));
-    }
   });
 }
 

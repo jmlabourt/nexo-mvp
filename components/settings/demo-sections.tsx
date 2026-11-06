@@ -1,6 +1,6 @@
 "use client";
 // Configuración de Gerencia en el modo demostración: catálogo de rubros (texto libre), costos horarios por rubro con
-// excepción por persona y vigencia, tasa del gasto financiero y la sección Demo. Todo se guarda de verdad en la demo
+// excepción por persona y vigencia, tasa del costo financiero y la sección Demo. Todo se guarda de verdad en la demo
 // (lib/ledger.ts); en una empresa real estas secciones son "Pendiente de backend".
 import { useState } from "react";
 import { addGeneralCost, addRate, addRubro, removeGeneralCost, renameRubro, setFinancialRate, setRubroActive } from "@/lib/ledger";
@@ -171,7 +171,7 @@ export function FinancialRateSection() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Gasto financiero</CardTitle>
+        <CardTitle>Costo financiero</CardTitle>
         <CardDescription>
           Tasa mensual sobre el precio de venta sin IVA. Gasto = precio × tasa / 100 × días financiados / 30. Días financiados = días de producción (inicio → entrega) +
           días que tarda el cliente en pagar. Con seña o cuotas se calcula por tramos sobre el saldo. Es una estimación: nunca un costo pagado.
@@ -195,7 +195,7 @@ export function FinancialRateSection() {
           Ejemplo: $ 1.000.000, 30 días de producción y 30 de pago, al {formatNumber(num(value) || 0, 2)} % mensual →{" "}
           <strong>{example.ok ? formatCurrency(example.amount) : "—"}</strong>.
         </p>
-        <p className="text-xs text-slate-500">Las cotizaciones aprobadas guardan su gasto financiero (foto). La ficha de cada proyecto muestra, aparte, la estimación actualizada con esta tasa.</p>
+        <p className="text-xs text-slate-500">Las cotizaciones aprobadas guardan su costo financiero (foto). La ficha de cada proyecto muestra, aparte, la estimación actualizada con esta tasa.</p>
         {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
       </CardContent>
     </Card>

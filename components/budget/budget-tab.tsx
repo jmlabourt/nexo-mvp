@@ -11,17 +11,15 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { BudgetEditor, draftFromLine, draftToInput, type DraftLine } from "./budget-editor";
-import { useIdentity } from "@/store/selectors";
-import { CorrectionButton, CorrectionsList } from "@/components/projects/correction-dialog";
+import { CorrectionsList } from "@/components/projects/correction-dialog";
 
 export function BudgetTab({ project }: { project: Project }) {
-  const editable = BUDGET_EDITABLE_STATUSES.includes(project.status);
+  const editable = !project.baseline && project.status === "quotation" && BUDGET_EDITABLE_STATUSES.includes(project.status);
   const [editing, setEditing] = useState(false);
   const [drafts, setDrafts] = useState<DraftLine[]>([]);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [msg, setMsg] = useState("");
   const store = useAppStore();
-  const { isManager } = useIdentity();
   const total = budgetTotal(project.budgetLines);
   const byCat = budgetByCategory(project.budgetLines);
 
@@ -63,7 +61,7 @@ export function BudgetTab({ project }: { project: Project }) {
             <Pencil /> Editar costo presupuestado
           </Button>
         )}
-        {!editable && isManager && <CorrectionButton project={project} />}
+
       </div>
       <CorrectionsList projectId={project.id} />
 

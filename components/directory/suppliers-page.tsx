@@ -7,7 +7,6 @@ import { useMemo, useState } from "react";
 import { Search } from "lucide-react";
 import { normalizeName, suppliersFrom, type SupplierSummary } from "@/lib/directory";
 import { exampleSupplierDetails } from "@/lib/demo/ejemplos";
-import { formatCurrency, formatDate } from "@/lib/formatting";
 import { useAppStore } from "@/store/use-app-store";
 import { useLedgerBacked } from "@/store/selectors";
 import { useExampleData } from "@/store/session-data";
@@ -58,8 +57,6 @@ function ExampleSuppliersPage({ prices }: { prices: boolean }) {
                 <TH>Contacto</TH>
                 <TH>Teléfono</TH>
                 <TH>Correo</TH>
-                <TH className="text-right">Materiales</TH>
-                {prices && <TH>Última compra</TH>}
               </TR>
             </THead>
             <TBody>
@@ -72,8 +69,6 @@ function ExampleSuppliersPage({ prices }: { prices: boolean }) {
                     <TD>{d.contact ?? "—"}</TD>
                     <TD className="tabular">{d.phone ?? "—"}</TD>
                     <TD>{d.email ?? "—"}</TD>
-                    <TD className="text-right tabular">{s.materials.length}</TD>
-                    {prices && <TD className="tabular">{s.lastPurchase ? formatDate(s.lastPurchase) : "—"}</TD>}
                   </TR>
                 );
               })}
@@ -88,7 +83,7 @@ function ExampleSuppliersPage({ prices }: { prices: boolean }) {
             <>
               <DialogHeader>
                 <DialogTitle>{open.name}</DialogTitle>
-                <DialogDescription>{open.orders} {open.orders === 1 ? "orden de compra" : "órdenes de compra"}{example ? " · contactos de ejemplo" : ""}.</DialogDescription>
+                <DialogDescription>Ficha del proveedor{example ? " · contactos de ejemplo" : ""}.</DialogDescription>
               </DialogHeader>
               <dl className="grid grid-cols-[8rem_1fr] gap-x-3 gap-y-2 text-sm">
                 {(["contact", "phone", "email", "address"] as const).map((k) => (
@@ -100,34 +95,6 @@ function ExampleSuppliersPage({ prices }: { prices: boolean }) {
                 <dt className="text-slate-500">Catálogo</dt>
                 <dd>{details(open).catalogUrl ? <span className="text-slate-700">{details(open).catalogUrl}</span> : "—"}</dd>
               </dl>
-              <h3 className="mt-5 text-sm font-semibold text-slate-900">Materiales que provee</h3>
-              {open.materials.length === 0 ? (
-                <p className="text-sm text-slate-500">Todavía no hay compras registradas a este proveedor.</p>
-              ) : (
-                <ul className="mt-1 divide-y divide-slate-100 text-sm">
-                  {open.materials.map((m) => (
-                    <li key={m.materialName} className="py-2">
-                      <div className="flex flex-wrap justify-between gap-2">
-                        <span className="font-medium text-slate-900">{m.materialName}</span>
-                        {prices && (
-                          <span className="tabular">
-                            {formatCurrency(m.lastPrice)} / {m.unit} <span className="text-xs text-slate-500">({formatDate(m.lastDate)})</span>
-                          </span>
-                        )}
-                      </div>
-                      {prices && m.history.length > 1 && (
-                        <ul className="mt-1 space-y-0.5 text-xs text-slate-500">
-                          {m.history.slice(0, 5).map((h) => (
-                            <li key={h.id} className="tabular">
-                              {formatDate(h.date)} · {formatCurrency(h.unitCost)} · {h.destination}
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              )}
               <div className="mt-5 flex flex-wrap gap-3">
                 <PendingAction label="Editar" />
                 {prices && <PendingAction label="Registrar precio" reason="Los precios nuevos se guardan con historial cuando el backend lo habilite; las compras anteriores no cambian." />}

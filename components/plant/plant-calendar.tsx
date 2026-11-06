@@ -2,6 +2,9 @@
 // Calendario del Jefe de planta (Lote 6 · Fase 3): grilla operarios × días (lunes a domingo). Cada celda muestra horas
 // asignadas / capacidad del día (ej. 6/8 h) y un chip por proyecto, uno al lado del otro, con el color del proyecto.
 // Rojo si lo asignado pasa la capacidad; gris si no es día laborable (días del operario y excepciones). Sin importes.
+import { createId } from "@/lib/activity";
+import { weeklyCapacity, withExternalHours } from "@/lib/frontend-work";
+import { useConfirmedAction } from "@/store/confirmed-action";
 import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import { useState } from "react";
 import type { Operator } from "@/types";
@@ -20,8 +23,23 @@ export function PlantCalendar({ operators, today, onAssign }: { operators: Opera
   const assignments = useAppStore((s) => s.assignments);
   const exceptions = useAppStore((s) => s.dayExceptions);
   const hoursPerDay = useAppStore((s) => s.costSettings.hoursPerDay);
+  const ledger = useAppStore((s) => s.ledger);
   const [anchor, setAnchor] = useState(today);
+  const saveBatch = useConfirmedAction("saveAssignmentsBatch");
+  const [copyId]=useState(()=>createId("copy-week"));
+  const [copyMessage,setCopyMessage] = useState("");
+  const [copying,setCopying] = useState(false);
+  const copyWeek = async () => {
+    setCopying(true);
+    const source = assignments.filter((a) => a.date >= week[0] && a.date <= week[6]);
+    const inputs=source.filter(a=>!assignments.some(other=>other.date===addDays(a.date,7)&&other.operatorId===a.operatorId&&other.projectId===a.projectId&&other.rubro===a.rubro&&other.itemId===a.itemId)).map(a=>({...a,date:addDays(a.date,7)}));
+    if(!inputs.length){setCopyMessage("No quedan asignaciones para copiar.");setCopying(false);return;}
+    const result=await saveBatch(`${copyId}-${week[0]}-${source.map(a=>`${a.id}:${a.plannedHours}`).sort().join("|")}`,inputs);
+    setCopyMessage(result.ok?`${result.value.length} asignaciones copiadas a la próxima semana. No se generaron horas reales.`:`No se guardaron asignaciones. ${result.error}`);
+    setCopying(false);
+  };
   const week = fullWeek(anchor);
+  const capacity = weeklyCapacity(withExternalHours(projects,ledger),operators,assignments,exceptions,week[0],week[6],today,hoursPerDay,undefined,ledger);
   const code = (id: string) => projects.find((p) => p.id === id)?.code ?? id;
   const shown = new Set(week.flatMap((d) => assignments.filter((a) => a.date === d).map((a) => a.projectId)));
 
@@ -42,17 +60,21 @@ export function PlantCalendar({ operators, today, onAssign }: { operators: Opera
             <span className="font-medium text-slate-600">Gris</span>: no es día laborable (días y excepciones en Operarios).
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button variant="outline" size="sm" onClick={() => setAnchor(addDays(week[0], -7))} aria-label="Semana anterior">
             <ChevronLeft />
           </Button>
           <Button variant="outline" size="sm" onClick={() => setAnchor(today)}>Esta semana</Button>
+          <Button variant="outline" size="sm" disabled={copying} onClick={copyWeek}>Copiar a próxima semana</Button>
           <Button variant="outline" size="sm" onClick={() => setAnchor(addDays(week[0], 7))} aria-label="Semana siguiente">
             <ChevronRight />
           </Button>
         </div>
       </CardHeader>
       <CardContent className="space-y-3">
+        <p className="text-sm text-slate-600">Horas disponibles: {formatNumber(capacity.available)} · Planificadas: {formatNumber(capacity.planned)} · Necesarias estimadas: {formatNumber(capacity.needed)}. La planificación no es ejecución ni se suma a la demanda.</p>
+        {capacity.pendingConfiguration && <p role="status" className="text-sm text-slate-600">Capacidad por rubro pendiente de configuración en Personal: hay personas productivas sin rubros habilitados.</p>}
+        {copyMessage && <p role="status" className="text-xs text-slate-600">{copyMessage}</p>}
         {shown.size > 0 && (
           <ul aria-label="Proyectos de la semana" className="flex flex-wrap gap-1.5 text-xs">
             {[...shown].sort((a, b) => code(a).localeCompare(code(b))).map((id) => (
@@ -63,7 +85,7 @@ export function PlantCalendar({ operators, today, onAssign }: { operators: Opera
           </ul>
         )}
         {/* Celular: un bloque por operario con sus 7 días. Pantallas anchas: la grilla. */}
-        <div className="space-y-3 sm:hidden">
+        <div className="space-y-3 xl:hidden">
           {operators.map((o) => (
             <section key={o.id} aria-label={o.name} className="rounded-lg border border-slate-200 p-2">
               <h3 className="mb-1 text-sm font-semibold text-slate-900">{o.name}</h3>
@@ -80,13 +102,13 @@ export function PlantCalendar({ operators, today, onAssign }: { operators: Opera
             </section>
           ))}
         </div>
-        <div className="hidden overflow-x-auto sm:block">
-          <table className="w-full border-separate border-spacing-1 text-sm" aria-label="Calendario operarios por día">
+        <div className="hidden xl:block">
+          <table className="w-full table-fixed border-separate border-spacing-1 text-sm" aria-label="Calendario operarios por día">
             <thead>
               <tr>
                 <th className="w-36 text-left text-xs font-medium text-slate-500">Operario</th>
                 {week.map((d) => (
-                  <th key={d} className={cn("min-w-32 text-left text-xs font-medium text-slate-500", d === today && "text-blue-800")}>
+                  <th key={d} className={cn("text-left text-xs font-medium text-slate-500", d === today && "text-blue-800")}>
                     {WEEKDAY_LABELS[dayOfWeek(d)]} {formatDate(d).slice(0, 5)}
                     {d === today && " (hoy)"}
                   </th>
@@ -143,19 +165,20 @@ function Cell({
         isToday && !cell.over && !off && "border-blue-300",
       )}
     >
-      <div className="flex items-center justify-between gap-1">
+      <div className="flex flex-wrap items-center justify-between gap-1">
         <span className={cn("text-xs tabular", cell.over ? "font-semibold text-red-700" : off ? "text-slate-500" : "text-slate-600")}>
           {off && cell.planned === 0 ? "No trabaja" : `${formatNumber(cell.planned)}/${formatNumber(cell.capacity.hours)} h`}
         </span>
         <button
           type="button"
           onClick={() => onAssign({ operatorId: operator.id, date: cell.date })}
-          className="rounded p-0.5 text-slate-400 hover:bg-slate-200 hover:text-blue-700"
+          className="flex size-11 shrink-0 items-center justify-center rounded-md border border-slate-300 text-blue-700 hover:bg-blue-50"
           aria-label={`Asignar a ${operator.name} el ${formatDate(cell.date)}`}
         >
           <Plus className="size-3.5" />
         </button>
       </div>
+      {cell.over && <p className="text-xs font-medium text-red-700">Sobrecarga: {formatNumber(cell.overBy)} h</p>}
       {cell.capacity.exception && <p className="text-[11px] text-slate-500">{cell.capacity.exception.note ?? (off ? "Excepción: no trabaja" : "Excepción: trabaja")}</p>}
       {cell.chips.length > 0 && (
         <div className="mt-1 flex flex-wrap gap-1">

@@ -49,7 +49,7 @@ describe("costos reales con las categorías nuevas", () => {
     expect(actualEntryLabel({ type: "other", category: "labor" })).toBe("Uso de máquinas (registro anterior)");
     expect(actualEntryLabel({ type: "other", category: "admin" })).toBe("Administración");
     expect(actualEntryLabel({ type: "other", category: "design" })).toBe("Diseño");
-    expect(actualEntryLabel({ type: "other", category: "financial" })).toBe("Gasto financiero");
+    expect(actualEntryLabel({ type: "other", category: "financial" })).toBe("Costo financiero");
   });
 });
 

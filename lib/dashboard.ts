@@ -1,3 +1,4 @@
+import { LEVEL_RANK } from "./alerts";
 // ─────────────────────────────────────────────────────────────
 // Dashboard del Administrativo (Lote 6) — agregados en funciones puras.
 // Cuatro bloques: proyectos (semáforo), horas y operarios (semana), margen y pendientes.
@@ -270,10 +271,10 @@ function projectCauses(project: Project, econ: ProjectEconomics, d: DetectedDevi
 /**
  * @param severePoints umbral de "grave" en puntos de margen (Configuración → aviso de Atención, 5 por defecto).
  */
-export function profitOverview(projects: Project[], assignments: WorkAssignment[], today: string, dueSoonDays: number, severePoints: number): ProfitOverview {
+export function profitOverview(projects: Project[], assignments: WorkAssignment[], today: string, dueSoonDays: number, severePoints: number,economics:(p:Project)=>ProjectEconomics=projectEconomics): ProfitOverview {
   const live = liveProjects(projects);
   const rows = live.map((project): OverviewRow => {
-    const econ = projectEconomics(project);
+    const econ = economics(project);
     const detected = detectedDeviations(project, assignments, today);
     const causes = projectCauses(project, econ, detected);
     const overrun = round2(Math.max(0, econ.costOverrun));
@@ -301,7 +302,7 @@ export function profitOverview(projects: Project[], assignments: WorkAssignment[
 
   const totals = new Map<string, OverviewCause & { projects: string[] }>();
   for (const r of rows) {
-    const econ = projectEconomics(r.project);
+    const econ = economics(r.project);
     for (const c of projectCauses(r.project, econ, r.detected)) {
       const label = CAUSE_LABEL[c.key] ?? c.label;
       const cur = totals.get(c.key) ?? { key: c.key, label, amount: 0, kind: c.kind, projects: [] };
@@ -331,4 +332,9 @@ export function profitOverview(projects: Project[], assignments: WorkAssignment[
       .sort((a, b) => (b.project.closedAt ?? "").localeCompare(a.project.closedAt ?? "")),
     causes: [...totals.values()].sort((a, b) => b.amount - a.amount),
   };
+}
+
+/** Orden global antes del límite: gravedad existente, impacto monetario y clave estable de desempate. */
+export function prioritizeDashboardNotices<T extends {key:string;level:import("@/types").AlertLevel;impactAmount?:number}>(notices:T[],limit=5):T[] {
+ return [...notices].sort((a,b)=>LEVEL_RANK[b.level]-LEVEL_RANK[a.level]||(b.impactAmount??0)-(a.impactAmount??0)||a.key.localeCompare(b.key)).slice(0,limit);
 }

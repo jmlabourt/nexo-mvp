@@ -4,12 +4,13 @@
 // (el de la factura de la orden de compra), proveedor y fechas. Nunca precio de venta, rentabilidad ni mano de obra.
 // Distinguen siempre compra (factura), consumo, desperdicio y sobrante reutilizable (ver lib/material-reconciliation.ts).
 // ─────────────────────────────────────────────────────────────
-import type { ActivityEvent, Alert, AlertLevel, AlertSettings, OrderReceived, Project, PurchaseEntry, PurchaseOrder, PurchaseOrderLine } from "@/types";
-import { receiveStock, warehouseHoldings, type StockChange, type StockCtx, type StockState } from "./stock";
+import type { ActivityEvent, Alert, AlertLevel, AlertSettings, OrderReceived, MaterialDelivery, Project, PurchaseEntry, PurchaseOrder, PurchaseOrderLine } from "@/types";
+import { r3, quantityError, computeBalances, receiveStock, warehouseHoldings, type StockChange, type StockCtx, type StockState } from "./stock";
 import { alertBase, keyed, sortAlerts } from "./alerts";
 import { materialBudgetQuantity, type QuoteMaterial } from "./budget-calculator";
 import { daysBetween, formatCurrency, formatDate, formatNumber, formatQty } from "./formatting";
 import { materialKey } from "./material-reconciliation";
+import { createId } from "./activity";
 import { addDays } from "./plant";
 
 const EPS = 1e-6;
@@ -72,16 +73,24 @@ export function materialNeeds(projects: Project[], orders: PurchaseOrder[], stoc
   const lines = orders.flatMap((o) => o.lines.map((l) => ({ o, l })));
   const fromOrders = new Set(lines.map(({ l }) => orderEntryId(l)));
   const free = new Map<string, number>();
-  for (const h of warehouseHoldings(stock)) free.set(h.lot.materialId, (free.get(h.lot.materialId) ?? 0) + h.quantity);
+  for (const h of warehouseHoldings(stock)) {
+    const key = `${h.lot.materialId}|${h.lot.unit}`;
+    free.set(key, (free.get(key) ?? 0) + h.quantity);
+  }
   // Asignado del depósito a cada proyecto (asignar − devolver), por material.
-  const lotKey = new Map(stock.lots.map((l) => [l.id, materialKey(l.materialId, l.materialName)]));
+  const lotKey = new Map(stock.lots.map((l) => [l.id, `${materialKey(l.materialId, l.materialName)}|${l.unit}`]));
   const depot = new Map<string, number>();
   for (const m of stock.movements) {
-    const sign = m.kind === "assign" ? 1 : m.kind === "release" ? -1 : 0;
-    const place = m.kind === "assign" ? m.to : m.from;
-    if (sign === 0 || place.type !== "project") continue;
-    const k = `${place.projectId}|${lotKey.get(m.lotId) ?? ""}`;
-    depot.set(k, (depot.get(k) ?? 0) + sign * m.quantity);
+    if (!["assign", "release", "transfer", "to_leftover", "supplier_return"].includes(m.kind)) continue;
+    const key = lotKey.get(m.lotId) ?? "";
+    if (m.to.type === "project") {
+      const k = `${m.to.projectId}|${key}`;
+      depot.set(k, (depot.get(k) ?? 0) + m.quantity);
+    }
+    if (m.from.type === "project") {
+      const k = `${m.from.projectId}|${key}`;
+      depot.set(k, (depot.get(k) ?? 0) - m.quantity);
+    }
   }
   const raw = projects
     .filter((p) => !p.isClosed && p.status !== "quotation")
@@ -89,32 +98,46 @@ export function materialNeeds(projects: Project[], orders: PurchaseOrder[], stoc
       const direct = new Map<string, number>();
       for (const e of p.purchaseEntries) {
         if (fromOrders.has(e.id)) continue;
-        const k = materialKey(e.materialId, e.materialName);
+        const k = `${materialKey(e.materialId, e.materialName)}|${e.unit}`;
         direct.set(k, (direct.get(k) ?? 0) + e.quantity);
       }
       return p.budgetLines
         .filter((l) => l.category === "materials" && l.quantity !== null)
         .map((l) => {
-          const mine = lines.filter(({ l: ol }) => ol.projectId === p.id && ol.budgetLineId === l.id);
           const key = materialKey(l.materialId, l.description);
+          const mine = lines.filter(({ l: ol }) => ol.projectId === p.id && (ol.budgetLineId === l.id || l.historicalNeedIds?.includes(ol.budgetLineId)) && ol.unit === l.unit && (materialKey(ol.materialId, ol.materialName) === key || (!ol.materialId && !l.materialId && l.historicalNeedIds?.includes(ol.budgetLineId))));
           return {
             p,
             l,
             key,
-            ordered: round2(mine.reduce((s, x) => s + x.l.quantity, 0)),
-            receivedFromOrders: round2(mine.reduce((s, x) => s + x.l.receivedQuantity, 0)),
-            direct: round2(direct.get(key) ?? 0),
-            fromDepot: round2(Math.max(0, depot.get(`${p.id}|${key}`) ?? 0)),
+            ordered: r3(mine.reduce((s, x) => s + x.l.quantity, 0)),
+            receivedFromOrders: r3(mine.reduce((s, x) => s + x.l.receivedQuantity, 0)),
+            direct: r3(direct.get(`${key}|${l.unit}`) ?? 0),
+            fromDepot: r3(depot.get(`${p.id}|${key}|${l.unit}`) ?? 0),
             orders: mine.map(({ o, l: ol }) => ({ orderId: o.id, number: o.number, quantity: ol.quantity, received: ol.receivedQuantity })),
           };
         });
     })
     .sort((a, b) => a.p.startDate.localeCompare(b.p.startDate) || a.p.code.localeCompare(b.p.code));
-  return raw.map(({ p, l, key, ordered, receivedFromOrders, direct, fromDepot, orders: os }): MaterialNeed => {
+  const allocated = new Map<string, { direct: number; depot: number; debit: number }>();
+  return raw.map(({ p, l, key, ordered: orderedTotal, receivedFromOrders: receivedTotal, direct: directTotal, fromDepot: depotTotal, orders: os }, index): MaterialNeed => {
     const needed = l.quantity ?? 0;
+    const unitKey = `${key}|${l.unit}`;
+    const poolKey = `${p.id}|${unitKey}`;
+    const used = allocated.get(poolKey) ?? { direct: 0, depot: 0, debit: 0 };
+    const directAfterTransfers = Math.max(0, directTotal + Math.min(0, depotTotal));
+    const outstandingDebit = Math.max(0, -depotTotal - directTotal - used.debit);
+    const debit = Math.min(receivedTotal, outstandingDebit);
+    const ordered = orderedTotal - debit;
+    const receivedFromOrders = receivedTotal - debit;
+    // Shared physical coverage can fulfill several BOM lines, but only once.
+    const lastLine = !raw.slice(index + 1).some((r) => r.p.id === p.id && r.key === key && r.l.unit === l.unit);
+    const direct = lastLine ? Math.max(0, directAfterTransfers - used.direct) : Math.min(Math.max(0, needed - ordered), Math.max(0, directAfterTransfers - used.direct));
+    const fromDepot = lastLine ? Math.max(0, depotTotal - used.depot) : Math.min(Math.max(0, needed - ordered - direct), Math.max(0, depotTotal - used.depot));
+    allocated.set(poolKey, { direct: used.direct + direct, depot: used.depot + fromDepot, debit: used.debit + debit });
     const missing = Math.max(0, needed - ordered - direct - fromDepot);
-    const fromStock = round2(Math.min(missing, free.get(key) ?? 0));
-    free.set(key, (free.get(key) ?? 0) - fromStock);
+    const fromStock = r3(Math.min(missing, free.get(unitKey) ?? 0));
+    free.set(unitKey, (free.get(unitKey) ?? 0) - fromStock);
     const received = receivedFromOrders + direct + fromDepot;
     const status: NeedStatus = received + EPS >= needed ? "received" : ordered > 0 ? "ordered" : "to_buy";
     return {
@@ -135,7 +158,7 @@ export function materialNeeds(projects: Project[], orders: PurchaseOrder[], stoc
       direct,
       fromDepot,
       fromStock,
-      toBuy: round2(missing - fromStock),
+      toBuy: r3(missing - fromStock),
       status,
       orders: os,
       needBy: p.startDate,
@@ -258,15 +281,22 @@ export interface OrderDraft {
   supplier: string;
   date: string;
   notes?: string;
-  lines: Array<Pick<PurchaseOrderLine, "projectId" | "budgetLineId" | "materialId" | "materialName" | "unit" | "quantity" | "unitCost">>;
+  lines: Array<Pick<PurchaseOrderLine, "destination" | "projectId" | "budgetLineId" | "materialId" | "materialName" | "unit" | "quantity" | "unitCost">>;
+}
+
+export function isWarehouseLine(line: Pick<PurchaseOrderLine,"destination">) { return line.destination === "warehouse"; }
+export function orderDestinations(order: Pick<PurchaseOrder,"lines">, projects: Pick<Project,"id"|"code">[]) {
+  return [...new Set(order.lines.map(l => isWarehouseLine(l) ? "Depósito general" : projects.find(p=>p.id===l.projectId)?.code ?? l.projectId))].join(", ");
 }
 
 export function orderDraftError(d: OrderDraft): string | null {
   if (!d.supplier.trim()) return "Indicá el proveedor elegido.";
   if (!/^\d{4}-\d{2}-\d{2}$/.test(d.date)) return "Indicá la fecha de la orden.";
   if (d.lines.length === 0) return "Elegí al menos un material.";
-  if (d.lines.some((l) => !(l.quantity > 0))) return "Las cantidades tienen que ser mayores a cero.";
-  if (d.lines.some((l) => !(l.unitCost > 0))) return "Indicá el costo unitario real conseguido de cada material.";
+  if (d.lines.some(l=>quantityError(l.quantity))) return "Las cantidades deben ser positivas, con hasta tres decimales.";
+  if (d.lines.some((l) => !Number.isFinite(l.unitCost) || !(l.unitCost > 0))) return "Indicá el costo unitario real conseguido de cada material.";
+  if (d.lines.some(l=>isWarehouseLine(l) ? !!l.projectId || !!l.budgetLineId || !l.materialId || !l.unit : !l.projectId || !l.budgetLineId)) return "Revisá el destino: depósito sin proyecto, o proyecto con necesidad identificada.";
+  if(new Set(d.lines.map(l=>`${l.destination??"project"}|${l.projectId}|${l.budgetLineId}|${l.materialId}|${l.unit}`)).size!==d.lines.length)return "No dupliques un material y destino en la misma orden.";
   return null;
 }
 
@@ -295,7 +325,7 @@ export function invoiceError(order: PurchaseOrder, i: InvoiceInput): string | nu
  * real de materiales del proyecto.
  */
 export function invoiceEntries(order: PurchaseOrder, i: InvoiceInput, actor: string, now: string): PurchaseEntry[] {
-  return order.lines.map((l) => ({
+  return order.lines.filter(l=>!isWarehouseLine(l)).map((l) => ({
     id: orderEntryId(l),
     projectId: l.projectId,
     materialId: l.materialId,
@@ -339,6 +369,8 @@ export function receiveOrder(
   ctx: StockCtx & { today: string },
 ): { order: PurchaseOrder; change: StockChange; sent: Array<{ line_id: string; quantity: number; lot_id: string; movement_id: string; material_key: string }> } {
   if (order.status === "draft") throw new Error("Primero enviá la orden.");
+  if(receipts.some(r=>!Number.isFinite(r.quantity)||r.quantity<0||!order.lines.some(l=>l.id===r.lineId))||new Set(receipts.map(r=>r.lineId)).size!==receipts.length)throw new Error("Revisá cantidades y líneas únicas de la recepción.");
+  if(receipts.some(r=>quantityError(r.quantity,true)))throw new Error("Las cantidades de recepción admiten hasta tres decimales (milésimas).");
   const change: StockChange = { lots: [], movements: [] };
   const sent: Array<{ line_id: string; quantity: number; lot_id: string; movement_id: string; material_key: string }> = [];
   const lines = order.lines.map((l) => {
@@ -358,15 +390,15 @@ export function receiveOrder(
         unitCost: l.unitCost,
         supplier: order.supplier,
         date: ctx.today,
-        destination: { projectId: l.projectId, projectName: p ? `${p.code} · ${p.name}` : l.projectId },
+        destination: isWarehouseLine(l) ? "warehouse" : { projectId: l.projectId, projectName: p ? `${p.code} · ${p.name}` : l.projectId },
         purchaseEntryId: p?.purchaseEntries.some((e) => e.id === orderEntryId(l)) ? orderEntryId(l) : undefined,
       },
       ctx,
     );
-    change.lots.push(...got.lots);
+    change.lots.push(...got.lots.map(lot=>isWarehouseLine(l)?({...lot,orderId:order.id,orderLineId:l.id}):lot));
     change.movements.push(...got.movements);
     sent.push({ line_id: l.id, quantity: r.quantity, lot_id: got.lot.id, movement_id: got.movements[0].id, material_key: key });
-    return { ...l, receivedQuantity: round2(l.receivedQuantity + r.quantity) };
+    return { ...l, receivedQuantity: r3(l.receivedQuantity + r.quantity) };
   });
   return { order: { ...order, lines, received: receivedState(lines) }, change, sent };
 }
@@ -507,7 +539,7 @@ export function orderedNotReceivedAlerts(projects: Project[], needs: MaterialNee
   for (const p of projects.filter((x) => startsWithin(x, today, leadDays))) {
     const mine = needs
       .filter((n) => n.projectId === p.id && n.status === "ordered")
-      .map((n) => ({ n, pending: round2(Math.min(n.ordered - n.receivedFromOrders, n.needed - n.receivedFromOrders - n.direct - n.fromDepot)) }))
+      .map((n) => ({ n, pending: r3(Math.min(n.ordered - n.receivedFromOrders, n.needed - n.receivedFromOrders - n.direct - n.fromDepot)) }))
       .filter((x) => x.pending > EPS);
     if (mine.length === 0) continue;
     const started = daysBetween(today, p.startDate) <= 0;
@@ -667,4 +699,41 @@ export function materialsQuote(materials: QuoteMaterial[]): { lines: MaterialQuo
       return { ...m, budgetQuantity, total: round2(budgetQuantity * m.unitCost) };
     });
   return { lines, total: round2(lines.reduce((s, l) => s + l.total, 0)) };
+}
+
+/** Reversible frontend operations append evidence and compensating movements; originals survive. */
+export function correctSentOrder(order: PurchaseOrder, reason: string, ctx: StockCtx): PurchaseOrder {
+  if (order.status !== "sent" || order.lines.some((l) => l.receivedQuantity > EPS) || order.invoiceNumber) throw new Error("Solo se corrige una orden enviada sin recepciones ni factura.");
+  if (reason.trim().length < 3) throw new Error("Indicá el motivo de la corrección.");
+  return { ...order, status:"draft", statusHistory:[...(order.statusHistory ?? []),{ previous:"sent",next:"draft",at:ctx.now,by:ctx.actor,reason:reason.trim() }] };
+}
+
+export function reverseLocalReceipt(order: PurchaseOrder, stock: StockState, deliveries: MaterialDelivery[], movementId: string, reason: string, ctx: StockCtx): { order: PurchaseOrder; stock: StockState } {
+  const receipt = order.localReceipts?.find((r) => r.movementId === movementId);
+  if (!receipt || receipt.reversedAt) throw new Error("No hay una recepción local vigente con trazabilidad suficiente para revertir.");
+  if (reason.trim().length < 3) throw new Error("Indicá el motivo de la reversión.");
+  const movement = stock.movements.find((m) => m.id === receipt.movementId && m.lotId === receipt.lotId && m.kind === "purchase_in");
+  const line = order.lines.find((l) => l.id === receipt.lineId);
+  if (!movement || !line || (isWarehouseLine(line) ? movement.to.type!=="warehouse" : movement.to.type!=="project") || line.receivedQuantity + EPS < receipt.quantity) throw new Error("La recepción no coincide con la orden y el movimiento original.");
+  const destination = movement.to;
+  const laterMovements = stock.movements.some((m) => m.lotId === receipt.lotId && m.id !== movement.id);
+  const committed = deliveries.some((d) => d.projectId === line.projectId && d.materialId === line.materialId && !d.closedAt);
+  const balance=computeBalances(stock.movements).get(receipt.lotId);
+  const held = destination.type==="warehouse" ? balance?.warehouse ?? 0 : destination.type==="project" ? balance?.held[destination.projectId] ?? 0 : 0;
+  if (laterMovements || committed || held + EPS < receipt.quantity) throw new Error("El material ya fue consumido, transferido o comprometido: no se puede revertir esta recepción.");
+  const lines = order.lines.map((l) => l.id === line.id ? { ...l,receivedQuantity:r3(l.receivedQuantity-receipt.quantity) } : l);
+  return {
+    order:{ ...order,lines,received:receivedState(lines),localReceipts:order.localReceipts!.map((r) => r === receipt ? { ...r,reversedAt:ctx.now,reversedBy:ctx.actor,reason:reason.trim() } : r) },
+    stock:{ ...stock,movements:[...stock.movements,{ id:createId("reverse"),lotId:receipt.lotId,kind:"supplier_return",quantity:receipt.quantity,from:destination,to:{ type:"supplier" },date:ctx.now.slice(0,10),note:`Reversión de recepción ${movementId}: ${reason.trim()}`,createdBy:ctx.actor,createdAt:ctx.now }] },
+  };
+}
+
+/** Diagnóstico no destructivo: solo concilia líneas con evidencia local completa. */
+export function receiptDiscrepancies(orders:PurchaseOrder[],stock:StockState):Array<{orderId:string;lineId:string;message:string}> {
+ return orders.flatMap(o=>o.lines.flatMap(l=>{
+  const receipts=o.localReceipts?.filter(r=>r.lineId===l.id);if(!receipts?.length)return [];
+  const active=receipts.filter(r=>!r.reversedAt),evidenced=r3(active.reduce((s,r)=>s+r.quantity,0));
+  const mismatch=receipts.some(r=>{const m=stock.movements.find(m=>m.id===r.movementId);return !m||m.lotId!==r.lotId||m.kind!=="purchase_in"||Math.abs(m.quantity-r.quantity)>EPS||!stock.lots.some(lot=>lot.id===r.lotId);});
+  return mismatch||Math.abs(evidenced-l.receivedQuantity)>EPS ? [{orderId:o.id,lineId:l.id,message:`${o.number} · ${l.materialName}: OC ${l.receivedQuantity}, recepciones locales vigentes ${evidenced}. Revisar historial y movimientos; no se modificaron datos.`}]:[];
+ }));
 }

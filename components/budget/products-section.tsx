@@ -2,6 +2,7 @@
 // Muebles de la cotización: cada mueble es una tarjeta con su nombre (editable en el título), su cantidad y sus rubros.
 // Dentro de cada rubro va todo junto (horas de operarios, operarios, materiales, diseño y administración: RubroSection).
 // De acá sale todo el costo de los muebles y, al crear el proyecto, los muebles que el Jefe de planta asigna.
+import { useProductionRubros } from "@/store/selectors";
 import { Plus } from "lucide-react";
 import type { RubroId } from "@/types";
 import { formatCurrency } from "@/lib/formatting";
@@ -12,6 +13,7 @@ import { FULL_RUBROS, RubroSection } from "./rubro-section";
 import { newProductRow, newProductRubroRow, productLabel, productRowError, type CalcState, type CalculatorResult, type ProductRow } from "./calculator-state";
 
 export function ProductsSection({ state, onState, result }: { state: CalcState; onState: (patch: Partial<CalcState>) => void; result: CalculatorResult }) {
+  const configuredRubros = useProductionRubros();
   const setProduct = (key: string, patch: Partial<ProductRow>) => onState({ products: state.products.map((p) => (p.key === key ? { ...p, ...patch } : p)) });
   const total = result.products.reduce((s, p) => s + p.total, 0);
 
@@ -20,8 +22,8 @@ export function ProductsSection({ state, onState, result }: { state: CalcState; 
       title="Muebles"
       help={
         <>
-          <span className="block">Cada mueble (ej. “Mesa × 10”) tiene sus rubros. En cada rubro: horas de operarios para toda la cantidad y cuántos operarios pide, materiales, y horas de diseño y de administración.</span>
-          <span className="block">Las horas se valorizan con las tarifas de Configuración. Cada rubro va una sola vez por mueble.</span>
+          <span className="block">Cada mueble (ej. “Mesa × 10”) tiene sus rubros. En cada rubro: horas de operarios para toda la cantidad y cuántos operarios pide, materiales. Las horas no operarias se presupuestan una vez por proyecto.</span>
+          <span className="block">Las horas se valorizan con la categoría productiva elegida y su tarifa vigente. Cada rubro va una sola vez por mueble.</span>
         </>
       }
     >
@@ -32,17 +34,17 @@ export function ProductsSection({ state, onState, result }: { state: CalcState; 
           const errId = `prod-err-${p.key}`;
           const label = productLabel(p, i);
           const used = p.rubros.map((r) => r.rubro);
-          const available = FULL_RUBROS.filter((r) => !used.includes(r.id));
+          const available = (configuredRubros.length ? configuredRubros : FULL_RUBROS).filter((r) => !used.includes(r.id));
           return (
             <fieldset key={p.key} className="space-y-3 rounded-lg border border-slate-300 bg-slate-50/50 p-4" aria-label={label} aria-describedby={error ? errId : undefined}>
               <div className="flex flex-wrap items-end gap-2">
-                <div className="min-w-0 flex-1">
-                  <label htmlFor={`prod-name-${p.key}`} className="sr-only">Nombre del mueble {i + 1}</label>
+                <div className="min-w-0 basis-48 flex-1">
+                  <label htmlFor={`prod-name-${p.key}`} className="text-xs text-slate-600">Nombre del mueble {i + 1}</label>
                   <Input
                     id={`prod-name-${p.key}`}
                     value={p.name}
                     placeholder={`Mueble ${i + 1}`}
-                    className="h-10 border-transparent bg-transparent px-1 text-base font-semibold text-slate-900 shadow-none placeholder:text-slate-900 hover:border-slate-300 focus:border-slate-300 focus:bg-white"
+                    className="h-10 bg-white text-base font-semibold text-slate-900"
                     onChange={(e) => setProduct(p.key, { name: e.target.value })}
                   />
                 </div>
@@ -77,7 +79,7 @@ export function ProductsSection({ state, onState, result }: { state: CalcState; 
                 ) : (
                   <span className="text-xs text-slate-500">Ya están todos los rubros en este mueble.</span>
                 )}
-                {res && <span className="text-sm font-medium tabular text-slate-800">{label}: {formatCurrency(res.total)}</span>}
+                {res && <span className="text-sm font-medium tabular text-slate-800">{label}: {result.errors.length?"Pendiente de validar":formatCurrency(res.total)}</span>}
               </div>
               {error && (
                 <p id={errId} role="alert" className="text-xs text-red-600">
@@ -93,7 +95,7 @@ export function ProductsSection({ state, onState, result }: { state: CalcState; 
           </Button>
           {result.products.length > 0 && (
             <span className="text-sm text-slate-600 tabular">
-              Costo de los muebles: <strong className="text-slate-900">{formatCurrency(total)}</strong> (suma de {result.products.length}{" "}
+              Costo de los muebles: <strong className="text-slate-900">{result.errors.length?"Pendiente de validar":formatCurrency(total)}</strong> (suma de {result.products.length}{" "}
               {result.products.length === 1 ? "mueble" : "muebles"})
             </span>
           )}

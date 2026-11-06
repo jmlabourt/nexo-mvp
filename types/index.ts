@@ -63,7 +63,16 @@ export type AlertLevel = "info" | "warning" | "critical";
 export type EconomicHealth = "no_data" | "healthy" | "attention" | "risk";
 
 export interface BudgetLine {
+  staffCategoryId?: string;
+  staffCategoryName?: string;
+  rateValidFrom?: string;
+  rateQuotedOn?: string;
+  quotationItem?: string;
+  quotationItemKey?: string;
+  quotationItemId?: string;
   id: string;
+  /** Read-only BOM projection: historical need IDs, never written back to orders. */
+  historicalNeedIds?: string[];
   category: BudgetCategory;
   description: string;
   /** Solo para líneas de materiales: vincula con el catálogo para reconciliar. */
@@ -162,6 +171,8 @@ export type OrderReceived = "no" | "partial" | "yes";
 
 /** Línea de una orden: un material de una línea del costo presupuestado de un proyecto, con el costo real conseguido. */
 export interface PurchaseOrderLine {
+  /** En reposición de depósito no existen proyecto ni necesidad: ambos IDs quedan vacíos. */
+  destination?: "warehouse";
   id: string;
   projectId: string;
   /** Línea de materiales del presupuesto que cubre. */
@@ -178,6 +189,10 @@ export interface PurchaseOrderLine {
 
 /** Orden de compra (registro manual: sin mail ni banco). */
 export interface PurchaseOrder {
+  /** Auditoría frontend local: no reconstruir recepciones históricas sin evidencia. */
+  localReceipts?: Array<{ movementId: string; lineId: string; lotId: string; quantity: number; date: string; by: string; reversedAt?: string; reversedBy?: string; reason?: string }>;
+  statusHistory?: Array<{ previous: OrderStatus; next: OrderStatus; at: string; by: string; reason: string }>;
+
   id: string;
   /** Correlativo de la empresa: OC-0001. */
   number: string;
@@ -245,6 +260,20 @@ export interface LaborDetail {
 }
 
 export interface ActualEntry {
+  /** Rectificación monetaria explícita de otro costo; nunca material físico ni horas. */
+  costAdjustment?: {
+    originId:string; eventId:string; kind:"correction"|"reduction"|"cancellation";
+    side:"reversal"|"replacement"|"net"; reason:string; reference?:string; effectiveDate:string;
+    previous:OtherCostValue; next:OtherCostValue;
+  };
+  categoryId?: string;
+  corrections?: Array<{
+    id?: string; sourceEntryId?: string; hourlyCost?: number;
+    previous: { date: string; projectId: string; itemId?: string; rubro?: RubroId; hours: number; amount: number; assignmentId?: string };
+    next: { date: string; projectId: string; itemId?: string; rubro?: RubroId; hours: number; amount: number; assignmentId?: string };
+    allocations?: Array<{ entryId:string;projectId:string;assignmentId:string;itemId?:string;rubro:RubroId;date:string;hours:number;amount:number }>;
+    reason: string; by: string; at: string;
+  }>;
   id: string;
   projectId: string;
   date: string;
@@ -269,11 +298,19 @@ export interface ActualEntry {
   createdAt: string;
 }
 
+export interface OtherCostValue {
+  date:string; amount:number; type:Exclude<ActualEntryType,"labor">; category:BudgetCategory;
+  description:string; supplier?:string; itemId?:string; notes?:string;
+}
+
 /**
  * Asignación del Jefe de planta (Lote 5B): qué operario trabaja en qué proyecto y rubro un día, y cuántas horas
  * se prevén. Sin importes.
  */
 export interface WorkAssignment {
+  overloadReason?: string;
+  /** Identidad del alta múltiple local para reintentos sin duplicaciones. */
+  batchId?: string;
   hourKind?: "labor" | "design" | "admin";
   id: string;
   projectId: string;
@@ -316,7 +353,17 @@ export interface ActivityEvent {
   message: string;
 }
 
+export interface QuotationParameters {
+  materialsTargetPct:number;
+  laborTargetPct:number;
+  financialPct:number;
+  deadlineDays:number|null;
+}
+
 export interface Project {
+  productionDecision?:{date:string;reason:string;by:string;at:string};
+  procurementNotifiedAt?:string;
+  quotationParameters?: QuotationParameters;
   id: string;
   code: string;
   name: string;
@@ -363,6 +410,10 @@ export interface ProductRubro {
 
 /** Producto del proyecto (ej. "Mesa × 10"). Antes "mueble": es el mismo registro (project_items). */
 export interface ProjectItem {
+  quotationName?:string;
+  quotationKey?: string;
+  /** Auditoría local de unidades: no reconstruir fechas de totales históricos. */
+  unitsHistory?: Array<{ date:string; previous:number; next:number; by:string; at:string }>;
   id: string;
   name: string;
   description?: string;
@@ -377,6 +428,8 @@ export interface ProjectItem {
 export type ProductionStatus = "pending" | "in_production" | "done";
 
 export interface ProjectBaseline {
+  quotationParameters?: QuotationParameters;
+  items?: ProjectItem[];
   capturedAt: string;
   capturedBy: string;
   salesPrice: number;
@@ -430,6 +483,10 @@ export interface Operator {
   createdAt: string;
   /** Días de la semana que trabaja (0 = domingo … 6 = sábado). Sin dato: lunes a viernes (Lote 6 · Fase 3). */
   workDays?: number[];
+  /** Configuración habitual por persona; nunca se edita desde Planta. */
+  hoursPerDay?: number;
+  enabledRubros?: RubroId[];
+  productive?: boolean;
 }
 
 /** Excepción de un día puntual: "trabaja este sábado (4 h)" o "no viene el viernes". La edita el Jefe de planta. */
@@ -518,6 +575,8 @@ export interface LeftoverDims {
 }
 
 export interface StockLot {
+  orderId?: string;
+  orderLineId?: string;
   id: string;
   materialId: string;
   materialName: string;
@@ -539,6 +598,7 @@ export interface StockLot {
 }
 
 export interface StockMovement {
+  reversalOf?: string;
   id: string;
   lotId: string;
   kind: MovementKind;
@@ -576,8 +636,8 @@ export interface CatalogMaterial {
   unit: string;
   /** Costo de referencia (último conocido). Solo se usa si no hay compra ni presupuesto. */
   referenceCost: number;
-  /** Rubro al que pertenece normalmente. */
-  rubro: RubroId;
+  /** Clasificación heredada opcional; no condiciona el uso del material. */
+  rubro?: RubroId;
 }
 
 export interface AlertSettings {
@@ -707,6 +767,7 @@ export interface Opportunity {
 
 /** Capacidad de un rubro de trabajo (Configuración de Gerencia). */
 export interface RubroCapacity {
+  members?: Array<{ hoursPerDay: number; workDays: number[] }>;
   rubro: string;
   employees: number;
   hoursPerDay: number;
@@ -788,8 +849,12 @@ export interface CommercialRejection {
 // persistencia real en la base es del equipo de backend (PENDIENTES_BACKEND.md). Todos los importes son sin IVA.
 // ─────────────────────────────────────────────────────────────
 
-/** Factura de venta emitida al cliente (la registra Gerencia). Facturado ≠ cobrado. */
+/** Factura de venta emitida al cliente (la registra Administración). Facturado ≠ cobrado. */
 export interface SalesInvoice {
+  dueDate?:string;
+  condition?:string;
+  milestoneId?:string;
+  cancelled?:boolean;
   id: string;
   projectId: string;
   number: string;
@@ -815,10 +880,11 @@ export interface Collection {
 }
 
 /**
- * Pago a un proveedor, confirmado por Gerencia sobre la factura que Compras cargó en la orden de compra.
+ * Pago a un proveedor, registrado por Administración sobre la obligación vinculada en la orden de compra.
  * Un pago no es ingreso ni un costo nuevo: el costo del material ya está en el proyecto.
  */
 export interface SupplierPayment {
+  paymentRequestId?:string;
   id: string;
   orderId: string;
   date: string;
@@ -896,6 +962,11 @@ export interface ClientHandover {
  * costo por hora vigente, congelado al cargar); sin proyecto son "Trabajo interno" y no van a ninguna OT.
  */
 export interface InternalHours {
+  categoryName?: string;
+  costCategory?: HourCategory;
+  categoryId?: string;
+  itemId?: string;
+  corrections?: Array<{ previous: { date: string; hours: number; allocations?: Array<{ projectId:string;amount:number }> }; next: { date:string;hours:number;allocations?: Array<{ projectId:string;amount:number }> }; by:string;at:string;reason:string }>;
   id: string;
   /** Persona que trabajó (nombre de la sesión en la demo). */
   employeeId: string;
@@ -906,6 +977,8 @@ export interface InternalHours {
   /** Costo por hora vigente al cargar (solo horas de proyecto). */
   hourlyCost?: number;
   createdAt: string;
+  /** Distribución monetaria congelada al registrar, sin crear horas productivas. */
+  allocations?: Array<{ projectId: string; amount: number }>;
 }
 
 /** Rubro del catálogo de la empresa (Gerencia lo crea, renombra o desactiva; los demás lo eligen). */
@@ -929,11 +1002,13 @@ export interface RateRecord {
 
 /** Cliente del directorio (alta y edición en la demo). */
 export interface ClientEntry extends ClientRecord {
+  previousNames?: string[];
   createdAt: string;
 }
 
 /** Proveedor del directorio compartido (alta y edición en la demo). */
 export interface SupplierEntry extends SupplierRecord {
+  previousNames?: string[];
   website?: string;
   active: boolean;
   createdAt: string;
@@ -955,7 +1030,72 @@ export interface GeneralCost {
 }
 
 /** Todos los registros nuevos de la demo integral, en un solo lugar. */
+/** Registros frontend para integrar después, sin alterar contratos del backend. */
+export interface ExternalWork {
+  status?:"commissioned"|"completed";
+  completedDate?:string;
+  completedBy?:string;
+  completedAt?:string;
+  id: string;
+  kind: "hourly" | "workshop";
+  projectId: string;
+  itemId?: string;
+  rubro: RubroId;
+  date: string;
+  description: string;
+  supplier?: string;
+  hours?: number;
+  estimatedCost?: number;
+  confirmedCost?: number;
+  confirmedBy?: string;
+  confirmedAt?: string;
+  costHistory?: Array<{ previous?: number; next: number; by: string; at: string; reason?: string }>;
+  createdBy: string;
+  createdAt: string;
+}
+export interface FrontendPersonnel {
+  views?: Array<"gerencia" | "administracion" | "compras" | "jefe_planta" | "operario">;
+  workDays?: number[];
+  employeeId: string;
+  enabled: boolean;
+  view: "gerencia" | "administracion" | "compras" | "jefe_planta" | "operario";
+  hoursPerDay?: number;
+  enabledRubros?: RubroId[];
+  productive?: boolean;
+  categoryIds?: string[];
+  contact?: string;
+  phone?: string;
+  joinedOn?: string;
+  accessEnabledOn?: string;
+}
+export interface PaymentRequest {
+  cancelled?:{at:string;by:string;reason:string;remaining:number};
+  id:string; orderId:string; amount:number; date:string; reason:string;
+  by:string; at:string;
+  banking?:{ instrument:"transfer"|"echeq"; issuedOn:string; reference:string; dueOn?:string };
+}
+export interface FinancialCorrection {
+  id:string; entity:"invoice"|"collection"|"payment"|"banking"; targetId:string;
+  before:unknown; after:unknown; reason:string; by:string; at:string;
+}
+export interface CapacityPlan {
+  id:string; rubro:RubroId; from:string; to:string; workers:number; hoursPerWorker:number;
+  note:string; by:string; at:string;
+}
 export interface Ledger {
+  paymentRequests?:PaymentRequest[];
+  financialCorrections?:FinancialCorrection[];
+  capacityPlans?:CapacityPlan[];
+  quoteDefaults?: { materialsTargetPct:number; laborTargetPct:number };
+  materialCatalog?: Array<CatalogMaterial & { active?: boolean; validFrom: string }>;
+  /** Extensiones frontend locales; no se envían al backend. */
+  externalWork?: ExternalWork[];
+  projectNomenclature?: { pattern: string; prefix: string; nextNumber: number };
+  staffCategories?: Array<{ kind?:"operator"; id: string; name: string; category: HourCategory; hourlyCost: number; legacyHourlyCost?:number; active?: boolean; rates?: Array<{ validFrom:string; hourlyCost:number; by:string; at:string }> }>;
+  capacityBase?: Record<string, number>;
+  capacityAdjustments?: Array<{ id: string; rubro?: RubroId; date: string; hours: number; note: string; by: string; at: string }>;
+  externalRates?: Array<{ rubro: RubroId; hourlyCost: number; validFrom: string; by: string; at: string }>;
+  personnel?: FrontendPersonnel[];
   salesInvoices: SalesInvoice[];
   collections: Collection[];
   supplierPayments: SupplierPayment[];

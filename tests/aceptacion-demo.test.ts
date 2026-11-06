@@ -1,3 +1,5 @@
+import { generalAllocations } from "@/lib/frontend-work";
+import { invoiceEntries } from "@/lib/purchasing";
 // @vitest-environment jsdom
 // Pruebas de aceptación (pedido §11) sobre UN SOLO estado: el modo demostración. Cada escenario recorre la misma OT
 // entre sesiones con las acciones del store, y las cifras se recomputan con los selectores puros (nunca se cargan dos
@@ -97,14 +99,18 @@ describe("4. Compras: una OC para dos OT, recepción parcial, factura; el pago d
     expect(order().received).toBe("partial");
     expect(st().stock.lots.length).toBe(lotsBefore + 1);
     const total = order().lines.reduce((s, l) => s + l.quantity * l.unitCost, 0);
-    ok(st().invoiceOrder(id, { invoiceNumber: "A-0001-00001234", invoiceAmount: Math.round(total * 100) / 100, invoiceDate: today }));
+    const historicalInvoice = { invoiceNumber:"A-0001-00001234",invoiceAmount:Math.round(total*100)/100,invoiceDate:today };
+    expect(st().invoiceOrder(id,historicalInvoice).ok).toBe(false);
+    // Historical supplier invoices still participate in payments; no new invoice form is introduced.
+    const entries = invoiceEntries(order(),historicalInvoice,"Histórico",`${today}T12:00:00Z`);
+    useAppStore.setState({ orders:st().orders.map((o) => o.id === id ? { ...o,status:"invoiced",...historicalInvoice } : o),projects:st().projects.map((p) => ({ ...p,purchaseEntries:[...p.purchaseEntries,...entries.filter((e) => e.projectId === p.id)] })) });
     expect(order().status).toBe("invoiced");
     expect(project("p-1051").purchaseEntries.some((e) => e.supplier === "Maderas del Sur")).toBe(true);
     expect(project("p-1053").purchaseEntries.some((e) => e.supplier === "Maderas del Sur")).toBe(true);
 
-    as("gerencia");
+    as("administracion");
     const sales = billingStatus(project("p-1051"), st().ledger);
-    ok(st().recordLedger(["gerencia"], (l, ctx) => confirmSupplierPayment(l, order(), { date: today, amount: order().invoiceAmount!, reference: "Transferencia 991" }, ctx)));
+    ok(st().recordLedger(["administracion"], (l, ctx) => confirmSupplierPayment(l, order(), { date: today, amount: order().invoiceAmount!, reference: "Transferencia 991" }, ctx)));
     expect(paidOf(st().ledger, id)).toBe(order().invoiceAmount);
     expect(billingStatus(project("p-1051"), st().ledger)).toEqual(sales);
     // Compras no paga.
@@ -143,8 +149,11 @@ describe("6. Horas de todos los roles", () => {
     const op = st().operators.find((o) => o.active)!;
     const A = project("p-1051");
     const B = project("p-1053");
-    const asgA = ok(st().saveAssignment({ projectId: A.id, itemId: A.items[0].id, rubro: A.items[0].rubros[0].rubro, operatorId: op.id, date: today, plannedHours: 4 }));
-    const asgB = ok(st().saveAssignment({ projectId: B.id, itemId: B.items[0].id, rubro: B.items[0].rubros[0].rubro, operatorId: op.id, date: today, plannedHours: 4 }));
+    as("gerencia");
+    ok(st().recordLedger(["gerencia"],(l)=>({...l,personnel:[...(l.personnel ?? []).filter((p)=>p.employeeId!==op.id),{employeeId:op.id,enabled:true,view:"operario",productive:true,enabledRubros:[...new Set([A.items[0].rubros[0].rubro,B.items[0].rubros[0].rubro])]}]})));
+    as("jefe_planta");
+    const asgA = ok(st().saveAssignment({ projectId: A.id, itemId: A.items[0].id, rubro: A.items[0].rubros[0].rubro, operatorId: op.id, date: today, plannedHours: 4,overloadReason:"Prueba de reparto con jornada extendida acordada" }));
+    const asgB = ok(st().saveAssignment({ projectId: B.id, itemId: B.items[0].id, rubro: B.items[0].rubros[0].rubro, operatorId: op.id, date: today, plannedHours: 4,overloadReason:"Prueba de reparto con jornada extendida acordada" }));
     // El operario solo ve sus tareas y carga 8 h en la primera.
     as("operario", op.id);
     const hoursOf = (pid: string) => project(pid).actualEntries.filter((e) => e.operatorId === op.id && e.date === today && e.labor).reduce((s, e) => s + (e.labor?.hours ?? 0), 0);
@@ -166,20 +175,20 @@ describe("6. Horas de todos los roles", () => {
     expect(costOf(A.id) - baseCostA + costOf(B.id) - baseCostB).toBeCloseTo(cost8, 1);
     expect(project(B.id).activity.at(-1)?.message).toMatch(/Trabajó la tarde en la OT B/);
 
-    as("administracion");
-    const person = "Diseño (prueba)";
-    ok(st().recordLedger(["administracion"], (l, ctx) => registerInternalHours(l, { employeeId: person, projectId: A.id, date: today, hours: 3, task: "Planos", hourlyCost: 10_000 }, ctx)));
-    ok(st().recordLedger(["administracion"], (l, ctx) => registerInternalHours(l, { employeeId: person, date: today, hours: 2, task: "Orden del estudio" }, ctx)));
-    expect(staffHoursCost(st().ledger, A.id)).toBe(30_000);
-    const internal = st().ledger.internalHours.filter((h) => h.employeeId === person && !h.projectId);
-    expect(internal.map((h) => h.hours)).toEqual([2]);
-    // Las 2 h internas no van a ninguna OT: la suma imputada a proyectos sigue siendo solo las 3 h.
-    expect(st().projects.reduce((s, p) => s + staffHoursCost(st().ledger, p.id), 0)).toBe(30_000);
-    // Compras y Jefe registran las suyas; Gerencia no puede.
-    as("compras");
-    ok(st().recordLedger(["administracion", "compras", "jefe_planta"], (l, ctx) => registerInternalHours(l, { employeeId: "Compras", date: today, hours: 1, task: "Pedidos" }, ctx)));
-    as("jefe_planta");
-    ok(st().recordLedger(["administracion", "compras", "jefe_planta"], (l, ctx) => registerInternalHours(l, { employeeId: "Jefe", projectId: B.id, date: today, hours: 1, task: "Control", hourlyCost: 1 }, ctx)));
+    // Personal y tarifa son explícitos; ninguna sesión crea identidades o salarios desde el payload de horas.
+    const profiles=[{id:"dis-test",name:"Diseño prueba",view:"administracion" as const,cost:10000},{id:"buy-test",name:"Compras prueba",view:"compras" as const,cost:100},{id:"plant-test",name:"Planta prueba",view:"jefe_planta" as const,cost:1}];
+    useAppStore.setState({operators:[...st().operators,...profiles.map(p=>({id:p.id,name:p.name,role:"Personal",active:true,hourlyCost:p.cost,createdAt:today}))],ledger:{...st().ledger,personnel:[...(st().ledger.personnel??[]),...profiles.map(p=>({employeeId:p.id,enabled:true,view:p.view}))]}});
+    as("administracion","dis-test");
+    const person="dis-test";
+    ok(st().recordLedger(["administracion"],(l,ctx)=>registerInternalHours(l,{employeeId:person,projectId:A.id,date:today,hours:3,task:"Planos",hourlyCost:10000},ctx)));
+    const beforeGeneral=st().projects.reduce((sum,p)=>sum+staffHoursCost(st().ledger,p.id),0);
+    ok(st().recordLedger(["administracion"],(l,ctx)=>{const next=registerInternalHours(l,{employeeId:person,date:today,hours:2,task:"Orden del estudio",hourlyCost:10000},ctx);return {...next,internalHours:next.internalHours.map(h=>h.id===next.internalHours.at(-1)!.id?{...h,allocations:generalAllocations(st().projects,today,20000)}:h)};}));
+    expect(st().ledger.internalHours.filter(h=>h.employeeId===person&&!h.projectId).map(h=>h.hours)).toEqual([2]);
+    expect(st().projects.reduce((sum,p)=>sum+staffHoursCost(st().ledger,p.id),0)-beforeGeneral).toBe(20000);
+    as("compras","buy-test");
+    ok(st().recordLedger(["compras"],(l,ctx)=>{const next=registerInternalHours(l,{employeeId:"buy-test",date:today,hours:1,task:"Pedidos",hourlyCost:100},ctx);return {...next,internalHours:next.internalHours.map(h=>h.id===next.internalHours.at(-1)!.id?{...h,allocations:generalAllocations(st().projects,today,100)}:h)};}));
+    as("jefe_planta","plant-test");
+    ok(st().recordLedger(["jefe_planta"],(l,ctx)=>registerInternalHours(l,{employeeId:"plant-test",projectId:B.id,date:today,hours:1,task:"Control",hourlyCost:1},ctx)));
     as("gerencia");
     expect(st().recordLedger(["administracion", "compras", "jefe_planta"], (l, ctx) => registerInternalHours(l, { employeeId: "Gerencia", date: today, hours: 1, task: "x" }, ctx)).ok).toBe(false);
   });
@@ -187,11 +196,11 @@ describe("6. Horas de todos los roles", () => {
 
 describe("7. Dashboard de Gerencia: facturas, cobros y condiciones en distintas fechas", () => {
   it("por OT, por mes y total, sin duplicar; la rentabilidad de hoy es parcial y no definitiva", () => {
-    as("gerencia");
+    as("administracion");
     const p = project("p-1056");
-    ok(st().recordLedger(["gerencia"], (l) => setPaymentTerms(l, { projectId: p.id, daysAfterDelivery: 30, schedule: [{ id: "", label: "Seña", amount: 1_000_000, date: "2026-11-15" }] })));
-    ok(st().recordLedger(["gerencia"], (l, ctx) => registerCollection(l, p, { date: "2026-09-30", amount: 500_000 }, ctx))); // anticipo
-    ok(st().recordLedger(["gerencia"], (l, ctx) => registerSalesInvoice(l, p, { number: "B-0001-00000777", date: "2026-10-02", amount: 2_000_000 }, ctx)));
+    ok(st().recordLedger(["administracion"], (l) => setPaymentTerms(l, { projectId: p.id, daysAfterDelivery: 30, schedule: [{ id: "", label: "Seña", amount: 1_000_000, date: "2026-11-15" }] })));
+    ok(st().recordLedger(["administracion"], (l, ctx) => registerCollection(l, p, { date: "2026-09-30", amount: 500_000 }, ctx))); // anticipo
+    ok(st().recordLedger(["administracion"], (l, ctx) => registerSalesInvoice(l, p, { number: "B-0001-00000777", date: "2026-10-02", amount: 2_000_000 }, ctx)));
     const b = billingStatus(project(p.id), st().ledger);
     expect(b).toMatchObject({ invoiced: 2_000_000, collected: 500_000, advances: 500_000, planned: 1_000_000 });
     const months = billingMonths(st().projects, st().ledger, "2026-09-01", "2026-11-30").map((m) => [m.key, m.invoiced, m.collected, m.planned]);
@@ -210,7 +219,7 @@ describe("7. Dashboard de Gerencia: facturas, cobros y condiciones en distintas 
   });
 });
 
-describe("9. Gasto financiero desde Configuración", () => {
+describe("9. Costo financiero desde Configuración", () => {
   it("la tasa de Gerencia se usa en el cotizador: 5 % mensual, 30 + 30 días → 10 % ($100.000 sobre $1.000.000)", () => {
     as("gerencia");
     ok(st().recordLedger(["gerencia"], (l) => setFinancialRate(l, 5)));
@@ -231,11 +240,12 @@ describe("10. Entrega y cierre", () => {
     as("gerencia");
     const blocked = st().closeProject(p.id);
     expect(blocked.ok).toBe(false);
-    // El Jefe rinde todo y Gerencia devuelve al depósito lo que no se usó.
+    // El Jefe rinde todo; Compras devuelve el remanente y Gerencia solo cierra después.
     as("jefe_planta");
     for (const d of openDeliveries(st().deliveries, p.id)) ok(st().closeDay({ projectId: p.id, date: today, units: [], deliveries: [{ id: d.id, consumed: d.quantity - (d.consumed ?? 0), waste: 0, leftover: 0 }] }));
-    as("gerencia");
+    as("compras");
     for (const h of projectHoldings(st().stock, p.id)) ok(st().releaseStock({ projectId: p.id, lotId: h.lot.id, materialId: h.lot.materialId, materialName: h.lot.materialName, unit: h.lot.unit, quantity: h.quantity, date: today }));
+    as("gerencia");
     const r = st().closeProject(p.id);
     if (!r.ok) throw new Error(r.error);
     expect(project(p.id).isClosed).toBe(true);

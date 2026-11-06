@@ -1,9 +1,11 @@
 "use client";
+import { useConfiguredOperators } from "@/store/selectors";
 import { useConfirmedAction } from "@/store/confirmed-action";
 // Asignar trabajo: proyecto → producto → rubro → operario(s) → días → horas por día. Sin importes.
 // Al crear se pueden elegir varias personas y un rango de días (una asignación por persona y día hábil);
 // al editar se cambia esa sola asignación.
 import { useState } from "react";
+import { createId } from "@/lib/activity";
 import type { RubroId, WorkAssignment } from "@/types";
 import { activeOperators } from "@/lib/operators";
 import { formatDate, formatNumber } from "@/lib/formatting";
@@ -12,7 +14,7 @@ import { calendarCell, operatorWorkdays } from "@/lib/schedule";
 import { rubroLabel } from "@/lib/rubros";
 import { parseDecimal } from "@/lib/schemas";
 import { useAppStore } from "@/store/use-app-store";
-import { useMaterialsStateOf } from "@/store/selectors";
+import { useMaterialsStateOf, useIdentity } from "@/store/selectors";
 import { MATERIALS_STATE_LABELS } from "@/lib/purchasing";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
@@ -33,24 +35,31 @@ export function AssignmentDialog({ draft, onClose }: { draft: AssignmentDraft | 
 
 function AssignmentForm({ draft, onClose }: { draft: AssignmentDraft; onClose: () => void }) {
   const projects = useAppStore((s) => s.projects).filter(isAssignable);
-  const operators = activeOperators(useAppStore((s) => s.operators));
+  const operators = activeOperators(useConfiguredOperators()).filter((o) => o.productive !== false && (o.enabledRubros?.length ?? 0)>0);
   const saveAssignment = useConfirmedAction("saveAssignment");
+  const saveBatch = useConfirmedAction("saveAssignmentsBatch");
+  const [batchId]=useState(()=>createId("asg-batch"));
+  const local=useAppStore(s=>s.demoLocal);
+  const [saving,setSaving]=useState(false);
   const removeAssignment = useConfirmedAction("removeAssignment");
   const editing = !!draft.id;
+  const { session } = useIdentity();
   const [hourKind, setHourKind] = useState<"labor" | "design" | "admin">(draft.hourKind ?? "labor");
   const materialsOf = useMaterialsStateOf();
   const [projectId, setProjectId] = useState(draft.projectId ?? projects[0]?.id ?? "");
   const project = projects.find((p) => p.id === projectId);
-  const [itemId, setItemId] = useState(draft.itemId ?? "");
-  const item = project?.items.find((i) => i.id === itemId) ?? project?.items[0];
+  const [itemId, setItemId] = useState(draft.itemId ?? (project?.items.length===1?project.items[0].id:""));
+  const item = project?.items.find((i) => i.id === itemId);
+  const rubros = item?.rubros ?? project?.items.flatMap((i) => i.rubros).filter((r, i, all) => all.findIndex((x) => x.rubro === r.rubro) === i) ?? [];
   const [rubro, setRubro] = useState<RubroId | "">(draft.rubro ?? "");
-  const chosenRubro = item?.rubros.some((r) => r.rubro === rubro) ? rubro : (item?.rubros[0]?.rubro ?? "");
+  const chosenRubro = rubros.some((r) => r.rubro === rubro) ? rubro : (rubros[0]?.rubro ?? "");
   const need = item?.rubros.find((r) => r.rubro === chosenRubro);
   const [picked, setPicked] = useState<string[]>(draft.operatorId ? [draft.operatorId] : []);
   const [from, setFrom] = useState(draft.date ?? "");
   const [to, setTo] = useState(draft.date ?? "");
-  const [hours, setHours] = useState(draft.plannedHours ? String(draft.plannedHours).replace(".", ",") : "8");
+  const [hours, setHours] = useState(draft.plannedHours ? String(draft.plannedHours).replace(".", ",") : String(useAppStore.getState().costSettings.hoursPerDay));
   const [error, setError] = useState("");
+  const [overloadReason,setOverloadReason]=useState(draft.id?useAppStore.getState().assignments.find(a=>a.id===draft.id)?.overloadReason??"":"");
   const exceptions = useAppStore((s) => s.dayExceptions);
   const assignments = useAppStore((s) => s.assignments);
   const hoursPerDay = useAppStore((s) => s.costSettings.hoursPerDay);
@@ -80,15 +89,17 @@ function AssignmentForm({ draft, onClose }: { draft: AssignmentDraft; onClose: (
 
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!item || !chosenRubro) return setError("Elegí el producto y el rubro.");
+    if (!chosenRubro) return setError("Elegí el rubro.");
     if (picked.length === 0) return setError("Elegí al menos un operario.");
     if (total === 0) return setError(editing ? "Elegí el día." : "Elegí desde y hasta qué día: en ese rango no hay días laborales de esas personas.");
-    for (const operatorId of picked) {
-      for (const date of daysFor(operatorId)) {
-        const r = await saveAssignment({ id: draft.id, projectId, itemId: item.id, rubro: chosenRubro, operatorId, date, plannedHours: parseDecimal(hours), hourKind });
-        if (!r.ok) return setError(r.error);
-      }
-    }
+    if(picked.some(id=>!operators.find(o=>o.id===id)?.enabledRubros?.includes(chosenRubro)))return setError("Una persona elegida no está habilitada para este rubro; revisá la selección.");
+    const inputs=picked.flatMap(operatorId=>daysFor(operatorId).map(date=>({projectId,itemId:item?.id,rubro:chosenRubro,operatorId,date,plannedHours:parseDecimal(hours),overloadReason:overloadReason.trim()||undefined,hourKind:session==="gerencia"?hourKind:"labor" as const})));
+    setSaving(true);
+    const r=editing ? await saveAssignment({...inputs[0],id:draft.id})
+      : local ? await saveBatch(batchId,inputs)
+      : inputs.length===1 ? await saveAssignment(inputs[0]) : {ok:false as const,error:"El alta múltiple atómica requiere integración backend; no se guardaron asignaciones."};
+    setSaving(false);
+    if(!r.ok)return setError(r.error);
     onClose();
   };
 
@@ -99,17 +110,18 @@ function AssignmentForm({ draft, onClose }: { draft: AssignmentDraft; onClose: (
         <DialogDescription>Cada persona lo ve en &quot;Mi día&quot; con las horas estimadas y solo carga las horas que trabajó.</DialogDescription>
       </DialogHeader>
       <form onSubmit={save} noValidate className="space-y-4">
-        <Field label="Tipo de trabajo" htmlFor="as-kind"><Select id="as-kind" value={hourKind} onChange={e=>setHourKind(e.target.value as typeof hourKind)}><option value="labor">Producción</option><option value="design">Diseño</option><option value="admin">Administración</option></Select></Field>
+        {session === "gerencia" && <Field label="Tipo de trabajo" htmlFor="as-kind"><Select id="as-kind" value={hourKind} onChange={e=>setHourKind(e.target.value as typeof hourKind)}><option value="labor">Producción</option><option value="design">Diseño</option><option value="admin">Administración</option></Select></Field>}
         <Field label="Proyecto" htmlFor="as-project">
-          <Select id="as-project" value={projectId} onChange={(e) => { setProjectId(e.target.value); setItemId(""); }}>
+          <Select id="as-project" value={projectId} onChange={(e) => { setProjectId(e.target.value);const p=projects.find(p=>p.id===e.target.value);setItemId(p?.items.length===1?p.items[0].id:""); }}>
             {projects.map((p) => (
               <option key={p.id} value={p.id}>{p.code} · {p.name}</option>
             ))}
           </Select>
         </Field>
         <div className="grid grid-cols-2 gap-3">
-          <Field label="Producto" htmlFor="as-item">
+          <Field label="Mueble (opcional)" htmlFor="as-item">
             <Select id="as-item" value={item?.id ?? ""} onChange={(e) => setItemId(e.target.value)}>
+              <option value="">Proyecto y rubro, sin mueble</option>
               {(project?.items ?? []).map((i) => (
                 <option key={i.id} value={i.id}>{i.name} × {i.quantity}</option>
               ))}
@@ -117,7 +129,7 @@ function AssignmentForm({ draft, onClose }: { draft: AssignmentDraft; onClose: (
           </Field>
           <Field label="Rubro" htmlFor="as-rubro">
             <Select id="as-rubro" value={chosenRubro} onChange={(e) => setRubro(e.target.value as RubroId)}>
-              {(item?.rubros ?? []).map((r) => (
+              {rubros.map((r) => (
                 <option key={r.rubro} value={r.rubro}>{rubroLabel(r.rubro)}</option>
               ))}
             </Select>
@@ -138,13 +150,13 @@ function AssignmentForm({ draft, onClose }: { draft: AssignmentDraft; onClose: (
           <div className="grid gap-1.5 sm:grid-cols-2">
             {operators.map((o) => (
               <label key={o.id} className="flex cursor-pointer items-center gap-2 rounded-md border border-slate-200 px-2.5 py-1.5 text-sm has-[:checked]:border-blue-400 has-[:checked]:bg-blue-50">
-                <input type={editing ? "radio" : "checkbox"} name="as-operator" checked={picked.includes(o.id)} onChange={() => toggle(o.id)} className="size-4" />
-                <span className="min-w-0 break-words">{o.name} <span className="text-xs text-slate-500">· {o.role}</span></span>
+                <input type={editing ? "radio" : "checkbox"} name="as-operator" checked={picked.includes(o.id)} disabled={(!chosenRubro||!o.enabledRubros?.includes(chosenRubro))} onChange={() => toggle(o.id)} className="size-4" />
+                <span className="min-w-0 break-words">{o.name} <span className="text-xs text-slate-500">· {o.role}{(!chosenRubro||!o.enabledRubros?.includes(chosenRubro))&&" · No habilitado para este rubro"}</span></span>
               </label>
             ))}
           </div>
         </fieldset>
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <Field label={editing ? "Día" : "Desde"} htmlFor="as-from">
             <Input id="as-from" type="date" value={from} onChange={(e) => { setFrom(e.target.value); if (!to || to < e.target.value) setTo(e.target.value); }} />
           </Field>
@@ -169,6 +181,7 @@ function AssignmentForm({ draft, onClose }: { draft: AssignmentDraft; onClose: (
             ))}
           </ul>
         )}
+        <label className="block text-sm">Motivo de sobreasignación (si excede disponibilidad)<Input value={overloadReason} onChange={e=>setOverloadReason(e.target.value)} placeholder="Solo si se acuerda superar la disponibilidad"/></label>
         {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
         <DialogFooter className="gap-2">
           {editing && (
@@ -186,7 +199,7 @@ function AssignmentForm({ draft, onClose }: { draft: AssignmentDraft; onClose: (
             </Button>
           )}
           <Button type="button" variant="outline" onClick={onClose}>Cancelar</Button>
-          <Button type="submit">Guardar</Button>
+          <Button type="submit" disabled={saving}>Guardar</Button>
         </DialogFooter>
       </form>
     </>
