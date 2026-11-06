@@ -1,0 +1,758 @@
+{
+  "_aviso": "ESCENARIO LOGICO PARA PRUEBAS. NO ES BACKUP NATIVO IMPORTABLE DE BLERP. No importarlo en la demo actual; Codex debe validar/adaptar en almacenamiento aislado.",
+  "periodo": "2026-10-01/2026-10-31",
+  "fecha_corte": "2026-11-03",
+  "moneda": "ARS",
+  "tasa_financiera_mensual_porcentaje": 0,
+  "costos_generales_distribuidos_automaticamente": false,
+  "categoria_operativa": {
+    "id": "staff-operator",
+    "nombre": "Operario"
+  },
+  "categorias_no_operativas": [
+    {
+      "id": "staff-diseno",
+      "nombre": "Diseñador",
+      "costo_hora_ars": 18000
+    }
+  ],
+  "empleados": [
+    {
+      "id": "emp-carp",
+      "nombre": "Marina Rojas",
+      "categorias": [
+        "staff-operator"
+      ],
+      "rubros": [
+        "Carpintería madera"
+      ],
+      "costo_hora_ars": 15000
+    },
+    {
+      "id": "emp-pint",
+      "nombre": "Lucas Vega",
+      "categorias": [
+        "staff-operator"
+      ],
+      "rubros": [
+        "Pintura / Laqueados"
+      ],
+      "costo_hora_ars": 14000
+    },
+    {
+      "id": "emp-dis",
+      "nombre": "Nora Paz",
+      "categorias": [
+        "staff-diseno"
+      ],
+      "rubros": [],
+      "costo_hora_ars": 18000
+    }
+  ],
+  "rubros": [
+    "Carpintería madera",
+    "Carpintería metálica",
+    "Montaje",
+    "Pintura / Laqueados"
+  ],
+  "catalogo_materiales": [
+    {
+      "id": "mat-mel",
+      "nombre": "Melamina blanca 18 mm",
+      "unidad": "placa",
+      "precio_referencia_ars": 55000
+    },
+    {
+      "id": "mat-mdf",
+      "nombre": "MDF 18 mm",
+      "unidad": "placa",
+      "precio_referencia_ars": 40000
+    },
+    {
+      "id": "mat-per",
+      "nombre": "Perfil de aluminio",
+      "unidad": "m",
+      "precio_referencia_ars": 12000
+    },
+    {
+      "id": "mat-tor",
+      "nombre": "Tornillos",
+      "unidad": "caja",
+      "precio_referencia_ars": 8000
+    },
+    {
+      "id": "mat-pin",
+      "nombre": "Pintura",
+      "unidad": "litro",
+      "precio_referencia_ars": 15000
+    }
+  ],
+  "clientes": [
+    {
+      "id": "cli-1",
+      "nombre": "Estudio Centro"
+    },
+    {
+      "id": "cli-2",
+      "nombre": "Librería Norte"
+    },
+    {
+      "id": "cli-3",
+      "nombre": "Retail Costa"
+    },
+    {
+      "id": "cli-4",
+      "nombre": "Clínica Plaza"
+    },
+    {
+      "id": "cli-5",
+      "nombre": "Casa Sur"
+    }
+  ],
+  "proveedores": [
+    {
+      "id": "prov-tab",
+      "nombre": "Tableros del Sur"
+    },
+    {
+      "id": "prov-fer",
+      "nombre": "Ferretería Central"
+    },
+    {
+      "id": "prov-met",
+      "nombre": "Metales del Río"
+    }
+  ],
+  "proyectos": [
+    {
+      "id": "P-TEST-01",
+      "nombre": "Mostrador pequeño",
+      "cliente_id": "cli-1",
+      "estado": "Cotización",
+      "fecha_cotizacion": "2026-10-28",
+      "fecha_aprobacion": null,
+      "fecha_bom_publicado": null,
+      "fecha_inicio_decidido_planta": null,
+      "fecha_cierre_validado": null,
+      "precio_venta_aprobado_ars": null,
+      "precio_ofertado_ars": 800000,
+      "muebles": [
+        {
+          "id": "P-TEST-01-m1",
+          "nombre": "Mostrador pequeño",
+          "cantidad": 1,
+          "lineas_cotizadas": [
+            {
+              "tipo": "material",
+              "referencia": "mat-mel",
+              "rubro": "Carpintería madera",
+              "cantidad": 4,
+              "costo_unitario_ars": 55000,
+              "costo_total_ars": 220000
+            },
+            {
+              "tipo": "hora_operario",
+              "referencia": "staff-operator",
+              "rubro": "Carpintería madera",
+              "cantidad": 12,
+              "costo_unitario_ars": 15000,
+              "costo_total_ars": 180000
+            },
+            {
+              "tipo": "hora_no_operativa",
+              "referencia": "staff-diseno",
+              "rubro": null,
+              "cantidad": 4,
+              "costo_unitario_ars": 18000,
+              "costo_total_ars": 72000
+            }
+          ]
+        }
+      ],
+      "costo_cotizado_ars": 472000,
+      "margen_cotizado_porcentaje": 41.0,
+      "notas": "Snapshot comercial independiente del BOM y de los costos reales.",
+      "bom_estado": "no_aplica"
+    },
+    {
+      "id": "P-TEST-02",
+      "nombre": "Estantería modular",
+      "cliente_id": "cli-2",
+      "estado": "Aprobado",
+      "fecha_cotizacion": "2026-10-18",
+      "fecha_aprobacion": "2026-10-20",
+      "fecha_bom_publicado": null,
+      "fecha_inicio_decidido_planta": null,
+      "fecha_cierre_validado": null,
+      "precio_venta_aprobado_ars": 1400000,
+      "precio_ofertado_ars": 1400000,
+      "muebles": [
+        {
+          "id": "P-TEST-02-m1",
+          "nombre": "Estantería modular",
+          "cantidad": 1,
+          "lineas_cotizadas": [
+            {
+              "tipo": "material",
+              "referencia": "mat-mdf",
+              "rubro": "Carpintería madera",
+              "cantidad": 10,
+              "costo_unitario_ars": 40000,
+              "costo_total_ars": 400000
+            },
+            {
+              "tipo": "material",
+              "referencia": "mat-per",
+              "rubro": "Carpintería metálica",
+              "cantidad": 10,
+              "costo_unitario_ars": 12000,
+              "costo_total_ars": 120000
+            },
+            {
+              "tipo": "hora_operario",
+              "referencia": "staff-operator",
+              "rubro": "Carpintería madera",
+              "cantidad": 20,
+              "costo_unitario_ars": 15000,
+              "costo_total_ars": 300000
+            },
+            {
+              "tipo": "hora_no_operativa",
+              "referencia": "staff-diseno",
+              "rubro": null,
+              "cantidad": 5,
+              "costo_unitario_ars": 18000,
+              "costo_total_ars": 90000
+            }
+          ]
+        }
+      ],
+      "costo_cotizado_ars": 910000,
+      "margen_cotizado_porcentaje": 35.0,
+      "notas": "Snapshot comercial independiente del BOM y de los costos reales.",
+      "bom_estado": "borrador"
+    },
+    {
+      "id": "P-TEST-03",
+      "nombre": "Exhibidores comerciales",
+      "cliente_id": "cli-3",
+      "estado": "Compras",
+      "fecha_cotizacion": "2026-10-06",
+      "fecha_aprobacion": "2026-10-08",
+      "fecha_bom_publicado": "2026-10-11",
+      "fecha_inicio_decidido_planta": null,
+      "fecha_cierre_validado": null,
+      "precio_venta_aprobado_ars": 2000000,
+      "precio_ofertado_ars": 2000000,
+      "muebles": [
+        {
+          "id": "P-TEST-03-m1",
+          "nombre": "Exhibidores comerciales",
+          "cantidad": 1,
+          "lineas_cotizadas": [
+            {
+              "tipo": "material",
+              "referencia": "mat-mel",
+              "rubro": "Carpintería madera",
+              "cantidad": 12,
+              "costo_unitario_ars": 55000,
+              "costo_total_ars": 660000
+            },
+            {
+              "tipo": "material",
+              "referencia": "mat-tor",
+              "rubro": "Montaje",
+              "cantidad": 5,
+              "costo_unitario_ars": 8000,
+              "costo_total_ars": 40000
+            },
+            {
+              "tipo": "hora_operario",
+              "referencia": "staff-operator",
+              "rubro": "Carpintería madera",
+              "cantidad": 30,
+              "costo_unitario_ars": 15000,
+              "costo_total_ars": 450000
+            },
+            {
+              "tipo": "hora_no_operativa",
+              "referencia": "staff-diseno",
+              "rubro": null,
+              "cantidad": 4,
+              "costo_unitario_ars": 18000,
+              "costo_total_ars": 72000
+            }
+          ]
+        }
+      ],
+      "costo_cotizado_ars": 1222000,
+      "margen_cotizado_porcentaje": 38.9,
+      "notas": "Snapshot comercial independiente del BOM y de los costos reales.",
+      "bom_estado": "publicado"
+    },
+    {
+      "id": "P-TEST-04",
+      "nombre": "Mesa de recepción",
+      "cliente_id": "cli-4",
+      "estado": "Producción",
+      "fecha_cotizacion": "2026-10-03",
+      "fecha_aprobacion": "2026-10-05",
+      "fecha_bom_publicado": "2026-10-07",
+      "fecha_inicio_decidido_planta": "2026-10-16",
+      "fecha_cierre_validado": null,
+      "precio_venta_aprobado_ars": 2500000,
+      "precio_ofertado_ars": 2500000,
+      "muebles": [
+        {
+          "id": "P-TEST-04-m1",
+          "nombre": "Mesa de recepción",
+          "cantidad": 1,
+          "lineas_cotizadas": [
+            {
+              "tipo": "material",
+              "referencia": "mat-mdf",
+              "rubro": "Carpintería madera",
+              "cantidad": 15,
+              "costo_unitario_ars": 40000,
+              "costo_total_ars": 600000
+            },
+            {
+              "tipo": "material",
+              "referencia": "mat-per",
+              "rubro": "Carpintería metálica",
+              "cantidad": 20,
+              "costo_unitario_ars": 12000,
+              "costo_total_ars": 240000
+            },
+            {
+              "tipo": "hora_operario",
+              "referencia": "staff-operator",
+              "rubro": "Carpintería madera",
+              "cantidad": 40,
+              "costo_unitario_ars": 15000,
+              "costo_total_ars": 600000
+            },
+            {
+              "tipo": "hora_operario",
+              "referencia": "staff-operator",
+              "rubro": "Pintura / Laqueados",
+              "cantidad": 10,
+              "costo_unitario_ars": 14000,
+              "costo_total_ars": 140000
+            },
+            {
+              "tipo": "hora_no_operativa",
+              "referencia": "staff-diseno",
+              "rubro": null,
+              "cantidad": 3,
+              "costo_unitario_ars": 18000,
+              "costo_total_ars": 54000
+            }
+          ]
+        }
+      ],
+      "costo_cotizado_ars": 1634000,
+      "margen_cotizado_porcentaje": 34.64,
+      "notas": "Snapshot comercial independiente del BOM y de los costos reales.",
+      "bom_estado": "publicado"
+    },
+    {
+      "id": "P-TEST-05",
+      "nombre": "Mueble de TV",
+      "cliente_id": "cli-5",
+      "estado": "Cerrado",
+      "fecha_cotizacion": "2026-10-01",
+      "fecha_aprobacion": "2026-10-02",
+      "fecha_bom_publicado": "2026-10-03",
+      "fecha_inicio_decidido_planta": "2026-10-06",
+      "fecha_cierre_validado": "2026-10-26",
+      "precio_venta_aprobado_ars": 1300000,
+      "precio_ofertado_ars": 1300000,
+      "muebles": [
+        {
+          "id": "P-TEST-05-m1",
+          "nombre": "Mueble de TV",
+          "cantidad": 1,
+          "lineas_cotizadas": [
+            {
+              "tipo": "material",
+              "referencia": "mat-mel",
+              "rubro": "Carpintería madera",
+              "cantidad": 6,
+              "costo_unitario_ars": 55000,
+              "costo_total_ars": 330000
+            },
+            {
+              "tipo": "material",
+              "referencia": "mat-tor",
+              "rubro": "Montaje",
+              "cantidad": 2,
+              "costo_unitario_ars": 8000,
+              "costo_total_ars": 16000
+            },
+            {
+              "tipo": "hora_operario",
+              "referencia": "staff-operator",
+              "rubro": "Carpintería madera",
+              "cantidad": 25,
+              "costo_unitario_ars": 15000,
+              "costo_total_ars": 375000
+            },
+            {
+              "tipo": "hora_operario",
+              "referencia": "staff-operator",
+              "rubro": "Pintura / Laqueados",
+              "cantidad": 5,
+              "costo_unitario_ars": 14000,
+              "costo_total_ars": 70000
+            },
+            {
+              "tipo": "hora_no_operativa",
+              "referencia": "staff-diseno",
+              "rubro": null,
+              "cantidad": 2,
+              "costo_unitario_ars": 18000,
+              "costo_total_ars": 36000
+            }
+          ]
+        }
+      ],
+      "costo_cotizado_ars": 827000,
+      "margen_cotizado_porcentaje": 36.3846,
+      "notas": "Snapshot comercial independiente del BOM y de los costos reales.",
+      "bom_estado": "publicado"
+    }
+  ],
+  "ordenes_compra": [
+    {
+      "id": "OC-01",
+      "proyecto_id": "P-TEST-03",
+      "proveedor_id": "prov-tab",
+      "material_id": "mat-mel",
+      "cantidad_pedida": 12,
+      "unidad": "placa",
+      "precio_unitario_ars": 55000,
+      "total_ars": 660000,
+      "estado": "enviada",
+      "fecha_envio_proveedor": "2026-10-12",
+      "cantidad_recibida": 8,
+      "fecha_recepcion": "2026-10-14",
+      "cantidad_asignada_proyecto": 8
+    },
+    {
+      "id": "OC-02",
+      "proyecto_id": "P-TEST-03",
+      "proveedor_id": "prov-fer",
+      "material_id": "mat-tor",
+      "cantidad_pedida": 5,
+      "unidad": "caja",
+      "precio_unitario_ars": 8000,
+      "total_ars": 40000,
+      "estado": "enviada",
+      "fecha_envio_proveedor": "2026-10-12",
+      "cantidad_recibida": 0,
+      "fecha_recepcion": null,
+      "cantidad_asignada_proyecto": 0
+    },
+    {
+      "id": "OC-03",
+      "proyecto_id": "P-TEST-04",
+      "proveedor_id": "prov-tab",
+      "material_id": "mat-mdf",
+      "cantidad_pedida": 15,
+      "unidad": "placa",
+      "precio_unitario_ars": 40000,
+      "total_ars": 600000,
+      "estado": "enviada",
+      "fecha_envio_proveedor": "2026-10-09",
+      "cantidad_recibida": 15,
+      "fecha_recepcion": "2026-10-10",
+      "cantidad_asignada_proyecto": 15
+    },
+    {
+      "id": "OC-04",
+      "proyecto_id": "P-TEST-04",
+      "proveedor_id": "prov-met",
+      "material_id": "mat-per",
+      "cantidad_pedida": 20,
+      "unidad": "m",
+      "precio_unitario_ars": 12000,
+      "total_ars": 240000,
+      "estado": "enviada",
+      "fecha_envio_proveedor": "2026-10-09",
+      "cantidad_recibida": 20,
+      "fecha_recepcion": "2026-10-10",
+      "cantidad_asignada_proyecto": 20
+    },
+    {
+      "id": "OC-05",
+      "proyecto_id": "P-TEST-05",
+      "proveedor_id": "prov-tab",
+      "material_id": "mat-mel",
+      "cantidad_pedida": 6,
+      "unidad": "placa",
+      "precio_unitario_ars": 55000,
+      "total_ars": 330000,
+      "estado": "enviada",
+      "fecha_envio_proveedor": "2026-10-04",
+      "cantidad_recibida": 6,
+      "fecha_recepcion": "2026-10-05",
+      "cantidad_asignada_proyecto": 6
+    },
+    {
+      "id": "OC-06",
+      "proyecto_id": "P-TEST-05",
+      "proveedor_id": "prov-fer",
+      "material_id": "mat-tor",
+      "cantidad_pedida": 2,
+      "unidad": "caja",
+      "precio_unitario_ars": 8000,
+      "total_ars": 16000,
+      "estado": "enviada",
+      "fecha_envio_proveedor": "2026-10-04",
+      "cantidad_recibida": 2,
+      "fecha_recepcion": "2026-10-05",
+      "cantidad_asignada_proyecto": 2
+    }
+  ],
+  "consumos_y_desperdicios": [
+    {
+      "id": "US-01",
+      "proyecto_id": "P-TEST-04",
+      "mueble_id": "P-TEST-04-m1",
+      "oc_id": "OC-03",
+      "material_id": "mat-mdf",
+      "cantidad_consumida": 8,
+      "cantidad_desperdiciada": 1,
+      "costo_unitario_origen_ars": 40000,
+      "costo_imputado_ars": 360000,
+      "fecha": "2026-10-19"
+    },
+    {
+      "id": "US-02",
+      "proyecto_id": "P-TEST-04",
+      "mueble_id": "P-TEST-04-m1",
+      "oc_id": "OC-04",
+      "material_id": "mat-per",
+      "cantidad_consumida": 7,
+      "cantidad_desperdiciada": 1,
+      "costo_unitario_origen_ars": 12000,
+      "costo_imputado_ars": 96000,
+      "fecha": "2026-10-20"
+    },
+    {
+      "id": "US-03",
+      "proyecto_id": "P-TEST-05",
+      "mueble_id": "P-TEST-05-m1",
+      "oc_id": "OC-05",
+      "material_id": "mat-mel",
+      "cantidad_consumida": 5,
+      "cantidad_desperdiciada": 1,
+      "costo_unitario_origen_ars": 55000,
+      "costo_imputado_ars": 330000,
+      "fecha": "2026-10-12"
+    },
+    {
+      "id": "US-04",
+      "proyecto_id": "P-TEST-05",
+      "mueble_id": "P-TEST-05-m1",
+      "oc_id": "OC-06",
+      "material_id": "mat-tor",
+      "cantidad_consumida": 2,
+      "cantidad_desperdiciada": 0,
+      "costo_unitario_origen_ars": 8000,
+      "costo_imputado_ars": 16000,
+      "fecha": "2026-10-12"
+    }
+  ],
+  "horas_reales": [
+    {
+      "id": "HR-01",
+      "proyecto_id": "P-TEST-04",
+      "mueble_id": "P-TEST-04-m1",
+      "empleado_id": "emp-carp",
+      "categoria_id": "staff-operator",
+      "rubro": "Carpintería madera",
+      "horas_reales": 18,
+      "costo_hora_historico_ars": 15000,
+      "costo_total_ars": 270000,
+      "fecha": "2026-10-19"
+    },
+    {
+      "id": "HR-02",
+      "proyecto_id": "P-TEST-04",
+      "mueble_id": "P-TEST-04-m1",
+      "empleado_id": "emp-pint",
+      "categoria_id": "staff-operator",
+      "rubro": "Pintura / Laqueados",
+      "horas_reales": 4,
+      "costo_hora_historico_ars": 14000,
+      "costo_total_ars": 56000,
+      "fecha": "2026-10-20"
+    },
+    {
+      "id": "HR-03",
+      "proyecto_id": "P-TEST-05",
+      "mueble_id": "P-TEST-05-m1",
+      "empleado_id": "emp-carp",
+      "categoria_id": "staff-operator",
+      "rubro": "Carpintería madera",
+      "horas_reales": 24,
+      "costo_hora_historico_ars": 15000,
+      "costo_total_ars": 360000,
+      "fecha": "2026-10-14"
+    },
+    {
+      "id": "HR-04",
+      "proyecto_id": "P-TEST-05",
+      "mueble_id": "P-TEST-05-m1",
+      "empleado_id": "emp-pint",
+      "categoria_id": "staff-operator",
+      "rubro": "Pintura / Laqueados",
+      "horas_reales": 5,
+      "costo_hora_historico_ars": 14000,
+      "costo_total_ars": 70000,
+      "fecha": "2026-10-15"
+    },
+    {
+      "id": "HR-05",
+      "proyecto_id": "P-TEST-05",
+      "mueble_id": "P-TEST-05-m1",
+      "empleado_id": "emp-dis",
+      "categoria_id": "staff-diseno",
+      "rubro": null,
+      "horas_reales": 2,
+      "costo_hora_historico_ars": 18000,
+      "costo_total_ars": 36000,
+      "fecha": "2026-10-07"
+    }
+  ],
+  "facturas_emitidas": [
+    {
+      "id": "F-01",
+      "proyecto_id": "P-TEST-03",
+      "fecha": "2026-10-10",
+      "vencimiento": "2026-10-30",
+      "importe_ars": 600000
+    },
+    {
+      "id": "F-02",
+      "proyecto_id": "P-TEST-04",
+      "fecha": "2026-10-08",
+      "vencimiento": "2026-11-07",
+      "importe_ars": 1000000
+    },
+    {
+      "id": "F-03",
+      "proyecto_id": "P-TEST-05",
+      "fecha": "2026-10-06",
+      "vencimiento": "2026-11-05",
+      "importe_ars": 1300000
+    }
+  ],
+  "cobros_efectivos": [
+    {
+      "id": "CO-01",
+      "factura_id": "F-01",
+      "proyecto_id": "P-TEST-03",
+      "fecha_efectiva": "2026-10-17",
+      "importe_ars": 300000
+    },
+    {
+      "id": "CO-02",
+      "factura_id": "F-02",
+      "proyecto_id": "P-TEST-04",
+      "fecha_efectiva": "2026-10-15",
+      "importe_ars": 1000000
+    },
+    {
+      "id": "CO-03",
+      "factura_id": "F-03",
+      "proyecto_id": "P-TEST-05",
+      "fecha_efectiva": "2026-10-08",
+      "importe_ars": 800000
+    },
+    {
+      "id": "CO-04",
+      "factura_id": "F-03",
+      "proyecto_id": "P-TEST-05",
+      "fecha_efectiva": "2026-10-29",
+      "importe_ars": 500000
+    }
+  ],
+  "solicitudes_pago_proveedores": [
+    {
+      "id": "SOL-01",
+      "oc_id": "OC-01",
+      "fecha_solicitud": "2026-10-15",
+      "importe_solicitado_ars": 400000,
+      "estado": "parcialmente_pagada"
+    },
+    {
+      "id": "SOL-02",
+      "oc_id": "OC-03",
+      "fecha_solicitud": "2026-10-17",
+      "importe_solicitado_ars": 300000,
+      "estado": "pagada"
+    },
+    {
+      "id": "SOL-03",
+      "oc_id": "OC-05",
+      "fecha_solicitud": "2026-10-10",
+      "importe_solicitado_ars": 330000,
+      "estado": "pagada"
+    },
+    {
+      "id": "SOL-04",
+      "oc_id": "OC-06",
+      "fecha_solicitud": "2026-10-13",
+      "importe_solicitado_ars": 16000,
+      "estado": "pagada"
+    }
+  ],
+  "pagos_efectivos_proveedores": [
+    {
+      "id": "PA-01",
+      "solicitud_id": "SOL-01",
+      "oc_id": "OC-01",
+      "fecha_debito_efectiva": "2026-10-18",
+      "importe_ars": 200000
+    },
+    {
+      "id": "PA-02",
+      "solicitud_id": "SOL-02",
+      "oc_id": "OC-03",
+      "fecha_debito_efectiva": "2026-10-20",
+      "importe_ars": 300000
+    },
+    {
+      "id": "PA-03",
+      "solicitud_id": "SOL-03",
+      "oc_id": "OC-05",
+      "fecha_debito_efectiva": "2026-10-12",
+      "importe_ars": 330000
+    },
+    {
+      "id": "PA-04",
+      "solicitud_id": "SOL-04",
+      "oc_id": "OC-06",
+      "fecha_debito_efectiva": "2026-10-15",
+      "importe_ars": 16000
+    }
+  ],
+  "sin_movimientos_adicionales": {
+    "sobrantes_devueltos": [],
+    "transferencias": [],
+    "tercerizaciones": [],
+    "gastos_extra": [],
+    "horas_general_distribuidas": []
+  },
+  "objetivos_prueba": [
+    "No confundir presupuestado con real",
+    "No imputar compras/recepciones al costo consumido",
+    "No contar solicitud como pago",
+    "No contar factura como cobro",
+    "No considerar ganancia parcial como final",
+    "No duplicar stock físico entre proyectos"
+  ]
+}

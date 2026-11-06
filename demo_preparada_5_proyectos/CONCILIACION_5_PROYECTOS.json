@@ -1,0 +1,324 @@
+{
+  "sourceSha256": "2069b1a1e4aae53a3f50a1300f7940c6fa9446d9ca321269e13faa6be9e3f7df",
+  "canImport": false,
+  "blockers": [
+    {
+      "kind": "missing",
+      "path": "ledger.staffCategories/staff-operator/hourlyCost",
+      "message": "Falta tarifa base de Operario. Las excepciones de 15.000 y 14.000 no definen una tarifa común."
+    },
+    {
+      "kind": "missing",
+      "path": "personnel/emp-carp",
+      "message": "Faltan jornada, días, vistas y acceso explícitos. No se asigna un permiso por el nombre de su categoría."
+    },
+    {
+      "kind": "missing",
+      "path": "personnel/emp-pint",
+      "message": "Faltan jornada, días, vistas y acceso explícitos. No se asigna un permiso por el nombre de su categoría."
+    },
+    {
+      "kind": "missing",
+      "path": "personnel/emp-dis",
+      "message": "Faltan jornada, días, vistas y acceso explícitos. No se asigna un permiso por el nombre de su categoría."
+    },
+    {
+      "kind": "missing",
+      "path": "projects/P-TEST-01/startDate",
+      "message": "No informado en el archivo lógico; no se usa una fecha real como si fuera planificación."
+    },
+    {
+      "kind": "missing",
+      "path": "projects/P-TEST-01/dueDate",
+      "message": "No informado en el archivo lógico; no se usa una fecha real como si fuera planificación."
+    },
+    {
+      "kind": "missing",
+      "path": "projects/P-TEST-01/projectType",
+      "message": "No informado en el archivo lógico; no se usa una fecha real como si fuera planificación."
+    },
+    {
+      "kind": "missing",
+      "path": "projects/P-TEST-01/owner",
+      "message": "No informado en el archivo lógico; no se usa una fecha real como si fuera planificación."
+    },
+    {
+      "kind": "missing",
+      "path": "projects/P-TEST-01/items/P-TEST-01-m1/carpinteria_madera/workers",
+      "message": "Las horas totales no informan cuántos operarios se solicitaron al cotizar."
+    },
+    {
+      "kind": "missing",
+      "path": "projects/P-TEST-01/items/P-TEST-01-m1/completedUnits",
+      "message": "No se informó avance de unidades ni evento de terminación."
+    },
+    {
+      "kind": "missing",
+      "path": "projects/P-TEST-02/startDate",
+      "message": "No informado en el archivo lógico; no se usa una fecha real como si fuera planificación."
+    },
+    {
+      "kind": "missing",
+      "path": "projects/P-TEST-02/dueDate",
+      "message": "No informado en el archivo lógico; no se usa una fecha real como si fuera planificación."
+    },
+    {
+      "kind": "missing",
+      "path": "projects/P-TEST-02/projectType",
+      "message": "No informado en el archivo lógico; no se usa una fecha real como si fuera planificación."
+    },
+    {
+      "kind": "missing",
+      "path": "projects/P-TEST-02/owner",
+      "message": "No informado en el archivo lógico; no se usa una fecha real como si fuera planificación."
+    },
+    {
+      "kind": "missing",
+      "path": "projects/P-TEST-02/items/P-TEST-02-m1/carpinteria_madera/workers",
+      "message": "Las horas totales no informan cuántos operarios se solicitaron al cotizar."
+    },
+    {
+      "kind": "missing",
+      "path": "projects/P-TEST-02/items/P-TEST-02-m1/completedUnits",
+      "message": "No se informó avance de unidades ni evento de terminación."
+    },
+    {
+      "kind": "missing",
+      "path": "projects/P-TEST-03/startDate",
+      "message": "No informado en el archivo lógico; no se usa una fecha real como si fuera planificación."
+    },
+    {
+      "kind": "missing",
+      "path": "projects/P-TEST-03/dueDate",
+      "message": "No informado en el archivo lógico; no se usa una fecha real como si fuera planificación."
+    },
+    {
+      "kind": "missing",
+      "path": "projects/P-TEST-03/projectType",
+      "message": "No informado en el archivo lógico; no se usa una fecha real como si fuera planificación."
+    },
+    {
+      "kind": "missing",
+      "path": "projects/P-TEST-03/owner",
+      "message": "No informado en el archivo lógico; no se usa una fecha real como si fuera planificación."
+    },
+    {
+      "kind": "missing",
+      "path": "projects/P-TEST-03/items/P-TEST-03-m1/carpinteria_madera/workers",
+      "message": "Las horas totales no informan cuántos operarios se solicitaron al cotizar."
+    },
+    {
+      "kind": "missing",
+      "path": "projects/P-TEST-03/items/P-TEST-03-m1/completedUnits",
+      "message": "No se informó avance de unidades ni evento de terminación."
+    },
+    {
+      "kind": "missing",
+      "path": "projects/P-TEST-04/startDate",
+      "message": "No informado en el archivo lógico; no se usa una fecha real como si fuera planificación."
+    },
+    {
+      "kind": "missing",
+      "path": "projects/P-TEST-04/dueDate",
+      "message": "No informado en el archivo lógico; no se usa una fecha real como si fuera planificación."
+    },
+    {
+      "kind": "missing",
+      "path": "projects/P-TEST-04/projectType",
+      "message": "No informado en el archivo lógico; no se usa una fecha real como si fuera planificación."
+    },
+    {
+      "kind": "missing",
+      "path": "projects/P-TEST-04/owner",
+      "message": "No informado en el archivo lógico; no se usa una fecha real como si fuera planificación."
+    },
+    {
+      "kind": "missing",
+      "path": "projects/P-TEST-04/items/P-TEST-04-m1/carpinteria_madera/workers",
+      "message": "Las horas totales no informan cuántos operarios se solicitaron al cotizar."
+    },
+    {
+      "kind": "missing",
+      "path": "projects/P-TEST-04/items/P-TEST-04-m1/pintura/workers",
+      "message": "Las horas totales no informan cuántos operarios se solicitaron al cotizar."
+    },
+    {
+      "kind": "missing",
+      "path": "projects/P-TEST-04/items/P-TEST-04-m1/completedUnits",
+      "message": "No se informó avance de unidades ni evento de terminación."
+    },
+    {
+      "kind": "missing",
+      "path": "projects/P-TEST-05/startDate",
+      "message": "No informado en el archivo lógico; no se usa una fecha real como si fuera planificación."
+    },
+    {
+      "kind": "missing",
+      "path": "projects/P-TEST-05/dueDate",
+      "message": "No informado en el archivo lógico; no se usa una fecha real como si fuera planificación."
+    },
+    {
+      "kind": "missing",
+      "path": "projects/P-TEST-05/projectType",
+      "message": "No informado en el archivo lógico; no se usa una fecha real como si fuera planificación."
+    },
+    {
+      "kind": "missing",
+      "path": "projects/P-TEST-05/owner",
+      "message": "No informado en el archivo lógico; no se usa una fecha real como si fuera planificación."
+    },
+    {
+      "kind": "missing",
+      "path": "projects/P-TEST-05/items/P-TEST-05-m1/carpinteria_madera/workers",
+      "message": "Las horas totales no informan cuántos operarios se solicitaron al cotizar."
+    },
+    {
+      "kind": "missing",
+      "path": "projects/P-TEST-05/items/P-TEST-05-m1/pintura/workers",
+      "message": "Las horas totales no informan cuántos operarios se solicitaron al cotizar."
+    },
+    {
+      "kind": "missing",
+      "path": "projects/P-TEST-05/items/P-TEST-05-m1/completedUnits",
+      "message": "No se informó avance de unidades ni evento de terminación."
+    },
+    {
+      "kind": "workflow",
+      "path": "projects/P-TEST-03/status",
+      "message": "La recepción activa Producción en Blerp. Mantener Compras requiere una vuelta autorizada y documentada de Planta, que no fue suministrada."
+    },
+    {
+      "kind": "missing",
+      "path": "projects/P-TEST-05/closure",
+      "message": "La declaración de cierre no aporta entrega real, unidades terminadas, revisión de horas ni facturas de proveedor de las OC enviadas. No se fabrica validación nativa ni ganancia final."
+    },
+    {
+      "kind": "missing",
+      "path": "paymentRequests/SOL-01/reason",
+      "message": "No se informó motivo comercial de la solicitud; el borrador conserva la referencia y lo señala."
+    },
+    {
+      "kind": "missing",
+      "path": "paymentRequests/SOL-02/reason",
+      "message": "No se informó motivo comercial de la solicitud; el borrador conserva la referencia y lo señala."
+    },
+    {
+      "kind": "missing",
+      "path": "paymentRequests/SOL-03/reason",
+      "message": "No se informó motivo comercial de la solicitud; el borrador conserva la referencia y lo señala."
+    },
+    {
+      "kind": "missing",
+      "path": "paymentRequests/SOL-04/reason",
+      "message": "No se informó motivo comercial de la solicitud; el borrador conserva la referencia y lo señala."
+    },
+    {
+      "kind": "missing",
+      "path": "costSettings",
+      "message": "Faltan jornada general, multiplicador y configuración de valoración para operaciones futuras. No se siembran parámetros de otra demo."
+    }
+  ],
+  "audit": {
+    "findings": [],
+    "projects": [
+      {
+        "id": "P-TEST-01",
+        "quoted": 472000,
+        "contract": 0,
+        "material": 0,
+        "labor": 0,
+        "hours": 0,
+        "productiveHours": 0,
+        "cost": 0,
+        "gain": null
+      },
+      {
+        "id": "P-TEST-02",
+        "quoted": 910000,
+        "contract": 1400000,
+        "material": 0,
+        "labor": 0,
+        "hours": 0,
+        "productiveHours": 0,
+        "cost": 0,
+        "gain": 1400000
+      },
+      {
+        "id": "P-TEST-03",
+        "quoted": 1222000,
+        "contract": 2000000,
+        "material": 0,
+        "labor": 0,
+        "hours": 0,
+        "productiveHours": 0,
+        "cost": 0,
+        "gain": 2000000
+      },
+      {
+        "id": "P-TEST-04",
+        "quoted": 1634000,
+        "contract": 2500000,
+        "material": 456000,
+        "labor": 326000,
+        "hours": 22,
+        "productiveHours": 22,
+        "cost": 782000,
+        "gain": 1718000
+      },
+      {
+        "id": "P-TEST-05",
+        "quoted": 827000,
+        "contract": 1300000,
+        "material": 346000,
+        "labor": 466000,
+        "hours": 31,
+        "productiveHours": 29,
+        "cost": 812000,
+        "gain": 488000
+      }
+    ],
+    "totals": {
+      "contract": 7200000,
+      "cost": 1594000,
+      "gain": 5606000,
+      "ordered": 1886000,
+      "received": 1626000,
+      "consumed": 802000,
+      "held": 824000,
+      "pendingReceipt": 260000,
+      "invoiced": 2900000,
+      "collected": 2600000,
+      "paid": 846000,
+      "cash": 1754000,
+      "requestedPending": 200000,
+      "obligationsUnpaid": 1040000
+    }
+  },
+  "comparisons": [
+    {
+      "id": "P-TEST-01",
+      "nativeRecordedCost": 0,
+      "sourceCost": 0
+    },
+    {
+      "id": "P-TEST-02",
+      "nativeRecordedCost": 0,
+      "sourceCost": 0
+    },
+    {
+      "id": "P-TEST-03",
+      "nativeRecordedCost": 0,
+      "sourceCost": 0
+    },
+    {
+      "id": "P-TEST-04",
+      "nativeRecordedCost": 782000,
+      "sourceCost": 782000
+    },
+    {
+      "id": "P-TEST-05",
+      "nativeRecordedCost": 812000,
+      "sourceCost": 812000
+    }
+  ]
+}
