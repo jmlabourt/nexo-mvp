@@ -5,7 +5,7 @@ import { validateInternalHoursChange } from "@/lib/internal-work";
 import { correctSentOrder, reverseLocalReceipt } from "@/lib/purchasing";
 import { reverseAssignment } from "@/lib/stock";
 import { employeeCost, employeeForSession, personnelViews, savePersonnel, demoOperatorEligible, type EmployeeEdit } from "@/lib/personnel";
-import { materialCatalog } from "@/lib/material-options";
+import { materialCatalog, catalogPriceAt } from "@/lib/material-options";
 
 // ─────────────────────────────────────────────────────────────
 // Store global (Zustand). Los datos viven en Supabase: el store los carga
@@ -51,7 +51,7 @@ import { createClient } from "@/lib/supabase/client";
 import { lotToRow } from "@/lib/supabase/mappers";
 import * as remote from "@/lib/supabase/workspace";
 import { recordClosure } from "@/lib/supabase/closures";
-import { commitLedger, ledgerDelta, loadLedger } from "@/lib/supabase/ledger";
+import { commitLedger, ledgerDelta, loadLedger, LOCAL_ONLY_LEDGER_KEYS } from "@/lib/supabase/ledger";
 import { buildClosureSnapshot } from "@/lib/closure-snapshot";
 import { DEFAULT_COST_SETTINGS, type ScheduleChange, type Workspace, type WorkspaceData } from "@/lib/supabase/workspace";
 import { dayCapacity, exceptionError, workDaysError } from "@/lib/schedule";
@@ -254,7 +254,7 @@ interface AppState {
    */
   saveHourRates: (rates: HourRate[], validFrom?: string) => Result;
   /** Precios de catálogo de materiales con "vigente desde". Solo afectan cotizaciones nuevas. */
-  saveCatalogMaterialLocal: (input:{ id?:string;name:string;unit:string;rubro?:string;price:number;validFrom:string }) => Result;
+  saveCatalogMaterial: (input:{ id?:string;name:string;unit:string;rubro?:string;price:number;validFrom:string }) => Result;
   setMaterialPrices: (prices: Array<{ materialId: string; value: number; previousValue: number }>, validFrom: string) => Result;
   /** Crea (sin id) o modifica una asignación. La hacen el Jefe de planta y Administrativo. */
   saveAssignmentsBatch: (requestId: string, inputs: AssignmentInput[]) => Result<string[]>;
@@ -1248,14 +1248,27 @@ export const useAppStore = create<AppState>()(
           void persistRemote((db, org) => remote.saveHourRates(db, org, hourRates));
           return { ok: true, value: undefined };
         }),
-        saveCatalogMaterialLocal: (input) => run(() => {
+        saveCatalogMaterial: (input) => run(() => {
           const st = get(); const who = effectiveIdentity(st);
-          if (!st.demoLocal || who.session !== "administracion") throw new ops.DomainError("El catálogo se edita en Administración de la demo local.");
+          if (who.session !== "administracion") throw new ops.DomainError("El catálogo se edita desde Administración.");
+          if (!st.demoLocal && !st.ledgerReady) throw new ops.DomainError("Pendiente de backend: este dato todavía no se guarda en la base.");
           if (input.name.trim().length < 2 || !input.unit.trim() || !Number.isFinite(input.price) || input.price < 0 || !/^\d{4}-\d{2}-\d{2}$/.test(input.validFrom)) throw new ops.DomainError("Completá material, unidad, rubro, precio y vigencia válidos.");
           const all = materialCatalog(st.ledger);
           if (all.some((m) => m.id !== input.id && m.name.toLowerCase() === input.name.trim().toLowerCase())) throw new ops.DomainError("Ese material ya existe.");
           const previous = all.find((m) => m.id === input.id); const id = previous?.id ?? createId("mat");
           const now = new Date().toISOString();
+          if (!st.demoLocal) {
+            // Empresa real: el material queda en el catálogo de la empresa (base). Un cambio de precio no toca presupuestos ya
+            // cargados; si el material ya tiene historial de precios, ese historial manda y lo cambia Gerencia.
+            const hasHistory = st.priceHistory.some((r) => r.kind === "material_price" && r.subjectId === id);
+            const priceChanged = !previous || input.price !== catalogPriceAt(st.priceHistory, id, todayISO());
+            if (priceChanged && hasHistory && !isManager(who.role)) throw new ops.DomainError("Este material ya tiene historial de precios: el precio lo cambia Gerencia en Configuración → Materiales.");
+            const entry = { id, name: input.name.trim(), unit: input.unit.trim(), rubro: previous?.rubro, referenceCost: hasHistory ? (previous?.referenceCost ?? input.price) : input.price, active: previous?.active ?? true, validFrom: previous?.validFrom ?? input.validFrom };
+            const saved = get().recordLedger(["administracion"], (l) => ({ ...l, materialCatalog: [...(l.materialCatalog ?? []).filter((m) => m.id !== id), entry] }));
+            if (!saved.ok) throw new ops.DomainError(saved.error);
+            if (priceChanged && hasHistory) addHistory([{ id: createId("price"), kind: "material_price", subjectId: id, value: input.price, validFrom: input.validFrom, createdBy: who.actor, createdAt: now }]);
+            return undefined;
+          }
           set({ projects:st.projects.map((p)=>input.validFrom <= todayISO() && p.status === "quotation" && !p.baseline ? { ...p,budgetLines:p.budgetLines.map((l)=>l.category === "materials" && l.materialId === id && l.unit === input.unit.trim() && l.quantity !== null ? { ...l,unitCost:input.price,total:Math.round(l.quantity*input.price*100)/100 } : l) } : p),ledger:{ ...st.ledger,materialCatalog:[...(st.ledger.materialCatalog ?? []).filter((m) => m.id !== id),{ id,name:input.name.trim(),unit:input.unit.trim(),rubro:previous?.rubro,referenceCost:previous?.referenceCost ?? input.price,active:previous?.active ?? true,validFrom:previous?.validFrom ?? input.validFrom }] },priceHistory:[...st.priceHistory,{ id:createId("price"),kind:"material_price",subjectId:id,value:input.price,validFrom:input.validFrom,createdBy:who.actor,createdAt:now }] });
           return undefined;
         }),
@@ -1641,7 +1654,9 @@ export const useAppStore = create<AppState>()(
             if (ledger.capacityBase !== state.ledger.capacityBase && Object.entries(ledger.capacityBase ?? {}).some(([id,hours])=>!ledger.rubroCatalog.some((r)=>r.id===id) || !Number.isFinite(hours) || hours<0)) throw new ops.DomainError("Capacidad base inválida: elegí rubro y horas semanales no negativas.");
             if (ledger.quoteDefaults && Object.values(ledger.quoteDefaults).some((v)=>!Number.isFinite(v) || v<0 || v>=100)) throw new ops.DomainError("Los objetivos de rentabilidad deben estar entre 0 y menos de 100%.");
             if (ledger === state.ledger) return undefined;
-            if (!state.demoLocal && (ledger.paymentRequests !== state.ledger.paymentRequests || ledger.financialCorrections !== state.ledger.financialCorrections || ledger.capacityPlans !== state.ledger.capacityPlans || ledger.materialCatalog !== state.ledger.materialCatalog || ledger.externalWork !== state.ledger.externalWork || ledger.personnel !== state.ledger.personnel || ledger.quoteDefaults !== state.ledger.quoteDefaults || ledger.capacityBase !== state.ledger.capacityBase || ledger.capacityAdjustments !== state.ledger.capacityAdjustments || ledger.externalRates !== state.ledger.externalRates || ledger.staffCategories !== state.ledger.staffCategories || ledger.projectNomenclature !== state.ledger.projectNomenclature)) throw new ops.DomainError("Esta configuración está preparada en frontend; su persistencia requiere integración backend.");
+            // Pedidos de pago, trabajo externo, capacidad, catálogo y rentabilidad objetivo ya se guardan en la base. Personal con
+            // vistas, categorías de costo y numeración de proyectos siguen siendo solo de la demostración local.
+            if (!state.demoLocal && LOCAL_ONLY_LEDGER_KEYS.some((key) => ledger[key] !== state.ledger[key])) throw new ops.DomainError("Esta configuración todavía no se guarda en la base: las personas y sus permisos se manejan en Configuración → Usuarios.");
             set({ ledger, ...(state.demoLocal ? { projects: afterPublishedBom(state.projects,state.ledger,ledger,{ actor:who.actor, now:new Date().toISOString() }) } : {}) });
             // Demo local: queda en el navegador. Empresa real: se guarda en la base lo que cambió (la base valida de nuevo
             // el permiso y las reglas) y, si fue lo último pendiente, se relee para tomar lo que puso el servidor.

@@ -209,21 +209,22 @@ describe("escritura: comercial_commit_change", () => {
 });
 
 describe("el ledger desde Administración", () => {
-  it("lee contrato, condiciones de pago, BOM, clientes y proveedores, pero no facturas ni cobros", async () => {
+  it("lee contrato, condiciones de pago, BOM, clientes, proveedores, facturas y cobros, pero no costos generales ni tarifas", async () => {
     await asUser(db, laura, (tx) => tx.query("select ledger_commit($1::jsonb)", [JSON.stringify({ salesInvoices: { upsert: [{ id: "fv-1", projectId: ACTIVE.id, number: "A-1", date: today, amount: 1000 }] }, generalCosts: { upsert: [{ id: "gc-1", name: "Alquiler", monthlyAmount: 5 }] } })]));
     const [r] = await rows(ana, "select ledger_workspace() as r");
     const l = r.r as Record<string, unknown>;
-    expect(l.salesInvoices).toEqual([]);
+    expect(l.salesInvoices).toMatchObject([{ id: "fv-1", amount: 1000 }]);
     expect(l.collections).toEqual([]);
     expect(l.generalCosts).toEqual([]);
     expect(l.rates).toEqual([]);
     expect(l.clients).not.toBeUndefined();
     expect(typeof l.financialMonthlyRatePct).toBe("number");
   });
-  it("carga condiciones de pago y clientes; no factura, no cobra, no confirma entregas", async () => {
+  it("carga condiciones de pago y clientes, factura y cobra; no toca tarifas ni confirma entregas", async () => {
     await asUser(db, ana, (tx) => tx.query("select ledger_commit($1::jsonb)", [JSON.stringify({ paymentTerms: { upsert: [{ projectId: NEW_ID, daysAfterDelivery: 30, schedule: [{ id: "c1", label: "Seña", amount: 100, date: today }] }] }, clients: { upsert: [{ id: "cli-ana-1", name: "Estudio Ríos", active: true }] } })]));
-    expect(await ledgerError(ana, { salesInvoices: { upsert: [{ id: "fv-9", projectId: ACTIVE.id, number: "Z-1", date: today, amount: 5 }] } })).toMatch(/Gerencia/);
-    expect(await ledgerError(ana, { collections: { upsert: [{ id: "cb-9", projectId: ACTIVE.id, date: today, amount: 5 }] } })).toMatch(/Gerencia/);
+    await asUser(db, ana, (tx) => tx.query("select ledger_commit($1::jsonb)", [JSON.stringify({ salesInvoices: { upsert: [{ id: "fv-9", projectId: ACTIVE.id, number: "Z-1", date: today, amount: 5 }] } })]));
+    await asUser(db, ana, (tx) => tx.query("select ledger_commit($1::jsonb)", [JSON.stringify({ collections: { upsert: [{ id: "cb-9", projectId: ACTIVE.id, invoiceId: "fv-9", date: today, amount: 5 }] } })]));
+    expect((await rows(laura, "select count(*)::int as c from sales_invoices where organization_id = $1 and id = 'fv-9' and created_by = 'Ana Torres'", [org]))[0].c).toBe(1);
     expect(await ledgerError(ana, { rates: { upsert: [] } })).toMatch(/Gerencia/);
     expect(await ledgerError(ana, { handovers: { upsert: [] } })).toMatch(/Jefe de planta/);
   });

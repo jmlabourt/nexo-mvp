@@ -13,7 +13,7 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 export function MaterialCatalogSettings() {
   const catalog = useMaterialCatalog();
   const currentPrice = useCatalogPrice();
-  const local = useAppStore((s) => s.demoLocal);
+  const local = useAppStore((s) => s.demoLocal || s.ledgerReady);
   const today = useToday();
   const [form,setForm] = useState({ id:"",name:"",unit:"",price:"",validFrom:today });
   const [error,setError] = useState("");
@@ -28,7 +28,7 @@ export function MaterialCatalogSettings() {
       e.preventDefault(); const price = parseDecimal(form.price);
       if (form.name.trim().length < 2 || !form.unit.trim() || !Number.isFinite(price) || price < 0) return setError("Completá nombre, unidad y precio válido.");
       if (catalog.some((m) => m.id !== form.id && m.name.trim().toLowerCase() === form.name.trim().toLowerCase())) return setError("Ese material ya existe.");
-      const r = useAppStore.getState().saveCatalogMaterialLocal({ ...form,id:form.id || undefined,price });
+      const r = useAppStore.getState().saveCatalogMaterial({ ...form,id:form.id || undefined,price });
       if (!r.ok) return setError(r.error);
       setError("");setForm({ id:"",name:"",unit:"",price:"",validFrom:today });
     }}>
@@ -36,7 +36,7 @@ export function MaterialCatalogSettings() {
       <label className="text-sm">Unidad<Input value={form.unit} onChange={(e) => setForm({ ...form,unit:e.target.value })} /></label>
       <label className="text-sm">Precio de referencia<Input inputMode="decimal" value={form.price} onChange={(e) => setForm({ ...form,price:e.target.value })} /></label>
       <div className="flex gap-2"><Button type="submit">{form.id ? "Guardar material" : "Crear material"}</Button><Button type="button" variant="outline" onClick={() => setForm({ id:"",name:"",unit:"",price:"",validFrom:today })}>Cancelar</Button></div>
-    </form> : <p className="text-sm text-slate-500">Altas y edición disponibles en demo local; integración backend pendiente.</p>}
+    </form> : <p className="text-sm text-slate-500">Altas y edición todavía no disponibles para tu empresa.</p>}
     {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
   </CardContent></Card>;
 }

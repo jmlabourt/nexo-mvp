@@ -115,8 +115,8 @@ describe("circuitos finales del MVP",() => {
    render(<SettingsPage />);expect(screen.queryByText("Materiales y precios de referencia")).not.toBeInTheDocument();cleanup();
    useAppStore.setState({ currentMode:"administracion" });render(<SettingsPage />);expect(screen.getByText("Materiales y precios de referencia")).toBeInTheDocument();
    const before = structuredClone(useAppStore.getState().projects[0]);
-   ok(useAppStore.getState().saveCatalogMaterialLocal({ name:"Tablero",unit:"placa",rubro:"carpinteria_madera",price:200,validFrom:today }));
-   const m = useAppStore.getState().ledger.materialCatalog![0];ok(useAppStore.getState().saveCatalogMaterialLocal({ ...m,rubro:m.rubro,price:300,validFrom:tomorrow }));
+   ok(useAppStore.getState().saveCatalogMaterial({ name:"Tablero",unit:"placa",rubro:"carpinteria_madera",price:200,validFrom:today }));
+   const m = useAppStore.getState().ledger.materialCatalog![0];ok(useAppStore.getState().saveCatalogMaterial({ ...m,rubro:m.rubro,price:300,validFrom:tomorrow }));
    expect(useAppStore.getState().projects[0]).toEqual(before);expect(useAppStore.getState().priceHistory.filter((r) => r.subjectId === m.id).map((r) => r.value)).toEqual([200,300]);
  });
  it("cotización aprobada es de solo lectura y las acciones locales de Administración están bloqueadas",async () => {

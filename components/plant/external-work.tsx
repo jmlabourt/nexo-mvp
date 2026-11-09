@@ -14,7 +14,7 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 export function ExternalWorkSection({ projectId }: { projectId?: string }) {
   const projects = useAppStore((s) => s.projects);
   const ledger = useAppStore((s) => s.ledger);
-  const local = useAppStore((s) => s.demoLocal);
+  const local = useAppStore((s) => s.demoLocal || s.ledgerReady);
   const record = useAppStore((s) => s.recordLedger);
   const { session } = useIdentity();
   const today = useToday();
@@ -30,7 +30,7 @@ export function ExternalWorkSection({ projectId }: { projectId?: string }) {
   return <Card>
     <CardHeader><CardTitle>Operarios externos y tercerizaciones</CardTitle></CardHeader>
     <CardContent className="space-y-3">
-      {!local && <p className="text-sm text-slate-500">Los nuevos registros externos y su confirmación están preparados en el frontend local. Su guardado en empresas reales requiere integración del backend.</p>}
+      {!local && <p className="text-sm text-slate-500">Los registros externos todavía no se pueden guardar para tu empresa.</p>}
       {rows.map((row) => <ExternalRow key={row.id} row={row} manager={manager && local} project={projects.find((p) => p.id === row.projectId)?.code ?? row.projectId} />)}
       {!manager && local && <details><summary className="cursor-pointer text-sm font-medium">Registrar trabajo externo</summary>
         <form className="mt-3 grid gap-3 sm:grid-cols-2" onSubmit={(e) => {

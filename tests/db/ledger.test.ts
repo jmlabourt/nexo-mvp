@@ -107,7 +107,7 @@ describe("Gerencia: facturación y cobros", () => {
       const l = await view(u);
       expect(l.salesInvoices).toEqual([]);
       expect(l.collections).toEqual([]);
-      expect(await commitError(u, { salesInvoices: up({ ...inv, id: "fv-z", number: "Z" }) })).toMatch(/Gerencia/);
+      expect(await commitError(u, { salesInvoices: up({ ...inv, id: "fv-z", number: "Z" }) })).toMatch(/Administración/);
     }
     expect(await errorAs(db, juan, (tx) => tx.query("select ledger_workspace()"))).toBeNull(); // el operario lee solo rubros
     expect((await view(juan)).salesInvoices).toEqual([]);
@@ -123,15 +123,32 @@ describe("Gerencia: facturación y cobros", () => {
   });
 });
 
+describe("Facturas: vencimiento, condición e hito", () => {
+  it("se guardan y vuelven; un vencimiento anterior a la emisión se rechaza", async () => {
+    await commit(laura, { salesInvoices: up({ id: "fv-venc", projectId: ACTIVE, number: "V-0001", date: today, amount: 200, dueDate: "2099-01-31", condition: "30 días", milestoneId: "c1" }) });
+    expect((await view(laura)).salesInvoices.find((i) => i.id === "fv-venc")).toMatchObject({ dueDate: "2099-01-31", condition: "30 días", milestoneId: "c1" });
+    expect(await commitError(laura, { salesInvoices: up({ id: "fv-mal", projectId: ACTIVE, number: "V-0002", date: today, amount: 200, dueDate: "2000-01-01" }) })).toMatch(/sales_invoices_due_after_issue|check/);
+  });
+});
+
 describe("Pagos a proveedores", () => {
+  it("un pago puede apoyarse en una orden enviada y guarda su solicitud de pago", async () => {
+    const sent = seed.orders.find((o) => o.status === "draft")!;
+    await db.query("update purchase_orders set status = 'sent' where organization_id = $1 and id = $2", [org, sent.id]);
+    await commit(laura, { paymentRequests: up({ id: "req-1", orderId: sent.id, amount: 100, date: today, reason: "Anticipo", by: "Martín", at: new Date().toISOString() }), supplierPayments: up({ id: "pg-sent", orderId: sent.id, date: today, amount: 100, reference: "TR-S", paymentRequestId: "req-1" }) });
+    const l = await view(laura);
+    expect(l.supplierPayments.find((p) => p.id === "pg-sent")).toMatchObject({ paymentRequestId: "req-1" });
+    expect(l.paymentRequests).toMatchObject([{ id: "req-1", amount: 100 }]); // vuelve en el mismo ledger_workspace
+    await db.query("update purchase_orders set status = 'draft' where organization_id = $1 and id = $2", [org, sent.id]);
+  });
   it("solo sobre una orden con factura; Compras ve el estado y no paga", async () => {
     const draft = seed.orders.find((o) => o.status === "draft")!;
     const invoiced = seed.orders.find((o) => o.status === "invoiced")!;
-    expect(await commitError(laura, { supplierPayments: up({ id: "pg-x", orderId: draft.id, date: today, amount: 10, reference: "TR-1" }) })).toMatch(/Primero Compras carga la factura/);
+    expect(await commitError(laura, { supplierPayments: up({ id: "pg-x", orderId: draft.id, date: today, amount: 10, reference: "TR-1" }) })).toMatch(/Primero enviá la orden de compra/);
     await commit(laura, { supplierPayments: up({ id: "pg-1", orderId: invoiced.id, date: today, amount: 500, reference: "TR-1" }) });
-    expect((await view(martin)).supplierPayments).toMatchObject([{ id: "pg-1", orderId: invoiced.id, amount: 500, by: "Laura Gómez" }]);
+    expect((await view(martin)).supplierPayments.find((p) => p.id === "pg-1")).toMatchObject({ id: "pg-1", orderId: invoiced.id, amount: 500, by: "Laura Gómez" });
     expect((await view(carla)).supplierPayments).toEqual([]);
-    expect(await commitError(martin, { supplierPayments: up({ id: "pg-2", orderId: invoiced.id, date: today, amount: 1, reference: "x" }) })).toMatch(/Gerencia/);
+    expect(await commitError(martin, { supplierPayments: up({ id: "pg-2", orderId: invoiced.id, date: today, amount: 1, reference: "x" }) })).toMatch(/Administración/);
   });
 });
 

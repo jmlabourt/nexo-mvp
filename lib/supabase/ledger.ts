@@ -19,16 +19,37 @@ interface ListDelta {
   remove?: string[];
 }
 
-/** Lo que se manda a ledger_commit. Solo trae las colecciones que cambiaron. */
-export type LedgerDelta = Partial<Record<Exclude<keyof Ledger, "financialMonthlyRatePct">, ListDelta>> & { financialMonthlyRatePct?: number };
+/** Colecciones de lista que se guardan en la tabla de registros extra (migración 20261109120000). */
+const EXTRA_LISTS = ["paymentRequests", "financialCorrections", "externalWork", "externalRates", "capacityAdjustments", "capacityPlans", "materialCatalog"] as const;
+/** Colecciones de un solo registro (id fijo en la base). */
+const EXTRA_SINGLES = ["capacityBase", "quoteDefaults"] as const;
+type ExtraListKey = (typeof EXTRA_LISTS)[number];
+type ExtraSingleKey = (typeof EXTRA_SINGLES)[number];
+/** Lo que la app todavía guarda solo en el navegador de la demo: personal con vistas, categorías de costo y numeración. */
+export const LOCAL_ONLY_LEDGER_KEYS = ["personnel", "staffCategories", "projectNomenclature"] as const;
 
-type ListKey = Exclude<keyof Ledger, "financialMonthlyRatePct" | "closures">;
+type CoreListKey = Exclude<keyof Ledger, "financialMonthlyRatePct" | ExtraListKey | ExtraSingleKey | (typeof LOCAL_ONLY_LEDGER_KEYS)[number]>;
+
+/** Lo que se manda a ledger_commit. Solo trae las colecciones que cambiaron. */
+export type LedgerDelta = Partial<Record<CoreListKey | ExtraListKey, ListDelta>> & {
+  financialMonthlyRatePct?: number;
+  capacityBase?: NonNullable<Ledger["capacityBase"]>;
+  quoteDefaults?: NonNullable<Ledger["quoteDefaults"]>;
+};
+
+type ListKey = Exclude<CoreListKey, "closures">;
 
 /** Colecciones que se identifican por `id` y las que no (el proyecto es la clave). */
 const BY_ID: ListKey[] = ["salesInvoices", "collections", "supplierPayments", "contractRevisions", "boms", "handovers", "internalHours", "generalCosts", "rubroCatalog", "rates", "clients", "suppliers"];
 
 /** De las colecciones, las únicas de las que se puede quitar un registro (el resto es historial). */
 const REMOVABLE: ListKey[] = ["boms", "generalCosts"];
+
+/** Identidad de un registro extra: las tarifas externas se identifican por rubro y vigencia. */
+const extraId = (key: ExtraListKey, row: unknown): string => {
+  const r = row as { id?: string; rubro?: string; validFrom?: string };
+  return key === "externalRates" ? `${r.rubro}|${r.validFrom}` : String(r.id);
+};
 
 /**
  * Qué cambió de `prev` a `next`. Las operaciones de lib/ledger.ts son inmutables, así que un registro sin cambios
@@ -45,6 +66,17 @@ export function ledgerDelta(prev: Ledger, next: Ledger): LedgerDelta | null {
     const keep = new Set(after.map((x) => x.id));
     const remove = REMOVABLE.includes(key) ? before.filter((x) => !keep.has(x.id)).map((x) => x.id) : [];
     if (upsert.length || remove.length) delta[key] = { upsert, ...(remove.length ? { remove } : {}) };
+  }
+  for (const key of EXTRA_LISTS) {
+    const before = (prev[key] ?? []) as unknown[];
+    const after = (next[key] ?? []) as unknown[];
+    if (before === after) continue;
+    const old = new Map(before.map((x) => [extraId(key, x), JSON.stringify(x)]));
+    const upsert = after.filter((x) => old.get(extraId(key, x)) !== JSON.stringify(x));
+    if (upsert.length) delta[key] = { upsert };
+  }
+  for (const key of EXTRA_SINGLES) {
+    if (prev[key] !== next[key] && next[key] !== undefined && JSON.stringify(prev[key]) !== JSON.stringify(next[key])) (delta as Record<string, unknown>)[key] = next[key];
   }
   if (prev.paymentTerms !== next.paymentTerms) {
     const old = new Map(prev.paymentTerms.map((t) => [t.projectId, t]));

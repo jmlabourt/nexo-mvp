@@ -35,7 +35,7 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
           </Link>
           <h1 className="mt-8 text-2xl font-semibold tracking-[-0.03em] text-ink">Accedé a {APP_NAME}</h1>
           <p className="mt-2 text-sm text-pretty text-ink-soft">
-            Si te invitaron, entrá con tu mail. Si vas a crear la empresa, entrá con Google: la primera vez la armamos con los datos demo de Madera Sur S.R.L.
+            Si te invitaron, entrá con tu mail. Si vas a crear la empresa, entrá con Google: la primera vez elegís si empezás vacía o con datos de ejemplo de Madera Sur S.R.L.
           </p>
           {invitedEmail && (
             <p role="status" className="mt-6 rounded-xl bg-white px-3 py-2 text-sm text-ink-soft ring-1 ring-line">
