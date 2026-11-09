@@ -8,8 +8,8 @@ import { HydrationGate } from "@/components/layout/hydration-gate";
 import { useAppStore } from "@/store/use-app-store";
 
 const loadWorkspace = vi.fn();
-const replaceWorkspace = vi.fn(async () => undefined);
-const startEmptyWorkspace = vi.fn(async () => undefined);
+const replaceWorkspace = vi.fn(async (...args: unknown[]) => void args);
+const startEmptyWorkspace = vi.fn(async (...args: unknown[]) => void args);
 vi.mock("@/lib/supabase/client", () => ({ createClient: () => ({}) }));
 vi.mock("@/lib/supabase/closures", () => ({ backfillClosures: vi.fn(async () => undefined) }));
 vi.mock("@/lib/supabase/workspace", async (original) => ({
