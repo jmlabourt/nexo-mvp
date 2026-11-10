@@ -4,16 +4,16 @@ import { APP_NAME } from "@/lib/constants";
 import { createClient } from "@/lib/supabase/client";
 import { backfillClosures } from "@/lib/supabase/closures";
 import { DEMO_LOCAL_COOKIE, isLocalDemoAccessEnabled, isLocalDemoHost } from "@/lib/supabase/env";
-import { loadWorkspace, replaceWorkspace } from "@/lib/supabase/workspace";
+import { loadWorkspace, replaceWorkspace, startEmptyWorkspace, type Workspace } from "@/lib/supabase/workspace";
 import { demoWorkspace, useAppStore } from "@/store/use-app-store";
 import { isDemoActive } from "@/store/demo-local";
 
-type GateState = { status: "loading" } | { status: "ready" } | { status: "error"; message: string };
+type GateState = { status: "loading" } | { status: "ready" } | { status: "error"; message: string } | { status: "choose"; ws: Workspace };
 
 /**
  * Carga la empresa del usuario desde Supabase antes de renderizar la app.
- * La primera vez que entra alguien, su empresa (creada por un trigger al registrarse)
- * todavía no tiene datos: le cargamos la demo de Madera Sur.
+ * La primera vez que entra alguien, su empresa (creada por un trigger al registrarse) todavía no tiene datos:
+ * se le pregunta si empieza vacía o con los datos de ejemplo de Madera Sur.
  */
 export function HydrationGate({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<GateState>({ status: "loading" });
@@ -38,10 +38,10 @@ export function HydrationGate({ children }: { children: React.ReactNode }) {
         return;
       }
       const db = createClient();
-      let ws = await loadWorkspace(db);
+      const ws = await loadWorkspace(db);
       if (!ws.demoSeeded) {
-        await replaceWorkspace(db, ws.organizationId, demoWorkspace());
-        ws = await loadWorkspace(db);
+        setState({ status: "choose", ws });
+        return;
       }
       useAppStore.getState().loadWorkspace(ws);
       setState({ status: "ready" });
@@ -99,6 +99,10 @@ export function HydrationGate({ children }: { children: React.ReactNode }) {
     );
   }
 
+  if (state.status === "choose") {
+    return <FirstRunChoice ws={state.ws} onDone={load} />;
+  }
+
   if (state.status === "loading") {
     return (
       <div className="flex min-h-screen items-center justify-center text-sm text-slate-500" aria-busy="true">
@@ -138,4 +142,61 @@ function SyncToast() {
     );
   }
   return null;
+}
+
+/** Primer ingreso de una empresa nueva: empezar vacía o con datos de ejemplo. Lo decide un Administrativo (el resto espera). */
+function FirstRunChoice({ ws, onDone }: { ws: Workspace; onDone: () => void }) {
+  const [busy, setBusy] = useState<"empty" | "demo" | null>(null);
+  const [error, setError] = useState("");
+  const canChoose = ws.role === "owner" || ws.role === "member";
+
+  const choose = async (kind: "empty" | "demo") => {
+    setBusy(kind);
+    setError("");
+    try {
+      const db = createClient();
+      if (kind === "empty") await startEmptyWorkspace(db, ws.organizationId);
+      else await replaceWorkspace(db, ws.organizationId, demoWorkspace());
+      onDone();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "No pudimos preparar tu empresa. Probá de nuevo.");
+      setBusy(null);
+    }
+  };
+
+  return (
+    <main className="flex min-h-screen flex-col items-center justify-center gap-6 px-4 py-10">
+      <div className="max-w-xl text-center">
+        <span className="text-lg font-semibold tracking-tight text-slate-900">{APP_NAME}</span>
+        <h1 className="mt-3 text-2xl font-semibold text-slate-900">Bienvenida, {ws.organizationName}</h1>
+        <p className="mt-2 text-sm text-slate-600">
+          {canChoose
+            ? "¿Cómo querés empezar? Podés cambiar de idea más tarde desde Configuración → Datos."
+            : "Tu empresa todavía no terminó la configuración inicial. Pedile a quien administra la cuenta que entre primero."}
+        </p>
+      </div>
+      {canChoose && (
+        <div className="grid w-full max-w-3xl gap-4 sm:grid-cols-2">
+          <section className="flex flex-col rounded-lg border border-slate-200 bg-white p-5">
+            <h2 className="text-base font-semibold text-slate-900">Empezar vacía</h2>
+            <p className="mt-1 flex-1 text-sm text-slate-600">Para cargar tus propios proyectos, personas y precios. Quedan listos los rubros estándar para cotizar.</p>
+            <button type="button" disabled={busy !== null} onClick={() => void choose("empty")} className="mt-4 rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-60">
+              {busy === "empty" ? "Preparando…" : "Empezar vacía"}
+            </button>
+          </section>
+          <section className="flex flex-col rounded-lg border border-slate-200 bg-white p-5">
+            <h2 className="text-base font-semibold text-slate-900">Cargar datos de ejemplo</h2>
+            <p className="mt-1 flex-1 text-sm text-slate-600">Proyectos, operarios y compras de Madera Sur S.R.L. para recorrer la app. Se pueden vaciar cuando quieras.</p>
+            <button type="button" disabled={busy !== null} onClick={() => void choose("demo")} className="mt-4 rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 disabled:opacity-60">
+              {busy === "demo" ? "Cargando…" : "Cargar datos de ejemplo"}
+            </button>
+          </section>
+        </div>
+      )}
+      {error && <p role="alert" className="max-w-md text-center text-sm text-red-700">{error}</p>}
+      <form action="/auth/signout" method="post">
+        <button type="submit" className="text-sm text-slate-500 underline underline-offset-2">Cerrar sesión</button>
+      </form>
+    </main>
+  );
 }

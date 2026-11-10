@@ -61,13 +61,14 @@ describe("flujo compartido entre vistas frontend", () => {
     expect(useAppStore.getState().ledger.externalWork![0].confirmedCost).toBe(450);
     expect(useAppStore.getState().projects.flatMap((p) => p.actualEntries)).toHaveLength(0);
   });
-  it("ninguna extensión local se presenta como guardada en una empresa real", () => {
+  it("lo que la base todavía no guarda se rechaza en una empresa real y no se presenta como guardado", () => {
     useAppStore.setState({ demoLocal:false,organizationId:"real",ledgerReady:true,currentMode:"gerencia" });
     const previous = useAppStore.getState().ledger;
-    const r = useAppStore.getState().recordLedger(["gerencia"],(l) => ({ ...l,externalWork:[] }));
-    expect(r.ok).toBe(false); expect(useAppStore.getState().ledger).toBe(previous);
+    for (const change of [{ personnel:[] }, { staffCategories:[] }, { projectNomenclature:{ pattern:"{numero}",prefix:"",nextNumber:9 } }]) {
+      const r = useAppStore.getState().recordLedger(["gerencia"],(l) => ({ ...l,...change }));
+      expect(r.ok).toBe(false); expect(useAppStore.getState().ledger).toBe(previous);
+    }
     render(<ExternalWorkSection />);
-    expect(within(document.body).queryByText("Registrar trabajo externo")).toBeNull();
-    expect(document.body.textContent).toMatch(/integración del backend/);
+    expect(document.body.textContent).not.toMatch(/todavía no se pueden guardar/);
   });
 });

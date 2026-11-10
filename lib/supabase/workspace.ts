@@ -9,7 +9,8 @@ import type { AlertSettings, AppRole, CostSettings, DayException, HourRate, Ledg
 import { DEFAULT_FINANCIAL_PCT, DEFAULT_HOUR_RATES, DEFAULT_HOURS_PER_DAY, DEFAULT_OVERTIME_MULTIPLIER, DEFAULT_SETTINGS } from "@/lib/constants";
 import type { StockState } from "@/lib/stock";
 import type { TallerCall } from "./taller";
-import { loadLedger, resetLedger } from "./ledger";
+import { commitLedger, loadLedger, resetLedger } from "./ledger";
+import { RUBROS } from "@/lib/rubros";
 import type { CorrectionInput, CorrectionReceipt } from "@/lib/corrections";
 import { deriveLedgerFromLegacy } from "@/lib/stock-legacy";
 import { todayISO } from "@/lib/formatting";
@@ -772,6 +773,16 @@ export async function replaceWorkspace(db: SupabaseClient, org: string, data: Wo
   await resetLedger(db, data?.ledger ?? null);
   // Con la demo cargada la empresa queda como demo; al vaciar, deja de serlo.
   check(await db.from("organizations").update({ is_demo: data !== null }).eq("id", org));
+}
+
+/**
+ * Empresa nueva que elige empezar sin datos de ejemplo: queda vacía (sin proyectos, operarios ni registros) pero con los
+ * rubros estándar activos, para poder cotizar y asignar desde el primer día. Gerencia los renombra o desactiva después.
+ */
+export async function startEmptyWorkspace(db: SupabaseClient, org: string) {
+  await replaceWorkspace(db, org, null);
+  const rubroCatalog = RUBROS.filter((r) => r.kind === "full").map((r) => ({ id: r.id, name: r.label, active: true }));
+  await commitLedger(db, { rubroCatalog: { upsert: rubroCatalog } });
 }
 
 /** Delta de una operación: no vuelve a escribir registros históricos ajenos al cambio. */
