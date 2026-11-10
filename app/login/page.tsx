@@ -6,6 +6,7 @@ import { CodeSignIn } from "@/components/auth/code-sign-in";
 import { GoogleSignInButton } from "@/components/auth/google-sign-in-button";
 import { Logo } from "@/components/landing/primitives";
 import { safeNext } from "@/lib/supabase/safe-next";
+import { NOT_AUTHORIZED_MESSAGE } from "@/lib/users";
 import { isSupabaseConfigured, SUPABASE_NOT_CONFIGURED } from "@/lib/supabase/env";
 
 export const metadata: Metadata = { title: `Acceder · ${APP_NAME}` };
@@ -15,6 +16,7 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
   const next = safeNext(typeof params.next === "string" ? params.next : undefined);
   const authError = params.error === "auth";
   const inviteNotice = params.error === "invite";
+  const notAuthorized = params.error === "unauthorized";
   const invitedEmail = typeof params.email === "string" && params.email.includes("@") ? params.email.slice(0, 200) : "";
 
   return (
@@ -35,7 +37,7 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
           </Link>
           <h1 className="mt-8 text-2xl font-semibold tracking-[-0.03em] text-ink">Accedé a {APP_NAME}</h1>
           <p className="mt-2 text-sm text-pretty text-ink-soft">
-            Si te invitaron, entrá con tu mail. Si vas a crear la empresa, entrá con Google: la primera vez elegís si empezás vacía o con datos de ejemplo de Madera Sur S.R.L.
+            Si tu empresa ya usa Blerp, entrá con el mail con el que te invitaron. Si el equipo de Blerp autorizó a tu empresa, entrá con ese mail (Google o código): la primera vez elegís si empezás vacía o con datos de ejemplo de Madera Sur S.R.L.
           </p>
           {invitedEmail && (
             <p role="status" className="mt-6 rounded-xl bg-white px-3 py-2 text-sm text-ink-soft ring-1 ring-line">
@@ -50,6 +52,11 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
           {authError && (
             <p role="alert" className="mt-6 rounded-xl bg-bad/5 px-3 py-2 text-sm text-bad ring-1 ring-bad/20">
               No pudimos iniciar sesión. Probá de nuevo.
+            </p>
+          )}
+          {notAuthorized && (
+            <p role="alert" className="mt-6 rounded-xl bg-bad/5 px-3 py-2 text-sm text-bad ring-1 ring-bad/20">
+              {NOT_AUTHORIZED_MESSAGE}
             </p>
           )}
           {inviteNotice && (

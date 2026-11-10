@@ -79,7 +79,7 @@ describe("lectura de admin_members()", () => {
 
 describe("ingreso con código por mail", () => {
   it("explica en castellano los errores de ingreso", () => {
-    expect(authErrorMessage("Database error saving new user")).toMatch(/No pudimos crear tu cuenta/);
+    expect(authErrorMessage("Database error saving new user")).toMatch(/todavía no está autorizado/);
     expect(authErrorMessage("Token has expired or is invalid")).toMatch(/venció/);
     expect(authErrorMessage("For security purposes, you can only request this after 30 seconds")).toMatch(/Esperá/);
   });

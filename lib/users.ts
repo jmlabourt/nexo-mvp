@@ -148,9 +148,13 @@ export function membersFromJson(json: { members?: Record<string, unknown>[]; inv
 }
 
 /** Errores de Supabase Auth → texto claro para quien intenta entrar con un código por mail. */
+export const NOT_AUTHORIZED_MESSAGE =
+  "Tu mail todavía no está autorizado. Si vas a usar Blerp con tu empresa, pedile al equipo de Blerp que la autorice; si tu empresa ya usa Blerp, pedile al Administrativo que te invite.";
+
 export function authErrorMessage(message: string): string {
   const m = message.toLowerCase();
-  if (m.includes("database error")) return "No pudimos crear tu cuenta. Probá de nuevo.";
+  // Supabase enmascara el rechazo del alta (mail sin empresa autorizada ni invitación) como "Database error saving new user".
+  if (m.includes("database error")) return NOT_AUTHORIZED_MESSAGE;
   if (m.includes("provider") || m.includes("not enabled") || m.includes("disabled")) return "El ingreso por mail no está disponible ahora.";
   if (m.includes("expired") || m.includes("invalid")) return "El código no es válido o venció. Pedí uno nuevo.";
   if (m.includes("rate") || m.includes("seconds")) return "Esperá un minuto antes de pedir otro código.";

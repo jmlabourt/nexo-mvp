@@ -97,7 +97,21 @@ export async function signUpPhone(db: PGlite, phone: string, name: string): Prom
   return r.rows[0].id;
 }
 
-export async function signUp(db: PGlite, email: string, name: string): Promise<string> {
+/**
+ * Alta por mail. Como en producción, sin autorización ni invitación la base rechaza el alta (empresas autorizadas):
+ * por defecto el helper autoriza el mail antes (así los tests que arman empresas siguen igual); con
+ * `{ authorized: false }` se prueba el rechazo. Con bases anteriores a esa migración no hay nada que autorizar.
+ */
+export async function signUp(db: PGlite, email: string, name: string, opts: { authorized?: boolean } = {}): Promise<string> {
+  if (opts.authorized !== false) {
+    const has = await db.query<{ t: string | null }>("select to_regclass('public.company_authorizations')::text as t");
+    if (has.rows[0].t) {
+      await db.query(
+        "insert into public.company_authorizations (email, company_name) values (lower($1), $2) on conflict do nothing",
+        [email, `Empresa de ${name}`],
+      );
+    }
+  }
   const r = await db.query<{ id: string }>(
     "insert into auth.users (email, raw_user_meta_data) values ($1, jsonb_build_object('full_name', $2::text)) returning id",
     [email, name],
