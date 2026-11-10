@@ -193,3 +193,14 @@ rol de cada sesión.
 5. Los cierres de la demo no traen `pending_costs`; las excepciones de tarifa por persona no tienen pantalla.
 6. Las necesidades de Compras salen del BOM publicado: un proyecto real sin BOM no muestra necesidades.
 7. Mails de invitación: falta `SUPABASE_SERVICE_ROLE_KEY` en Production, redeploy y SMTP propio.
+
+## 9. Empresas autorizadas (migración `20261110120000_empresas_autorizadas.sql`)
+
+Nadie crea una empresa por su cuenta: el alta (`private.handle_new_user`) exige una autorización del equipo de Blerp, una invitación o un operario cargado.
+
+- **Quién autoriza:** `platform_admins` (por mail; la migración carga a `jmlabourt@gmail.com`). Para sumar a otra persona del equipo: `insert into platform_admins (email) values ('mail@blerp.com');` (minúsculas). Esa persona además puede abrir su propia empresa de prueba al entrar.
+- **Cómo se autoriza una empresa:** pantalla `/plataforma` (solo se ve si sos del equipo; para el resto no existe) o `select platform_authorize_company('{"email":"gerencia@empresa.com","company_name":"Empresa S.R.L."}')`. Al entrar por primera vez esa persona (Google o código), se crea la empresa con ese nombre y queda como Administrativo (`owner`); la autorización queda marcada como usada (con fecha, usuario y empresa).
+- **Cómo entra el resto de la gente:** el Administrativo invita desde Configuración → Usuarios (`admin_invite_member`, con el rol de cada uno). Sin cambios.
+- **Mail sin autorización:** se rechaza; Supabase lo muestra como "Database error saving new user" y la app lo traduce a un aviso claro (`/login?error=unauthorized` en Google, mensaje en el formulario en el ingreso por código).
+- No se tocan empresas ni usuarios existentes. La autorización solo sirve para un mail que todavía no tiene cuenta.
+- Las tablas `platform_admins` y `company_authorizations` no tienen políticas: solo se usan por las funciones `platform_*` (SECURITY DEFINER, solo equipo de Blerp).

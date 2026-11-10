@@ -9,6 +9,12 @@ export async function GET(request: NextRequest) {
   const code = searchParams.get("code");
   const next = safeNext(searchParams.get("next"));
 
+  // Si el alta se rechaza (mail sin empresa autorizada ni invitación), Supabase vuelve acá con el error en la URL.
+  const detail = `${searchParams.get("error_description") ?? ""} ${searchParams.get("error") ?? ""}`.toLowerCase();
+  if (detail.includes("database error") || detail.includes("saving new user")) {
+    return NextResponse.redirect(`${origin}/login?error=unauthorized`);
+  }
+
   if (code && isSupabaseConfigured) {
     const supabase = await createClient();
     const { error } = await supabase.auth.exchangeCodeForSession(code);
