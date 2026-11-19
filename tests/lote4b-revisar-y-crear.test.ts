@@ -1,6 +1,6 @@
 // Lote 4b — Diseño y Administración por separado, y el resumen del paso "Revisar y crear".
 import { describe, expect, it } from "vitest";
-import type { HourRate } from "@/types";
+import type { HourRate, RubroId } from "@/types";
 import { rubroTable } from "@/lib/budget-calculator";
 import { DEFAULT_HOUR_RATES } from "@/lib/constants";
 import { computeCalculator, initialCalcState, newRubroRow, ratesText, reviewWarnings, type CalcState, type RubroRow } from "@/components/budget/calculator-state";
@@ -88,6 +88,22 @@ describe("tabla por rubro del paso Revisar y crear", () => {
       [undefined, 80],
     ]);
     expect(t.total).toBe(1080);
+  });
+});
+
+describe("rubros propios de la empresa en la tabla por rubro", () => {
+  it("un rubro creado en Personal aparece en su fila y las filas suman el total", () => {
+    const t = rubroTable([
+      { category: "materials", rubro: "carpinteria_madera", description: "x", quantity: 1, unit: "u", unitCost: 1000 },
+      { category: "labor", rubro: "rubro_entrega" as RubroId, description: "Entrega: mano de obra", quantity: 4, unit: "h", unitCost: 23_000 },
+      { category: "transport", description: "Fletes", quantity: null, unit: "global", unitCost: 500 },
+    ]);
+    expect(t.rows.map((r) => [r.rubro, r.labor, r.total])).toEqual([
+      ["carpinteria_madera", 0, 1000],
+      ["rubro_entrega", 92_000, 92_000],
+      [undefined, 0, 500],
+    ]);
+    expect(t.rows.reduce((s, r) => s + r.total, 0)).toBe(t.total);
   });
 });
 
