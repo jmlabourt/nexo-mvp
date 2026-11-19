@@ -405,8 +405,12 @@ export function rubroTable(lines: BudgetLineInput[]): RubroTable {
     total: totalOfLines(ls),
   });
   const costLines = lines.filter((l) => l.category !== "financial");
+  // Rubros que crea cada empresa (Personal → Rubros de trabajo): no están en RUBROS y van después, en orden de aparición.
+  const fixed = new Set<RubroId>(RUBROS.map((def) => def.id));
+  const custom = [...new Set(costLines.flatMap((l) => (l.rubro && !fixed.has(l.rubro) ? [l.rubro] : [])))];
   const rows = [
     ...RUBROS.map((def) => row(costLines.filter((l) => l.rubro === def.id), def.id)),
+    ...custom.map((id) => row(costLines.filter((l) => l.rubro === id), id)),
     row(costLines.filter((l) => !l.rubro)),
   ].filter((r) => r.total !== 0);
   return { rows, financial: sum(lines, "financial"), total: totalOfLines(lines) };
